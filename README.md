@@ -422,4 +422,4 @@ Para reportar issues o sugerencias, consultar la documentación oficial de ASTER
 
 - **EUROCONTROL ASTERIX** - Especificación oficial
 - **WGS-84** - World Geodetic System 1984
-- **Vincenty Formula** - Geodetic calculations on an ellipsoid
+- **Vincenty Formula** - Geodetic calculations on an ellipsoid# decoderAsterix
