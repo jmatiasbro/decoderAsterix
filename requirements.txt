@@ -1,0 +1,5 @@
+dpkt>=1.9.7
+numpy
+matplotlib
+pyproj
+fpdf2

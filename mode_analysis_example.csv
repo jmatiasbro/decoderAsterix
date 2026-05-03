@@ -1,0 +1,4 @@
+Record#,Mode_A_Detected,Mode_C_Detected,Squawk_Code,Squawk_Octal,Flight_Level,Mode_A_Probability,Mode_C_Probability,Combined_Probability,Confidence_Level
+1,True,True,4012,7654,25000,0.9500,0.9000,0.8550,high
+2,True,True,668,1234,15000,0.9500,0.9000,0.8550,high
+3,True,False,,,,0.9500,0.0000,,medium
