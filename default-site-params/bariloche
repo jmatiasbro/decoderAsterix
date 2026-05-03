@@ -1,0 +1,24 @@
+# Definicion de parametros de sitio Bariloche
+SITE_NAME="Bariloche"
+RADAR_ID="BRC"
+RADAR_SAC=226
+RADAR_SIC=204
+ADSB_SAC=226
+ADSB_SIC=104
+RADAR_LAT=-41.145277
+RADAR_LON=-71.155555
+
+# Definiciones de puertos
+#Puerto UDP de escucha de la consola RMD
+RMD_AX_PORT=8600
+
+# Definiciones de direcciones IP
+CMSS_IP=10.9.230.100
+RC1_IP=10.9.230.110
+RC2_IP=10.9.230.120
+ADSB1_IP=10.9.230.98
+ADSB2_IP=10.9.230.99
+CMST1_IP=10.9.230.101
+CMST2_IP=10.9.230.102
+DEFAULT_GATEWAY=10.9.230.254
+NETWORK_MASK=24

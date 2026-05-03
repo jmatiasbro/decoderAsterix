@@ -1,0 +1,55 @@
+{
+  "statistics": {
+    "total_records": 3,
+    "mode_a_only": 1,
+    "mode_c_only": 0,
+    "mode_a_and_c": 2,
+    "no_mode_data": 0,
+    "average_mode_a_probability": 0.9499999999999998,
+    "average_mode_c_probability": 0.9,
+    "average_combined_probability": 0.855,
+    "squawk_codes_found": [
+      668,
+      4012
+    ],
+    "flight_levels_found": [
+      15000,
+      25000
+    ]
+  },
+  "detections": [
+    {
+      "mode_a_detected": true,
+      "mode_c_detected": true,
+      "squawk_code": 4012,
+      "flight_level": 25000,
+      "mode_3a": 4012,
+      "mode_a_probability": 0.95,
+      "mode_c_probability": 0.9,
+      "combined_probability": 0.855,
+      "confidence_level": "high"
+    },
+    {
+      "mode_a_detected": true,
+      "mode_c_detected": true,
+      "squawk_code": 668,
+      "flight_level": 15000,
+      "mode_3a": 668,
+      "mode_a_probability": 0.95,
+      "mode_c_probability": 0.9,
+      "combined_probability": 0.855,
+      "confidence_level": "high"
+    },
+    {
+      "mode_a_detected": true,
+      "mode_c_detected": false,
+      "squawk_code": 0,
+      "flight_level": null,
+      "mode_3a": 0,
+      "mode_a_probability": 0.95,
+      "mode_c_probability": 0.0,
+      "combined_probability": null,
+      "confidence_level": "medium"
+    }
+  ]
+}
