@@ -1,0 +1,16 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                3    [MOXAT1G]
+243329.09S0650011.19W        [MOXAT1G]
+243153.07S0645301.70W        [MOXAT1G]
+240605.00S0645500.00W        [MOXAT1G]

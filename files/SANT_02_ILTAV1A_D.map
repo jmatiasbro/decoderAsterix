@@ -1,0 +1,18 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                5    [ILTAV1A]
+263610.00S0650251.00W        [ILTAV1A]
+263659.00S0650002.00W        [ILTAV1A]
+263814.00S0645724.00W        [ILTAV1A]
+263923.00S0645542.00W        [ILTAV1A]
+260855.00S0642633.00W        [ILTAV1A]

@@ -1,0 +1,18 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                5    [KOVAT1U]
+242845.00S0642704.00W        [KOVAT1U]
+243530.09S0644747.27W        [KOVAT1U]
+243812.51S0645236.24W        [KOVAT1U]
+244528.18S0650533.80W        [KOVAT1U]
+242143.00S0652026.00W        [KOVAT1U]

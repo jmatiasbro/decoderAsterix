@@ -1,0 +1,17 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                4    [ILPAR4B]
+263610.00S0650251.00W        [ILPAR4B]
+261229.00S0645409.00W        [ILPAR4B]
+261054.00S0650535.00W        [ILPAR4B]
+254158.00S0650533.00W        [ILPAR4B]

@@ -1,0 +1,15 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                2    [IMBOL3E]
+270529.00S0650340.00W        [IMBOL3E]
+274456.00S0645554.00W        [IMBOL3E]

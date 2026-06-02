@@ -1,1168 +1,1267 @@
+"""
+main_pyqt.py — ASTERIX Radar Decoder (Arquitectura Modular)
+============================================================
+Punto de entrada de la GUI PyQt6.
+
+Módulos:
+  - geo_utils         → StereographicLocal, cargar_sensores, METERS_PER_NM
+  - asterix_worker    → AsterixWorker QThread (scan + play)
+  - radar_widget      → RadarWidget PPI (visualización)
+  - dashboard_widget  → DashboardWidget (control lateral Glassmorphism)
+
+Colores:  Fondo #0B0E14 | Ploteos Cian #00FFFF | Barrido Verde #39FF14
+
+FLUJO FASE 1 (Decodificar Archivo):
+  Paso 1 (Cargar Archivo): Usuario selecciona PCAP. Sistema escanea superficialmente
+    para contar frames, detectar SAC/SIC y habilitar botón "Decodificar Archivo".
+    Play permanece deshabilitado.
+  Paso 2 (Presionar Decodificar): AsterixWorker procesa en segundo plano, indexa
+    timestamps, llena buffers y ejecuta relocalización geográfica (Fase 2).
+    Al terminar, se habilita Play.
+"""
+
 import sys
 import os
-import math
-import re
 import time
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget, 
-                             QPushButton, QSlider, QLabel, QStatusBar, QFileDialog, QTabWidget, 
-                             QHBoxLayout, QComboBox, QDialog, QTableWidget, QTableWidgetItem, 
-                             QHeaderView, QGraphicsEllipseItem, QGridLayout, QFrame)
-from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer
-from PyQt6.QtGui import QAction
-import pyqtgraph as pg
+import json
+import glob
+import math
+import tempfile
+import shutil
+from typing import Dict, Tuple, List, Optional, Set, Any
 
-from config import get_sensor_position
-from decoders import decode_asterix_stream
-from geo_tools import TrackManager, TargetProcessor, SensorRegistry
-from main import AsterixAnalyzer
-from atm_analytics import ATMAnalyticsEngine
-from exporters import KMLExporter, PDFReportGenerator, ReportGenerator
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout,
+    QHBoxLayout, QFileDialog, QMessageBox, QGroupBox, QSizePolicy,
+    QListWidget, QListWidgetItem, QPushButton, QLabel, QSlider, QComboBox,
+    QSpinBox, QCheckBox
+)
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont, QColor, QPainterPath
 
-# ============================================================================
-# VENTANAS DE DIÁLOGO PARA ANALÍTICA
-# ============================================================================
+import ezdxf
 
-class StatsDialog(QDialog):
-    """Diálogo para mostrar estadísticas de Pd y performance."""
-    def __init__(self, parent, pd_intervals, pd_dict, analytics_stats):
-        super().__init__(parent)
-        self.setWindowTitle("Estadísticas de Detección y Performance")
-        self.setMinimumSize(600, 400)
-        self.setStyleSheet("background-color: #1a1a1a; color: #e0e0e0;")
-
-        layout = QVBoxLayout(self)
-        
-        # Estadísticas de integridad
-        stats_text = (f"Registros sin Modo A: {analytics_stats.get('mode_a_missing', 0)}\n"
-                      f"Registros sin Modo C (FL): {analytics_stats.get('mode_c_missing', 0)}")
-        layout.addWidget(QLabel(stats_text))
-
-        # Gráfico de Pd Interactivo
-        self.plot_widget = pg.PlotWidget(title="Curva de Probabilidad de Detección (Pd)")
-        self.plot_widget.setLabel('left', 'Pd (%)')
-        self.plot_widget.setLabel('bottom', 'Rotación / Intervalo')
-        self.plot_widget.setYRange(0, 105)
-        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.plot_widget.addLegend()
-        
-        colors = [(0, 255, 0), (0, 255, 255), (255, 255, 0)]
-        for i, (cat, values) in enumerate(pd_dict.items()):
-            color = colors[i % len(colors)]
-            self.plot_widget.plot(pd_intervals, values, pen=pg.mkPen(color, width=2), symbol='o', symbolBrush=color, name=f'CAT {cat}')
-            
-        layout.addWidget(self.plot_widget, stretch=2)
-
-        # Tabla de Pd
-        table = QTableWidget()
-        table.setColumnCount(len(pd_dict) + 1)
-        
-        header_labels = ["Rotación"] + [f"Pd CAT {cat} (%)" for cat in pd_dict.keys()]
-        table.setHorizontalHeaderLabels(header_labels)
-        table.setRowCount(len(pd_intervals))
-
-        for i, interval in enumerate(pd_intervals):
-            table.setItem(i, 0, QTableWidgetItem(str(interval)))
-            for j, cat in enumerate(pd_dict.keys()):
-                pd_value = pd_dict[cat][i]
-                table.setItem(i, j + 1, QTableWidgetItem(f"{pd_value:.2f}"))
-        
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        layout.addWidget(table, stretch=1)
+from geo_utils import cargar_sensores, METERS_PER_NM
+from asterix_worker import AsterixWorker
+from radar_widget import RadarWidget, RadarPlot
+from dashboard_widget import DashboardWidget
+from io_tools import load_pcap
 
 
-class DegradationDialog(QDialog):
-    """Diálogo para mostrar eventos de degradación detectados."""
-    def __init__(self, parent, degradations):
-        super().__init__(parent)
-        self.setWindowTitle("Eventos de Degradación Detectados")
-        self.setMinimumSize(700, 400)
-        self.setStyleSheet("background-color: #1a1a1a; color: #e0e0e0;")
+# ============================================================
+# CONSTANTES DE COLOR
+# ============================================================
+COLOR_BG_MAIN = QColor("#0B0E14")
 
-        layout = QVBoxLayout(self)
-        table = QTableWidget()
-        table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["Timestamp", "Tipo", "ID (Squawk)", "Detalles"])
-        table.setRowCount(len(degradations))
 
-        for i, event in enumerate(degradations):
-            timestamp_str = time.strftime('%H:%M:%S', time.gmtime(event.get('time', 0)))
-            table.setItem(i, 0, QTableWidgetItem(timestamp_str))
-            table.setItem(i, 1, QTableWidgetItem(str(event.get('type', 'N/A'))))
-            table.setItem(i, 2, QTableWidgetItem(str(event.get('id', 'N/A'))))
-            table.setItem(i, 3, QTableWidgetItem(str(event.get('details', 'N/A'))))
-
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        layout.addWidget(table)
-
-# ============================================================================
-# 1. CONTROLADOR / HILO ASÍNCRONO (Data Ingestion & Processing)
-# ============================================================================
-class IngestionWorker(QThread):
+# ============================================================
+# HILO LIGERO DE ESCANEO SUPERFICIAL (FASE 1)
+# ============================================================
+class PcapScannerThread(QThread):
     """
-    Hilo secundario que engloba toda la E/S (I/O) y carga de CPU 
-    para no bloquear jamás la GUI. Implementa Batching.
-    """
-    progress = pyqtSignal(int, str)
-    tracks_state_ready = pyqtSignal(dict)  # Emite el estado final del buffer
-    finished = pyqtSignal(int, list, dict, dict, list, float)
-    error = pyqtSignal(str)
+    Escanea superficialmente un PCAP para detectar:
+    - Cantidad total de frames
+    - SAC/SIC del primer radar detectado
+    - Duración estimada (primer y último ToD)
 
-    def __init__(self, file_paths, processor, track_manager):
+    NO decodifica datos completos. Solo lectura rápida para habilitar
+    la UI y preparar al usuario para la decodificación real.
+    """
+    scan_result = pyqtSignal(int, float, set)  # total_frames, duration_sec, detected_sensors
+    scan_error = pyqtSignal(str)
+
+    def __init__(self, pcap_path: str):
         super().__init__()
-        self.file_paths = file_paths
-        self.processor = processor
-        self.track_manager = track_manager
-        self._is_running = True
+        self.pcap_path = pcap_path
 
     def run(self):
+        from scapy.all import PcapReader, UDP
+        from native_asterix import parse_payload
+
+        if not os.path.exists(self.pcap_path):
+            self.scan_error.emit(f"PCAP no encontrado: {self.pcap_path}")
+            return
+
         try:
-            total_processed = 0
-            all_processed_records = []
-            detected_rpm = 15.0
-            for file_idx, file_path in enumerate(self.file_paths):
-                if not self._is_running:
-                    break
-                
-                self.progress.emit(5, f"Leyendo archivo {file_idx+1}/{len(self.file_paths)}: {os.path.basename(file_path)}...")
-                
-                # Instanciamos el analizador local para invocar sus métodos de ingesta
-                analyzer_temp = AsterixAnalyzer()
-                
-                _, ext = os.path.splitext(file_path)
-                if ext.lower() == '.pcap':
-                    raw_data = analyzer_temp.load_pcap(file_path)
-                elif ext.lower() == '.ast':
-                    raw_data = analyzer_temp.load_ast(file_path)
-                else:
-                    self.error.emit(f"Formato no soportado: {os.path.basename(file_path)}")
-                    continue
-
-                if not raw_data:
-                    self.error.emit(f"No se extrajeron datos de {os.path.basename(file_path)}")
-                    continue
-
-                self.progress.emit(20, f"Decodificando {os.path.basename(file_path)}...")
-                records = decode_asterix_stream(raw_data)
-                total = len(records)
-                
-                if total == 0:
-                    continue
-
-                # PREVENCIÓN DE SIGNAL FLOOD: Procesamiento por Lotes (Batching)
-                batch_size = 1000
-                
-                for i, raw_rec in enumerate(records):
-                    if not self._is_running:
-                        break
-                    
-                    # Auto-registrar el sensor para que el TargetProcessor sepa proyectarlo
-                    sensor = self.processor.sensor_registry.get_sensor(raw_rec.sac, raw_rec.sic)
-                    if not sensor or sensor['latitude'] is None:
-                        if getattr(raw_rec, 'latitude', None) is not None and raw_rec.category in [34, 2]:
-                            self.processor.sensor_registry.register_sensor(raw_rec.sac, raw_rec.sic, raw_rec.latitude, raw_rec.longitude, getattr(raw_rec, 'altitude', 0))
-                        else:
-                            known_pos = get_sensor_position(raw_rec.sac, raw_rec.sic)
-                            if known_pos:
-                                self.processor.sensor_registry.register_sensor(raw_rec.sac, raw_rec.sic, known_pos[0], known_pos[1], known_pos[2])
-                    
-                    processed = self.processor.process_record(raw_rec)
-                    all_processed_records.append(processed)
-                    
-                    if processed.get('category') in [2, 34] and 'antenna_speed' in processed.get('extra_data', {}):
-                        detected_rpm = processed['extra_data']['antenna_speed']
-                    
-                    # Aislamiento por SAC/SIC para evitar colisiones Multi-Sensor
-                    sac = processed.get('sac', 0)
-                    sic = processed.get('sic', 0)
-                    tid_val = processed.get('mode_s') or processed.get('mode_3a') or processed.get('track_number')
-                    tid = f"{sac:03d}_{sic:03d}_{tid_val}" if tid_val is not None else 'None'
-                    
-                    if tid != 'None':
-                        self.track_manager.update_track(tid, processed)
-                    
-                    if i % batch_size == 0:
-                        self.tracks_state_ready.emit(dict(self.track_manager.tracks))
-                        pct = int(20 + (i / total) * 80)
-                        self.progress.emit(pct, f"Procesando archivo {file_idx+1}/{len(self.file_paths)}: {i}/{total} targets...")
-                
-                total_processed += total
-
-            if self._is_running:
-                self.progress.emit(90, "Calculando Probabilidad de Detección (Pd) Global...")
-                analytics = ATMAnalyticsEngine(rotation_period=60.0/detected_rpm if detected_rpm > 0 else 4.0)
-                pd_intervals, pd_dict, stats = analytics.calculate_pd_series(all_processed_records)
-                degradations = analytics.degradations
-                
-                self.tracks_state_ready.emit(dict(self.track_manager.tracks))
-
-            self.progress.emit(100, "Procesamiento completado.")
-            self.finished.emit(total_processed, pd_intervals, pd_dict, stats, degradations, detected_rpm)
-
+            reader = PcapReader(self.pcap_path)
         except Exception as e:
-            self.error.emit(str(e))
+            self.scan_error.emit(f"Error abriendo PCAP: {e}")
+            return
 
-    def stop(self):
-        self._is_running = False
+        total_pkts = 0
+        first_tod = None
+        last_tod = None
+        detected_sensors: Set[Tuple[int, int]] = set()
+        max_scan = 20000  # Límite para escaneo superficial rápido
+
+        for i, pkt in enumerate(reader):
+            if i >= max_scan:
+                break
+            try:
+                if UDP not in pkt:
+                    continue
+                payload = bytes(pkt[UDP].payload)
+                if len(payload) <= 10:
+                    continue
+
+                records = parse_payload(payload)
+                if not records:
+                    continue
+
+                for rec in records:
+                    cat = rec.get('category')
+                    if cat not in (1, 2, 21, 34, 48, 62):
+                        continue
+                    
+                    sac = rec.get('sac')
+                    sic = rec.get('sic')
+                    if sac is not None and sic is not None:
+                        detected_sensors.add((sac, sic))
+
+                    tod = rec.get('timestamp')
+                    if tod is not None:
+                        if first_tod is None:
+                            first_tod = tod
+                        last_tod = tod
+                    
+                    total_pkts += 1
+            except Exception:
+                continue
+
+        reader.close()
+
+        duration = 0.0
+        if first_tod is not None and last_tod is not None:
+            duration = last_tod - first_tod
+            if duration < 0:
+                duration += 86400.0
+
+        self.scan_result.emit(total_pkts, duration, detected_sensors)
 
 
-# ============================================================================
-# 2. VISTA (Interfaz Gráfica Principal)
-# ============================================================================
-class ATCNightWindow(QMainWindow):
-    """Interfaz Profesional ATC en modo oscuro."""
+# ============================================================
+# HILO DE CARGA DEL DXF (asíncrono)
+# ============================================================
+class DxfLoaderThread(QThread):
+    """Carga mapa.dxf en hilo separado. Emite segmentos serializables."""
+    dxf_data = pyqtSignal(object, float, float, float, float)
+    dxf_error = pyqtSignal(str)
+
+    def __init__(self, filepath: str):
+        super().__init__()
+        self.filepath = filepath
+
+    def run(self):
+        # Intentar ruta directa o relativa al directorio raíz del proyecto
+        path = self.filepath
+        if not os.path.exists(path):
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            path = os.path.join(base_dir, self.filepath)
+        if not os.path.exists(path):
+            # Probar un nivel superior
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            path = os.path.join(base_dir, self.filepath)
+        
+        if not os.path.exists(path):
+            self.dxf_error.emit(f"DXF no encontrado: {self.filepath}")
+            return
+            
+        try:
+            doc = ezdxf.readfile(path)
+            msp = doc.modelspace()
+            # Segmentos raw: coordenadas en NM (NO multiplicadas por METERS_PER_NM)
+            # El DXF fue diseñado para San Luis (lat=-33.274444, lon=-66.348611)
+            # y las coordenadas representan offsets en NM desde ese punto.
+            segments: list = []
+            min_x = min_y = float('inf')
+            max_x = max_y = float('-inf')
+
+            def update_ext(x, y):
+                nonlocal min_x, max_x, min_y, max_y
+                min_x = min(min_x, x)
+                max_x = max(max_x, x)
+                min_y = min(min_y, y)
+                max_y = max(max_y, y)
+
+            def add_seg(t, layer, *coords):
+                segments.append((t, layer, *coords))
+                for i in range(0, len(coords), 2):
+                    update_ext(coords[i], coords[i+1])
+
+            for entity in msp:
+                try:
+                    dxft = entity.dxftype()
+                    layer = entity.dxf.layer
+                    if dxft == 'LINE':
+                        add_seg('M', layer, entity.dxf.start.x, entity.dxf.start.y)
+                        add_seg('L', layer, entity.dxf.end.x, entity.dxf.end.y)
+                    elif dxft == 'LWPOLYLINE':
+                        pts = list(entity.get_points())
+                        if pts:
+                            add_seg('M', layer, pts[0][0], pts[0][1])
+                            for p in pts[1:]:
+                                add_seg('L', layer, p[0], p[1])
+                            if entity.closed:
+                                segments.append(('C', layer))
+                    elif dxft == 'POLYLINE':
+                        verts = list(entity.vertices)
+                        if verts:
+                            v0 = verts[0].dxf.location
+                            add_seg('M', layer, v0.x, v0.y)
+                            for v in verts[1:]:
+                                loc = v.dxf.location
+                                add_seg('L', layer, loc.x, loc.y)
+                            if entity.is_closed:
+                                segments.append(('C', layer))
+                    elif dxft == 'ARC':
+                        cx, cy = entity.dxf.center.x, entity.dxf.center.y
+                        r = entity.dxf.radius
+                        sa, ea = entity.dxf.start_angle, entity.dxf.end_angle
+                        steps = max(12, int(abs(ea - sa) / 5))
+                        first = True
+                        for i in range(steps + 1):
+                            a = math.radians(sa + (ea - sa) * i / steps)
+                            x = cx + r * math.cos(a)
+                            y = cy + r * math.sin(a)
+                            if first:
+                                add_seg('M', layer, x, y)
+                                first = False
+                            else:
+                                add_seg('L', layer, x, y)
+                    elif dxft == 'CIRCLE':
+                        cx, cy = entity.dxf.center.x, entity.dxf.center.y
+                        r = entity.dxf.radius
+                        first = True
+                        for i in range(37):
+                            a = math.radians(360.0 * i / 36)
+                            x = cx + r * math.cos(a)
+                            y = cy + r * math.sin(a)
+                            if first:
+                                add_seg('M', layer, x, y)
+                                first = False
+                            else:
+                                add_seg('L', layer, x, y)
+                        segments.append(('C', layer))
+                except Exception:
+                    continue
+
+            if min_x == float('inf'):
+                self.dxf_error.emit("Sin entidades válidas en DXF")
+                return
+            self.dxf_data.emit(segments, min_x, min_y, max_x, max_y)
+        except Exception as e:
+            self.dxf_error.emit(f"Error DXF: {e}")
+
+
+def build_path_from_segments(segments: list) -> QPainterPath:
+    """Reconstruye QPainterPath desde segmentos serializables."""
+    path = QPainterPath()
+    for seg in segments:
+        t = seg[0]
+        if t == 'M':
+            path.moveTo(seg[1], seg[2])
+        elif t == 'L':
+            path.lineTo(seg[1], seg[2])
+        elif t == 'C':
+            path.closeSubpath()
+    return path
+
+
+def raw_decode_cat48(payload: bytes) -> List[Dict[str, Any]]:
+    """Raw decoder de emergencia para CAT048 (fallback si asterix falla), corregido."""
+    if not payload or len(payload) < 3:
+        return []
+
+    if payload[0] != 0x30:
+        return []
+
+    try:
+        length = (payload[1] << 8) | payload[2]
+        if length > len(payload):
+            return []
+        payload = payload[:length]
+    except IndexError:
+        return []
+
+    fspec_bytes = []
+    idx = 3
+    while idx < length:
+        b = payload[idx]
+        fspec_bytes.append(b)
+        idx += 1
+        if not (b & 1):
+            break
+    
+    if not fspec_bytes:
+        return []
+    
+    rec = {'category': 48}
+    fspec1 = fspec_bytes[0]
+
+    # I048/010 Data Source Identifier (SAC/SIC)
+    if fspec1 & 0x80:
+        if idx + 2 <= length:
+            rec['I048/010'] = {'SAC': payload[idx], 'SIC': payload[idx+1]}
+            idx += 2
+            
+    # I048/140 Time of Day
+    if fspec1 & 0x40:
+        if idx + 3 <= length:
+            tod = ((payload[idx] << 16) | (payload[idx+1] << 8) | payload[idx+2]) / 128.0
+            rec['I048/140'] = {'Time of Day': tod}
+            idx += 3
+
+    # I048/020 Target Report Descriptor (variable)
+    if fspec1 & 0x20:
+        while idx < length:
+            b = payload[idx]
+            idx += 1
+            if not (b & 1): break
+            
+    # I048/040 Measured Position in Polar Coordinates
+    if fspec1 & 0x10:
+        if idx + 4 <= length:
+            rho = ((payload[idx] << 8) | payload[idx+1]) / 256.0 # NM
+            theta = ((payload[idx+2] << 8) | payload[idx+3]) * (360.0 / 65536.0) # degrees
+            rec['I048/040'] = {'RHO': rho, 'THETA': theta}
+            idx += 4
+            
+    # I048/070 Mode-3/A Code
+    if fspec1 & 0x08:
+        if idx + 2 <= length:
+            idx += 2
+
+    # I048/090 Flight Level
+    if fspec1 & 0x04:
+        if idx + 2 <= length:
+            idx += 2
+
+    # I048/130 Radar Plot Characteristics (compound)
+    if fspec1 & 0x02:
+        while idx < length:
+            b = payload[idx]
+            idx += 1
+            if not (b & 1): break
+
+    # Add default SAC/SIC if missing to allow plot drawing
+    if 'I048/010' not in rec:
+        rec['I048/010'] = {'SAC': 0, 'SIC': 0}
+
+    # Only return if we have the minimum data for plotting
+    if 'I048/040' in rec and 'I048/140' in rec:
+        return [rec]
+
+    return []
+
+
+
+# ============================================================
+# VENTANA PRINCIPAL
+# ============================================================
+class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ASTERIX Mission-Critical Analyzer - Fase 1")
-        self.setMinimumSize(1200, 800)
-        self.setStyleSheet("""
-            QMainWindow { background-color: #0a0a0a; color: #00ff00; font-family: 'Consolas'; }
-            QTabWidget::pane { border: 1px solid #004400; background: #050505; }
-            QTabBar::tab { background: #1a1a1a; color: #aaaaaa; padding: 8px; border: 1px solid #004400; }
-            QTabBar::tab:selected { background: #004400; color: #ffffff; font-weight: bold; }
-            QComboBox, QPushButton { background-color: #1a1a1a; color: #00ff00; border: 1px solid #00ff00; padding: 5px; }
-            QPushButton:hover { background-color: #004400; }
+        self.setWindowTitle("ASTERIX Radar Decoder - Multi-Category")
+        self.resize(1280, 800)
+        self.main_sensor_set = False
+        self._sensor_rpms: Dict[Tuple[int, int], float] = {}
+        self._center_sensor_key: Optional[Tuple[int, int]] = None
+        self._decode_complete = False  # FASE 1: flag de decodificación completada
+
+        # Cargar sensores — Resolve default-site-params directory robustly
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        site_params_dir = os.path.join(base_dir, "default-site-params")
+        self.sensores = cargar_sensores(site_params_dir)
+
+        # Filtro de Sensores - memoria activa
+        self.sensores_conocidos: Set[str] = set()
+
+        # Worker y thread
+        self._worker: Optional[AsterixWorker] = None
+        self._playing = False
+        self._pcap_duration = 0.0
+        self._total_frames = 0
+        self._pcap_path = ""  # Sin archivo por defecto
+
+        self.cache_dir = tempfile.mkdtemp(prefix="asterix_cache_")
+        print(f"[Main] Directorio de caché de sesión creado en: {self.cache_dir}")
+
+        self._setup_ui()
+        self._load_dxf_async()
+
+        # FASE 4: Conectar señal de contadores de categoría
+        # self.radar.category_counts_updated.connect(self.dashboard.update_category_counts)
+
+        # REGLA DE ESTILO (Inyectar al final del __init__):
+        estilo_profesional = """
+/* Fondo principal y texto general */
+QMainWindow, QWidget {
+    background-color: #1A1C23;
+    color: #E0E6ED;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 10pt;
+}
+
+/* Estilo para los paneles de agrupación */
+QGroupBox {
+    background-color: #242730;
+    border: 1px solid #3A3F4C;
+    border-radius: 6px;
+    margin-top: 18px;
+    font-weight: bold;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 8px;
+    color: #61AFEF; /* Azul técnico */
+    background-color: #1A1C23;
+    border-radius: 4px;
+}
+
+/* Botones modernos y responsivos */
+QPushButton {
+    background-color: #2D313C;
+    border: 1px solid #4B5263;
+    border-radius: 4px;
+    padding: 6px 12px;
+    color: #FFFFFF;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #3E4451;
+    border: 1px solid #61AFEF;
+    color: #61AFEF;
+}
+QPushButton:pressed {
+    background-color: #61AFEF;
+    color: #1A1C23;
+}
+
+/* Lista de sensores (QListWidget) */
+QListWidget {
+    background-color: #1A1C23;
+    border: 1px solid #3A3F4C;
+    border-radius: 4px;
+    padding: 4px;
+}
+QListWidget::item {
+    padding: 4px;
+    border-bottom: 1px solid #242730;
+}
+QListWidget::item:hover {
+    background-color: #2D313C;
+}
+QListWidget::item:selected {
+    background-color: #3E4451;
+    color: #61AFEF;
+    border-left: 3px solid #61AFEF;
+}
+"""
+
+        self.setStyleSheet(estilo_profesional)
+
+    # ----------------------------------------------------------
+    # UI
+    # ----------------------------------------------------------
+    def _setup_ui(self):
+        # REGLA DE ARQUITECTURA PRINCIPAL:
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.layout_principal = QVBoxLayout(self.central_widget)
+        self.layout_principal.setContentsMargins(5, 5, 5, 5)
+        self.layout_principal.setSpacing(5)
+
+        # REGLA DE LA BARRA SUPERIOR:
+        self.panel_superior = QWidget()
+        self.panel_superior.setMaximumHeight(130) # Altura fija tipo "Dashboard"
+        self.panel_superior.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        self.layout_superior = QHBoxLayout(self.panel_superior)
+        self.layout_superior.setContentsMargins(0, 0, 0, 0)
+
+        # 1. Zona de controles de reproducción (Play/Stop/Carga)
+        self.grupo_reproduccion = QGroupBox("Controles de Archivo")
+        layout_reproduccion = QHBoxLayout()
+        layout_reproduccion.setSpacing(10)
+        layout_reproduccion.setContentsMargins(10, 10, 10, 10)
+
+        self.btn_cargar = QPushButton("Cargar Archivo")
+        self.btn_decodificar = QPushButton("Decodificar / Play")
+        self.btn_detener = QPushButton("Detener")
+
+        self.btn_cargar.setMinimumHeight(30)
+        self.btn_decodificar.setMinimumHeight(30)
+        self.btn_detener.setMinimumHeight(30)
+        self.btn_decodificar.setEnabled(False)
+
+        layout_reproduccion.addWidget(self.btn_cargar)
+        layout_reproduccion.addWidget(self.btn_decodificar)
+        layout_reproduccion.addWidget(self.btn_detener)
+
+        self.grupo_reproduccion.setLayout(layout_reproduccion)
+        self.layout_superior.addWidget(self.grupo_reproduccion)
+
+        self.btn_cargar.clicked.connect(self._on_load_pcap)
+        self.btn_decodificar.clicked.connect(self._on_play_toggle)
+        self.btn_detener.clicked.connect(self._on_stop)
+
+        # 2. Zona TDD: Tiempo, Slider y Velocidad
+        self.grupo_tdd = QGroupBox("Tiempo")
+        layout_tdd = QVBoxLayout()
+        layout_tdd.setSpacing(4)
+        layout_tdd.setContentsMargins(8, 8, 8, 8)
+
+        # TDD Label: tiempo actual
+        self.lbl_tiempo = QLabel("00:00:00")
+        self.lbl_tiempo.setFont(QFont("Monospace", 14, QFont.Weight.Bold))
+        self.lbl_tiempo.setStyleSheet("color: #00FF00;")
+        self.lbl_tiempo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_tdd.addWidget(self.lbl_tiempo)
+
+        # Slider de tiempo
+        self.slider_tiempo = QSlider(Qt.Orientation.Horizontal)
+        self.slider_tiempo.setMinimum(0)
+        self.slider_tiempo.setMaximum(1000)
+        self.slider_tiempo.setValue(0)
+        self.slider_tiempo.setEnabled(False)
+        layout_tdd.addWidget(self.slider_tiempo)
+
+        # Combo de velocidad
+        self.combo_velocidad = QComboBox()
+        self.combo_velocidad.addItems(["1x", "2x", "4x", "5x", "10x"])
+        self.combo_velocidad.setCurrentIndex(0)
+        layout_tdd.addWidget(self.combo_velocidad)
+
+        self.grupo_tdd.setLayout(layout_tdd)
+        self.layout_superior.addWidget(self.grupo_tdd)
+
+        # 3. Zona del Filtro de Sensores
+        self.grupo_sensores = QGroupBox("Filtro de Sensores Múltiple")
+        layout_sensores = QHBoxLayout() # Horizontal para que conviva la lista y los botones
+
+        # Botones apilados verticalmente a la izquierda de la lista
+        layout_botones = QVBoxLayout()
+        self.btn_todos = QPushButton("Todos")
+        self.btn_ninguno = QPushButton("Ninguno")
+        layout_botones.addWidget(self.btn_todos)
+        layout_botones.addWidget(self.btn_ninguno)
+        layout_sensores.addLayout(layout_botones)
+
+        # Lista de sensores a la derecha de los botones
+        self.lista_sensores = QListWidget()
+        layout_sensores.addWidget(self.lista_sensores, stretch=1) # Le damos stretch para que ocupe el ancho sobrante
+
+        self.grupo_sensores.setLayout(layout_sensores)
+        self.layout_superior.addWidget(self.grupo_sensores, stretch=2)
+
+        # Conexiones de señales del filtro
+        self.sensores_activos = set()
+        self.lista_sensores.itemChanged.connect(self.actualizar_filtro)
+        self.lista_sensores.itemClicked.connect(self._on_sensor_item_clicked)
+        self.btn_todos.clicked.connect(self.seleccionar_todos)
+        self.btn_ninguno.clicked.connect(self.deseleccionar_todos)
+
+        # FASE 1: Conectar señales TDD
+        self.combo_velocidad.currentIndexChanged.connect(self.cambiar_velocidad)
+        self.slider_tiempo.sliderMoved.connect(self.seek_tiempo)
+        
+        # Historial y Estela
+        self.grupo_hist = QGroupBox("Historial / Estela")
+        l_hist = QVBoxLayout()
+
+        # Fila 1: Modo de visualización
+        l_modo = QHBoxLayout()
+        self.lbl_mode = QLabel("Modo:")
+        self.lbl_mode.setStyleSheet("background-color: transparent; border: none; color: #E0E6ED; font-weight: normal;")
+        self.combo_mode = QComboBox()
+        self.combo_mode.addItems(["Tracking", "Historic"])
+        self.combo_mode.setCurrentText("Tracking")
+        self.combo_mode.setStyleSheet("background-color: #2D313C; color: white; border: 1px solid #4B5263; border-radius: 4px; padding: 2px;")
+        l_modo.addWidget(self.lbl_mode)
+        l_modo.addWidget(self.combo_mode, stretch=1)
+
+        # Fila 2: Cantidad de puntos
+        l_cant = QHBoxLayout()
+        lbl_cant = QLabel("Puntos:")
+        lbl_cant.setStyleSheet("background-color: transparent; border: none; color: #E0E6ED; font-weight: normal;")
+        self.spin_hist = QSpinBox()
+        self.spin_hist.setRange(0, 500)
+        self.spin_hist.setValue(500)
+        self.spin_hist.setStyleSheet("background-color: #2D313C; color: white; border: 1px solid #4B5263; border-radius: 4px; padding: 2px;")
+        l_cant.addWidget(lbl_cant)
+        l_cant.addWidget(self.spin_hist, stretch=1)
+        
+        self.btn_clear_hist = QPushButton("Limpiar")
+        self.btn_clear_hist.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(244, 67, 54, 150);
+                border: 1px solid #F44336;
+            }
+            QPushButton:hover {
+                background-color: #F44336;
+                color: white;
+            }
         """)
         
-        # Modelos de Estado
-        self.sensor_registry = SensorRegistry()
-        self.processor = TargetProcessor(self.sensor_registry)
-        self.track_manager = TrackManager(history_minutes=10, timeout_seconds=60)
-        self.worker = None
-        self.analytics_engine = ATMAnalyticsEngine()
-        self.degradation_events = []
-        self.known_track_ids = set()
+        self.chk_sweep = QCheckBox("Barrido Radar")
+        self.chk_sweep.setChecked(True)
+        self.chk_sweep.setStyleSheet("""
+            QCheckBox {
+                color: #E0E6ED;
+                background-color: transparent;
+                font-weight: normal;
+                border: none;
+                margin-top: 4px;
+            }
+            QCheckBox::indicator {
+                width: 14px;
+                height: 14px;
+                border: 1px solid #00E5FF;
+                background-color: #2D313C;
+                border-radius: 3px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #00E5FF;
+                border: 1px solid #00E5FF;
+            }
+        """)
         
-        # Animación de barrido
-        self.sweep_angle = 0.0
+        l_hist.addLayout(l_modo)
+        l_hist.addLayout(l_cant)
+        l_hist.addWidget(self.btn_clear_hist)
+        l_hist.addWidget(self.chk_sweep)
+        self.grupo_hist.setLayout(l_hist)
         
-        self._setup_ui()
-        
-        # Timer para Garbage Collection cada 10 segundos
-        self.gc_timer = QTimer(self)
-        self.gc_timer.timeout.connect(self._run_garbage_collection)
-        self.gc_timer.start(10000)
-        
-        # Timer para animación de antena PPI (60 FPS)
-        self.anim_timer = QTimer(self)
-        self.anim_timer.timeout.connect(self._animate_sweep)
-        self.anim_timer.start(16)
+        self.layout_superior.addWidget(self.grupo_hist)
 
-    def _setup_ui(self):
-        # --- Menú Superior Requerido ---
-        menubar = self.menuBar()
-        menubar.setStyleSheet("background-color: #1a1a1a; color: #00ff00;")
-        file_menu = menubar.addMenu("Archivo")
-        
-        load_action = QAction("Cargar Archivo...", self)
-        load_action.setShortcut("Ctrl+O")
-        load_action.triggered.connect(self._load_file_dialog)
-        file_menu.addAction(load_action)
-        
-        file_menu.addSeparator()
-        kml_export_action = QAction("Exportar KML Avanzado (<gx:Track>)", self)
-        kml_export_action.triggered.connect(self._export_kml_advanced)
-        file_menu.addAction(kml_export_action)
-        
-        pdf_export_action = QAction("Exportar Reporte a PDF", self)
-        pdf_export_action.triggered.connect(self._export_pdf_report)
-        file_menu.addAction(pdf_export_action)
-        
-        file_menu.addSeparator()
-        exit_action = QAction("Salir", self)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+        # ---- RADAR WIDGET (PPI central) ----
+        self.radar = RadarWidget(sensores=self.sensores)
+        self.radar.sensores_visibles = self.sensores_activos
+        self.radar.setStyleSheet("background-color: transparent;")
 
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
+        # Conectar señales que dependen de self.radar (creado arriba)
+        self.combo_mode.setCurrentText(self.radar.history_mode)
+        self.combo_mode.currentTextChanged.connect(self._on_mode_changed)
+        self.spin_hist.valueChanged.connect(self._on_history_limit_changed)
+        self.btn_clear_hist.clicked.connect(self._clear_history)
+        self.chk_sweep.toggled.connect(self.radar.set_sweep_enabled)
 
-        # --- Panel de Control de Simulación (Fase 2) ---
-        playback_layout = QHBoxLayout()
-        
-        self.btn_play = QPushButton("▶ Play")
-        self.btn_play.clicked.connect(self._toggle_playback)
-        playback_layout.addWidget(self.btn_play)
-        
-        self.speed_combo = QComboBox()
-        self.speed_combo.addItems(["1x", "2x", "5x", "10x", "50x"])
-        playback_layout.addWidget(self.speed_combo)
-        
-        self.time_label = QLabel("TOD: 00:00:00")
-        self.time_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #00ff00;")
-        playback_layout.addWidget(self.time_label)
-        
-        playback_layout.addWidget(QLabel("Sensor Source (PPI):"))
-        self.sensor_source_combo = QComboBox()
-        self.sensor_source_combo.currentIndexChanged.connect(self._force_redraw)
-        playback_layout.addWidget(self.sensor_source_combo, stretch=1)
-        
-        layout.addLayout(playback_layout)
+        # REGLA DE ENSAMBLAJE (Al final de la configuración de la UI):
+        self.layout_principal.addWidget(self.panel_superior)
+        self.layout_principal.addWidget(self.radar, stretch=1)
 
-        # --- Panel de Control (Filtro HMI) ---
-        control_layout = QHBoxLayout()
-        
-        control_layout.addWidget(QLabel("Filtrar Aeronave:"))
-        self.track_filter_combo = QComboBox()
-        self.track_filter_combo.addItem("Mostrar Todos", "ALL")
-        self.track_filter_combo.currentIndexChanged.connect(self._force_redraw)
-        control_layout.addWidget(self.track_filter_combo, stretch=1)
+    # ----------------------------------------------------------
+    # CARGA DEL DXF (asíncrona)
+    # ----------------------------------------------------------
+    def _load_dxf_async(self):
+        self.dxf_loader = DxfLoaderThread("mapa/mapa.dxf")
+        self.dxf_loader.dxf_data.connect(self._on_dxf_data)
+        self.dxf_loader.dxf_error.connect(self._on_dxf_error)
+        self.dxf_loader.start()
 
-        # 4. Sistema de Etiquetas Dinámicas (Data Block Switch)
-        self.label_mode_combo = QComboBox()
-        self.label_mode_combo.addItems(["Callsign", "Squawk"])
-        self.label_mode_combo.currentIndexChanged.connect(self._force_redraw)
-        control_layout.addWidget(self.label_mode_combo)
+    def _on_dxf_data(self, segments, min_x, min_y, max_x, max_y):
+        self.radar.set_raw_map_segments(segments, min_x, min_y, max_x, max_y)
+        self.radar._set_default_view()
+        # self.dashboard.set_progress_text("Mapa DXF cargado ✓ (reproyectable)")
 
-        btn_clear = QPushButton("LIMPIAR BUFFER")
-        btn_clear.clicked.connect(self._clear_buffer)
-        btn_clear.setStyleSheet("background-color: #440000; color: white;")
-        control_layout.addWidget(btn_clear)
-        
-        layout.addLayout(control_layout)
+    def _on_dxf_error(self, msg):
+        print(f"[DXF] {msg}")
 
-        # --- Panel de Herramientas (Medición e Historial) ---
-        tools_layout = QHBoxLayout()
-        tools_layout.addWidget(QLabel("Persistencia (segundos):"))
-        self.history_slider = QSlider(Qt.Orientation.Horizontal)
-        self.history_slider.setRange(0, 600) # 0 a 10 minutos
-        self.history_slider.setValue(60)
-        self.history_slider.valueChanged.connect(self._force_redraw)
-        tools_layout.addWidget(self.history_slider, stretch=1)
-        
-        self.btn_ruler_center = QPushButton("📏 Medir (Centro)")
-        self.btn_ruler_center.setCheckable(True)
-        self.btn_ruler_center.clicked.connect(self._toggle_ruler_center)
-        tools_layout.addWidget(self.btn_ruler_center)
+    def _on_history_limit_changed(self, val: int):
+        self.radar.history_limit = val
+        self.radar.update()
 
-        self.btn_ruler_free = QPushButton("📏 Medir (Libre)")
-        self.btn_ruler_free.setCheckable(True)
-        self.btn_ruler_free.clicked.connect(self._toggle_ruler_free)
-        tools_layout.addWidget(self.btn_ruler_free)
-        
-        layout.addLayout(tools_layout)
 
-        # --- Estructura de Vistas (TabWidget) ---
-        self.tabs = QTabWidget()
-        layout.addWidget(self.tabs, stretch=1)
-        
-        # Configuración global de PyQtGraph
-        pg.setConfigOption('background', '#050505')
-        pg.setConfigOption('foreground', '#00ff00')
+    def _clear_history(self):
+        if hasattr(self.radar, 'history'):
+            self.radar.history.clear()
+        if hasattr(self.radar, 'plots_raw'):
+            self.radar.plots_raw.clear()
+        self.radar.update()
+        # self.dashboard.set_progress_text("Mapa DXF: no disponible")
 
-        # --- Módulo 1: Vista Previa por Cuadrantes (Dashboard) ---
-        self.dashboard_tab = QWidget()
-        dash_layout = QGridLayout(self.dashboard_tab)
-        
-        def create_dash_frame(title):
-            frame = QFrame()
-            frame.setStyleSheet("QFrame { border: 2px solid #00ffff; border-radius: 5px; background-color: #0a0a0a; }")
-            vbox = QVBoxLayout(frame)
-            vbox.setContentsMargins(5, 5, 5, 5)
-            lbl = QLabel(title)
-            lbl.setStyleSheet("color: #00ffff; font-weight: bold; border: none; padding: 2px;")
-            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            pw = pg.PlotWidget()
-            pw.setAspectLocked(True)
-            pw.showGrid(x=True, y=True, alpha=0.2)
-            pw.hideAxis('bottom')
-            pw.hideAxis('left')
-            pw.setStyleSheet("border: none;")
-            vbox.addWidget(lbl)
-            vbox.addWidget(pw)
-            return frame, pw
-            
-        frame01, self.dash_c01 = create_dash_frame("CAT 001 - Monoradar Surface")
-        frame48, self.dash_c48 = create_dash_frame("CAT 048 - Monoradar Target")
-        frame21, self.dash_c21 = create_dash_frame("CAT 021 - ADS-B Reports")
-        frame62, self.dash_c62 = create_dash_frame("CAT 062 - System Tracks")
-        
-        # Añadir scatters estáticos
-        self.scatter_cat01 = pg.ScatterPlotItem(size=3, pen=pg.mkPen(None), brush=pg.mkBrush(255, 100, 255, 200)) # Magenta
-        self.dash_c01.addItem(self.scatter_cat01)
-        self.scatter_cat48 = pg.ScatterPlotItem(size=3, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 200)) # Verde
-        self.dash_c48.addItem(self.scatter_cat48)
-        self.scatter_cat21 = pg.ScatterPlotItem(size=3, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 255, 200)) # Cian
-        self.dash_c21.addItem(self.scatter_cat21)
-        self.scatter_cat62 = pg.ScatterPlotItem(size=3, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 0, 200)) # Amarillo
-        self.dash_c62.addItem(self.scatter_cat62)
-        
-        dash_layout.addWidget(frame01, 0, 0)
-        dash_layout.addWidget(frame48, 0, 1)
-        dash_layout.addWidget(frame21, 1, 0)
-        dash_layout.addWidget(frame62, 1, 1)
-        
-        self.tabs.addTab(self.dashboard_tab, "Dashboard Preview")
-
-        # Vista 1: PPI Sensor
-        self.ppi_view = pg.PlotWidget(title="Vista 1: PPI Sensor (Plano Polar)")
-        self.ppi_view.setAspectLocked(True)
-        self.ppi_view.showGrid(x=False, y=False)
-        self.ppi_view.hideAxis('bottom')
-        self.ppi_view.hideAxis('left')
-        self.ppi_view.setMouseEnabled(x=True, y=True)
-        
-        # --- Retícula Polar (Range Rings y Líneas Acimutales) ---
-        text_zero = pg.TextItem("0", color=(0, 150, 0, 180), anchor=(0.5, 0.5))
-        text_zero.setPos(0, 0)
-        self.ppi_view.addItem(text_zero)
-        
-        for r in range(50, 251, 50): # Anillos cada 50 NM hasta 250 NM
-            circle = QGraphicsEllipseItem(-r, -r, r*2, r*2)
-            circle.setPen(pg.mkPen(color=(0, 100, 0, 150), width=1, style=Qt.PenStyle.DashLine))
-            self.ppi_view.addItem(circle)
-            # Etiqueta de distancia
-            text = pg.TextItem(f"{r} NM", color=(0, 150, 0, 180), anchor=(0.5, 1))
-            text.setPos(0, r)
-            self.ppi_view.addItem(text)
-            
-        for angle in range(0, 360, 30): # Líneas radiales cada 30 grados
-            rad = math.radians(angle)
-            x = 250 * math.sin(rad)
-            y = 250 * math.cos(rad)
-            line = pg.PlotCurveItem([0, x], [0, y], pen=pg.mkPen(color=(0, 100, 0, 150), width=1, style=Qt.PenStyle.DashLine))
-            self.ppi_view.addItem(line)
-            
-        self.ppi_scatters = {}
-        for sym in ['o', 't', 's', 'x', '+']:
-            scatter = pg.ScatterPlotItem(symbol=sym, pen=pg.mkPen(None))
-            self.ppi_scatters[sym] = scatter
-            self.ppi_view.addItem(scatter)
-            
-        self.sweep_line = pg.PlotCurveItem(pen=pg.mkPen(color='#00ff00', width=2, style=Qt.PenStyle.DashLine))
-        self.degradation_scatter = pg.ScatterPlotItem(size=15, pen=pg.mkPen(None), symbol='o')
-        self.ppi_view.addItem(self.degradation_scatter)
-        
-        # --- Herramientas de Medición (Ruler) ---
-        self.ruler_start_point = None
-        self.ruler_line_item = pg.PlotCurveItem(pen=pg.mkPen(color='r', width=2, style=Qt.PenStyle.DashLine))
-        self.ruler_label = pg.TextItem(color='r', anchor=(0, 1), fill=pg.mkBrush(0, 0, 0, 150))
-        self.ppi_view.addItem(self.ruler_line_item)
-        self.ppi_view.addItem(self.ruler_label)
-        self.ruler_line_item.hide()
-        self.ruler_label.hide()
-        
-        self.ppi_view.scene().sigMouseClicked.connect(self._on_ppi_mouse_clicked)
-        self.ppi_view.scene().sigMouseMoved.connect(self._on_ppi_mouse_moved)
-
-        # Animación de pulso para degradaciones
-        self.degradation_pulse_timer = QTimer(self)
-        self.degradation_pulse_timer.timeout.connect(self._pulse_degradations)
-        self.degradation_pulse_timer.start(250)
-        self.pulse_state = 0
-
-        self.ppi_view.addItem(self.sweep_line)
-        self.tabs.addTab(self.ppi_view, "PPI Sensor")
-
-        # Vista 2: Mapa Situacional WGS84
-        self.map_view = pg.PlotWidget(title="Vista 2: Mapa Situacional (WGS84)")
-        self.map_view.setAspectLocked(True)
-        self.map_view.showGrid(x=True, y=True, alpha=0.3)
-        
-        self.map_scatters = {}
-        for sym in ['o', 't', 's', 'x', '+']:
-            scatter = pg.ScatterPlotItem(symbol=sym, pen=pg.mkPen(None))
-            self.map_scatters[sym] = scatter
-            self.map_view.addItem(scatter)
-            
-        self.tabs.addTab(self.map_view, "Mapa Situacional")
-
-        # --- Menú de Análisis ---
-        analysis_menu = menubar.addMenu("Análisis")
-        pd_action = QAction("Estadísticas de Detección (Pd)", self)
-        pd_action.triggered.connect(self._show_pd_dialog)
-        analysis_menu.addAction(pd_action)
-        degradation_action = QAction("Eventos de Degradación", self)
-        degradation_action.triggered.connect(self._show_degradation_dialog)
-        analysis_menu.addAction(degradation_action)
-        
-        self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-        self.statusBar.showMessage("Listo.")
-        
-        self.current_tod = None
-        self.is_playing = False
-        self.playback_timer = QTimer(self)
-        self.playback_timer.timeout.connect(self._advance_playback)
-        
-        # Optimización: Object Pooling para elementos dinámicos
-        self.ppi_text_pool = {}
-        self.ppi_vector_pool = {}
-        self.ppi_trail_pool = {}
-        
-        self.map_text_pool = {}
-        self.map_vector_pool = {}
-        self.map_trail_pool = {}
-        
-        self.detected_rpm = 15.0  # Fallback RPM
-        self.antenna_offset_deg = 0.0
-
-    def _load_dxf_map(self, filepath):
-        if not HAS_EZDXF:
-            self.statusBar.showMessage("ezdxf no instalado (pip install ezdxf). Sin mapa DXF.", 5000)
+    def _on_mode_changed(self, mode: str):
+        """Handle UI mode change between Tracking and Historic."""
+        self.radar.history_mode = mode
+        self.radar.update()
+    # ----------------------------------------------------------
+    # WORKER ASTERIX
+    # ----------------------------------------------------------
+    def _start_worker(self):
+        if self._worker is not None or not self._pcap_path:
             return
 
-        if not os.path.exists(filepath):
-            self.statusBar.showMessage(f"Archivo {filepath} no encontrado. Fondo negro.", 5000)
+        self._worker = AsterixWorker(
+            pcap_file=self._pcap_path,
+            sensores=self.sensores,
+            cache_dir=self.cache_dir)
+        self._connect_worker_signals()
+        self._worker.start()
+
+    def _connect_worker_signals(self):
+        if self._worker is None:
+            return
+        self._worker.new_plot.connect(self.radar.on_new_plot)
+        # FASE 2: Interceptar batch para detectar sensores dinámicamente
+        self._worker.new_plot_batch.connect(self._on_new_plot_batch)
+        self._worker.scan_progress.connect(self._on_scan_progress)
+        self._worker.scan_done.connect(self._on_scan_done)
+        self._worker.playback_finished.connect(self._on_playback_finished)
+        self._worker.sensor_detected.connect(self._on_sensor_detected)
+        self._worker.state_changed.connect(self._on_worker_state_changed)
+        self._worker.clear_plots.connect(self.radar.stop_sweep)
+        self._worker.rotation_speed_detected.connect(self._on_rotation_speed_detected)
+        self._worker.sensors_scanned.connect(self._on_sensors_scanned)
+        self._worker.north_mark_detected.connect(self._on_north_mark_detected)
+        # FASE 1: Señales TDD
+        self._worker.tod_update.connect(self._on_tod_update)
+        self._worker.progress_updated.connect(self.actualizar_progreso)
+
+    # ----------------------------------------------------------
+    # FASE 2: DETECCIÓN DINÁMICA DE SENSORES EN PLOTS ENTRANTES
+    # ----------------------------------------------------------
+    def _on_new_plot_batch(self, batch: List[Any]):
+        if not batch:
+            return
+
+        # Si la proyección no se ha inicializado (ej. archivo CAT 62 sin coordenadas de radar),
+        # auto-centramos la proyección en el primer plot válido del lote para habilitar el mapa y tracking.
+        if not self.radar.projection_set:
+            for datos_recibidos in batch:
+                if isinstance(datos_recibidos, list):
+                    lista_plots = datos_recibidos
+                elif isinstance(datos_recibidos, dict) and 'plots' in datos_recibidos:
+                    lista_plots = datos_recibidos['plots']
+                else:
+                    lista_plots = [datos_recibidos]
+                
+                found = False
+                for plot in lista_plots:
+                    if isinstance(plot, dict):
+                        plat = plot.get('lat')
+                        plon = plot.get('lon')
+                        if plat is not None and plon is not None and abs(plat) > 1.0 and abs(plon) > 1.0:
+                            sid = plot.get('sac_sic', '0/0')
+                            try:
+                                sac, sic = map(int, sid.split('/'))
+                            except ValueError:
+                                sac, sic = 0, 0
+                            print(f"[AUTOCENTER FALLBACK] Inicializando proyección en primer blanco válido: Lat={plat:.5f}, Lon={plon:.5f}")
+                            self.radar.reset_origin_for_new_file(
+                                float(plat), float(plon), sac, sic, "System Center (CAT62)"
+                            )
+                            found = True
+                            break
+                if found:
+                    break
+
+        # El router ya ha normalizado el batch. No se necesita búsqueda recursiva aquí.
+        for datos_recibidos in batch:
+            if isinstance(datos_recibidos, list):
+                lista_plots = datos_recibidos
+            elif isinstance(datos_recibidos, dict) and 'plots' in datos_recibidos:
+                lista_plots = datos_recibidos['plots']
+            else:
+                lista_plots = [datos_recibidos]
+
+            for plot in lista_plots:
+                if not isinstance(plot, dict):
+                    continue
+
+                # Las claves 'sac_sic', 'lat', 'lon' ya vienen normalizadas por el router.
+                sensor_id = plot.get('sac_sic', f"UNK_CAT{plot.get('category', 'XX')}")
+                lat = plot.get('lat')
+                lon = plot.get('lon')
+                cat = plot.get('category', 'XX')
+
+                # Inyectar claves de renderizado para el RadarWidget
+                if lat is not None:
+                    plot['lat_render'] = float(lat)
+                if lon is not None:
+                    plot['lon_render'] = float(lon)
+
+                if sensor_id not in self.sensores_conocidos:
+                    self.sensores_conocidos.add(sensor_id)
+                    self.sensores_activos.add(sensor_id)
+                    item = QListWidgetItem(f"{sensor_id} (CAT {cat})")
+                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                    item.setCheckState(Qt.CheckState.Checked)
+                    item.setData(Qt.ItemDataRole.UserRole, sensor_id)
+                    self.lista_sensores.addItem(item)
+
+                # Enviar el plot normalizado al RadarWidget
+                if lat is not None and lon is not None:
+                    self.radar.agregar_plot_individual(plot, trigger_update=False)
+
+        # Refrescar el widget de radar una única vez para todo el lote
+        self.radar.update()
+
+    # ----------------------------------------------------------
+    # FASE 3: CAMBIO DE SENSOR ACTIVO (QListWidget)
+    # ----------------------------------------------------------
+    def actualizar_filtro(self, item):
+        sensor_id = item.data(Qt.ItemDataRole.UserRole)
+        if item.checkState() == Qt.CheckState.Checked:
+            self.sensores_activos.add(sensor_id)
+        else:
+            self.sensores_activos.discard(sensor_id)
+        
+        # Sincronizar con el widget de radar
+        self.radar.sensores_visibles = self.sensores_activos
+        self.radar.update()
+        
+
+    def _on_sensor_item_clicked(self, item):
+        sensor_id = item.data(Qt.ItemDataRole.UserRole)
+        if not sensor_id or "/" not in sensor_id:
             return
 
         try:
-            doc = ezdxf.readfile(filepath)
-            msp = doc.modelspace()
-            
-            path = QPainterPath()
-            # Escala de Mapping: Suponemos que el DXF está en metros y lo pasamos a Millas Náuticas (NM)
-            scale_factor = 1.0 / 1852.0  
-            
-            text_items = []
-            
-            for entity in msp:
-                if entity.dxftype() == 'LINE':
-                    start = entity.dxf.start
-                    end = entity.dxf.end
-                    path.moveTo(start.x * scale_factor, start.y * scale_factor)
-                    path.lineTo(end.x * scale_factor, end.y * scale_factor)
-                elif entity.dxftype() == 'LWPOLYLINE':
-                    points = entity.get_points(format='xy')
-                    if points:
-                        path.moveTo(points[0][0] * scale_factor, points[0][1] * scale_factor)
-                        for p in points[1:]:
-                            path.lineTo(p[0] * scale_factor, p[1] * scale_factor)
-                        if entity.closed:
-                            path.lineTo(points[0][0] * scale_factor, points[0][1] * scale_factor)
-                elif entity.dxftype() == 'CIRCLE':
-                    center = entity.dxf.center
-                    radius = entity.dxf.radius * scale_factor
-                    cx, cy = center.x * scale_factor, center.y * scale_factor
-                    path.addEllipse(QPointF(cx, cy), radius, radius)
-                elif entity.dxftype() == 'TEXT':
-                    insert = entity.dxf.insert
-                    text = entity.dxf.text
-                    x, y = insert.x * scale_factor, insert.y * scale_factor
-                    text_items.append((x, y, text))
-            
-            # Capa inferior estática unificada (Glass Cockpit Style)
-            path_item = QGraphicsPathItem(path)
-            pen = QPen(QColor(50, 100, 50, 150)) # Verde tenue 
-            pen.setWidth(0) # Lápiz cosmético: no se engrosa indeseadamente al hacer zoom
-            path_item.setPen(pen)
-            path_item.setZValue(-1) # Capa Inferior
-            self.ppi_view.addItem(path_item)
-            
-            font = QFont("Consolas", 7)
-            for x, y, text in text_items:
-                ti = pg.TextItem(text=text, color=(100, 150, 100, 200))
-                ti.setFont(font)
-                ti.setPos(x, y)
-                ti.setZValue(-1)
-                self.ppi_view.addItem(ti)
-                
-            self.statusBar.showMessage(f"Mapa vectorial DXF '{filepath}' renderizado correctamente.", 5000)
-
-        except Exception as e:
-            self.statusBar.showMessage(f"Error al cargar DXF: {e}", 5000)
-
-    def _toggle_ruler_center(self):
-        if self.btn_ruler_free.isChecked():
-            self.btn_ruler_free.setChecked(False)
-            self._toggle_ruler_free()
-            
-        if not self.btn_ruler_center.isChecked():
-            self.ruler_start_point = None
-            self.ruler_line_item.hide()
-            self.ruler_label.hide()
-            self.statusBar.showMessage("Medición desde centro desactivada.")
-        else:
-            self.ruler_start_point = (0, 0)
-            self.ruler_line_item.setData([0, 0], [0, 0])
-            self.ruler_line_item.show()
-            self.ruler_label.show()
-            self.statusBar.showMessage("Moviendo ratón para medir desde el centro (Radar). Clic para fijar.")
-
-    def _toggle_ruler_free(self):
-        if self.btn_ruler_center.isChecked():
-            self.btn_ruler_center.setChecked(False)
-            self._toggle_ruler_center()
-
-        if not self.btn_ruler_free.isChecked():
-            self.ruler_start_point = None
-            self.ruler_line_item.hide()
-            self.ruler_label.hide()
-            self.statusBar.showMessage("Medición libre desactivada.")
-        else:
-            self.ruler_start_point = None
-            self.statusBar.showMessage("Haga clic izquierdo en el PPI para iniciar medición libre.")
-
-    def _on_ppi_mouse_clicked(self, evt):
-        if self.btn_ruler_center.isChecked():
-            if evt.button() == Qt.MouseButton.LeftButton:
-                self.btn_ruler_center.setChecked(False) # Clic fija la línea
-            elif evt.button() == Qt.MouseButton.RightButton:
-                self.btn_ruler_center.setChecked(False)
-                self._toggle_ruler_center() # Cancelar por completo
+            sac, sic = map(int, sensor_id.split('/'))
+        except ValueError:
             return
 
-        if self.btn_ruler_free.isChecked():
-            if evt.button() == Qt.MouseButton.LeftButton:
-                pos = self.ppi_view.plotItem.vb.mapSceneToView(evt.scenePos())
-                if self.ruler_start_point is None:
-                    self.ruler_start_point = (pos.x(), pos.y())
-                    self.ruler_line_item.setData([pos.x(), pos.x()], [pos.y(), pos.y()])
-                    self.ruler_line_item.show()
-                    self.ruler_label.show()
-                else:
-                    self.btn_ruler_free.setChecked(False) # Segundo clic fija la línea
-            elif evt.button() == Qt.MouseButton.RightButton:
-                self.btn_ruler_free.setChecked(False)
-                self._toggle_ruler_free() # Cancelar
+        info = self.sensores.get((sac, sic))
+        if info and info.get('lat') and info.get('lon'):
+            lat, lon = info['lat'], info['lon']
+            sensor_name = info.get('name', f"Radar {sac}/{sic}")
 
-    def _on_ppi_mouse_moved(self, pos):
-        if (self.btn_ruler_free.isChecked() or self.btn_ruler_center.isChecked()) and self.ruler_start_point is not None:
-            view_pos = self.ppi_view.plotItem.vb.mapSceneToView(pos)
-            x0, y0 = self.ruler_start_point
-            x1, y1 = view_pos.x(), view_pos.y()
-            self.ruler_line_item.setData([x0, x1], [y0, y1])
+            # Re-centrar proyección geográfica del widget
+            self.radar.set_projection_center(lat, lon, (sac, sic))
+            self.radar.reproject_all_coordinates()
+            self.radar._active_sensor_label = f"SENSOR ACTIVO: {sensor_name} ({sac}/{sic})"
             
-            dist = math.hypot(x1 - x0, y1 - y0)
-            angle = (math.degrees(math.atan2(x1 - x0, y1 - y0)) + 360) % 360
+            # Sincronizar velocidad de rotación de la antena (RPM) si fue detectada
+            rpm = self._sensor_rpms.get((sac, sic), 12.0)
+            self.radar.set_sweep_speed(rpm)
             
-            self.ruler_label.setText(f"{dist:.2f} NM\nΔAz: {angle:.1f}°")
-            self.ruler_label.setPos(x1, y1)
+            print(f"[REPROYECTOR] Re-centrado en el sensor seleccionado {sensor_id} (Lat: {lat:.5f}, Lon: {lon:.5f}) - {rpm:.2f} RPM")
 
-    def _load_file_dialog(self):
-        file_paths, _ = QFileDialog.getOpenFileNames(
-            self, "Seleccionar archivos ASTERIX", "", "Archivos Soportados (*.pcap *.ast);;Todos los archivos (*.*)"
+
+    def seleccionar_todos(self):
+        self.lista_sensores.blockSignals(True)
+        for i in range(self.lista_sensores.count()):
+            item = self.lista_sensores.item(i)
+            item.setCheckState(Qt.CheckState.Checked)
+            self.sensores_activos.add(item.data(Qt.ItemDataRole.UserRole))
+        self.lista_sensores.blockSignals(False)
+        self.radar.sensores_visibles = self.sensores_activos
+        self.radar.update()
+
+    def deseleccionar_todos(self):
+        self.lista_sensores.blockSignals(True)
+        for i in range(self.lista_sensores.count()):
+            self.lista_sensores.item(i).setCheckState(Qt.CheckState.Unchecked)
+        self.sensores_activos.clear()
+        self.lista_sensores.blockSignals(False)
+        self.radar.sensores_visibles = self.sensores_activos
+        self.radar.update()
+
+    # ----------------------------------------------------------
+    # WORKER CALLBACKS
+    # ----------------------------------------------------------
+    def _on_scan_progress(self, current: int, total: int):
+        if total > 0:
+            pass
+
+    def _on_scan_done(self, total_frames: int, duration: float):
+        self._total_frames = total_frames
+        self._pcap_duration = duration
+        self._decode_complete = True
+        self.btn_decodificar.setEnabled(True)
+        if total_frames > 0:
+            self.slider_tiempo.setMaximum(total_frames - 1)
+            self.slider_tiempo.setEnabled(True)
+
+    def _on_playback_finished(self):
+        self._playing = False
+        self.btn_decodificar.setText("Decodificar / Play")
+
+    def _on_sensor_detected(self, sac: int, sic: int):
+        info = self.sensores.get((sac, sic), {'name': f"Radar {sac}/{sic}"})
+
+    def _on_rotation_speed_detected(self, sac: int, sic: int, rpm: float):
+        sensor_key = (sac, sic)
+        self._sensor_rpms[sensor_key] = rpm
+        if hasattr(self.radar, 'center_key') and self.radar.center_key == sensor_key:
+            self.radar.set_sweep_speed(rpm)
+        print(f"[Main] Velocidad de rotación para {sac}/{sic} -> {rpm:.2f} RPM")
+
+    def _on_north_mark_detected(self, sac: int, sic: int):
+        # FASE 3: El centro del radar ahora se gestiona en RadarWidget
+        if hasattr(self.radar, 'center_key') and self.radar.center_key == (sac, sic):
+            self.radar.reset_sweep_angle()
+
+    def _on_sensors_scanned(self, detected_sensors: Set[Tuple[int, int]]):
+        missing = []
+        for (sac, sic) in detected_sensors:
+            fp = os.path.join("default-site-params", f"{sac}_{sic}.json")
+            if not os.path.exists(fp):
+                missing.append(f"SAC {sac}/SIC {sic}")
+            elif (sac, sic) not in self.sensores:
+                missing.append(f"SAC {sac}/SIC {sic} (sin configuración)")
+
+        if missing:
+            msg = "⚠ Radars sin config: " + ", ".join(missing[:3])
+            if len(missing) > 3:
+                msg += f" +{len(missing)-3} más"
+            print(f"[Main] Advertencia: {msg}")
+        else:
+            pass
+
+    def _on_worker_state_changed(self, state: str):
+        self._playing = (state == "PLAYING")
+
+        if state == "STOPPED":
+            self.btn_decodificar.setText("Decodificar / Play")
+        elif state == "PAUSED":
+            self.btn_decodificar.setText("▶ Play")
+        elif state == "PLAYING":
+            self.btn_decodificar.setText("❚❚ Pausa")
+            self.radar.play()
+
+    def _update_dashboard_status(self):
+        if self._worker and self._worker.isRunning():
+            pass
+
+    # ----------------------------------------------------------
+    # FASE 1: CARGA DE PCAP (solo escaneo superficial)
+    # ----------------------------------------------------------
+    def _on_load_pcap(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Seleccionar archivo PCAP", ".",
+            "Archivos PCAP (*.pcap *.pcapng);;Todos (*)"
         )
-        if file_paths:
-            self._start_ingestion(file_paths)
-
-    def _start_ingestion(self, file_paths):
-        if self.worker and self.worker.isRunning():
-            self.worker.stop()
-            self.worker.wait()
-
-        self._clear_buffer()
-        self.worker = IngestionWorker(file_paths, self.processor, self.track_manager)
-        
-        self.worker.progress.connect(self._update_progress)
-        self.worker.tracks_state_ready.connect(self._on_tracks_state)
-        self.worker.finished.connect(self._on_ingestion_finished)
-        self.worker.error.connect(self._on_ingestion_error)
-        
-        self.worker.start()
-
-    def _update_progress(self, percent, message):
-        self.statusBar.showMessage(f"{message} [{percent}%]")
-
-    def _on_tracks_state(self, tracks_dict):
-        self.current_tracks_dict = tracks_dict
-        
-        # 1. Actualizar QComboBox dinámicamente sin bloquear
-        for tid, track_deque in tracks_dict.items():
-            if tid not in self.known_track_ids and track_deque:
-                self.known_track_ids.add(tid)
-                latest = track_deque[-1]
-                cat = latest.get('category', 'UNK')
-                trk = latest.get('track_number', 'N/A')
-                sq = latest.get('mode_3a', 'N/A')
-                sq_str = f"{sq:04o}" if isinstance(sq, int) else str(sq)
-                
-                label = f"CAT {cat} - TRK: {trk} - SQ: {sq_str} [{tid}]"
-                self.track_filter_combo.addItem(label, tid)
-
-        self._force_redraw()
-        
-    def _toggle_playback(self):
-        if not hasattr(self, 'current_tod') or self.current_tod is None:
-            self.statusBar.showMessage("Debe cargar un archivo primero.", 3000)
+        if not file_path:
             return
-            
-        self.is_playing = not self.is_playing
-        if self.is_playing:
-            self.btn_play.setText("⏸ Pause")
-            self.last_wall_time = time.time()
-            self.playback_timer.start(50)  # 20 FPS para renderizado fluido
+
+        # REGLA DE RESETEO DE UI:
+        if hasattr(self, 'radar'):
+            self.radar.limpiar_pantalla()
+        elif hasattr(self, 'radar_widget'):
+            self.radar_widget.limpiar_pantalla()
+
+        # Reiniciar TDD y Slider visualmente
+        if hasattr(self, 'lbl_tiempo'):
+            self.lbl_tiempo.setText("00:00:00")
+        if hasattr(self, 'slider_tiempo'):
+            self.slider_tiempo.setValue(0)
+
+        self._cleanup_session()
+
+        basename = os.path.basename(file_path)
+        self.setWindowTitle(f"ASTERIX Radar Decoder - {basename}")
+
+        self._pcap_path = file_path
+
+        self._light_scanner = PcapScannerThread(file_path)
+        self._light_scanner.scan_result.connect(self._on_light_scan_done)
+        self._light_scanner.scan_error.connect(self._on_light_scan_error)
+        self._light_scanner.start()
+
+    def _cleanup_session(self):
+        if self._worker is not None:
+            self._worker.stop()
+            if self._worker.isRunning():
+                self._worker.quit()
+                self._worker.wait(2000)
+
+        self._playing = False
+        self._worker = None
+        self._pcap_duration = 0.0
+        self._total_frames = 0
+        self._decode_complete = False
+        self.btn_decodificar.setEnabled(False)
+        self._pcap_path = ""
+
+        # Limpiar sensores conocidos y la lista de sensores
+        self.sensores_conocidos.clear()
+        self.sensores_activos.clear()
+        self.lista_sensores.blockSignals(True)
+        self.lista_sensores.clear()
+        self.lista_sensores.blockSignals(False)
+        self.radar.sensores_visibles = self.sensores_activos
+        self.radar.update()
+
+        self.radar.clear_all_plots()
+
+    def _on_light_scan_done(self, total_frames: int, duration: float, sensors: Set[Tuple[int, int]]):
+        self._total_frames = total_frames
+        self._pcap_duration = duration
+
+        msg = f"Escaneo: {total_frames} frames"
+        if duration > 0:
+            msg += f" ({duration:.1f}s)"
+
+        if total_frames > 0:
+            self._on_decode_file(sensors) # Auto-decode after scan
         else:
-            self.btn_play.setText("▶ Play")
-            self.playback_timer.stop()
+            pass
 
-    def _advance_playback(self):
-        now = time.time()
-        dt = now - getattr(self, 'last_wall_time', now)
-        self.last_wall_time = now
-        
-        speed_str = self.speed_combo.currentText().replace('x', '')
-        speed = float(speed_str)
-        
-        if self.current_tod is not None:
-            self.current_tod += dt * speed
-            hms = time.strftime('%H:%M:%S', time.gmtime(self.current_tod))
-            self.time_label.setText(f"TOD: {hms}")
-            self._force_redraw()
+        for sac, sic in sensors:
+            info = self.sensores.get((sac, sic), {'name': f"Radar {sac}/{sic}"})
 
-    def _force_redraw(self):
-        if not hasattr(self, 'current_tracks_dict'):
+    def _on_light_scan_error(self, msg: str):
+        print(f"[Main] Error en escaneo superficial: {msg}")
+
+    def _on_udp_connect(self, ip: str, port: int):
+        print(f"[Main] Solicitud de conexión a UDP: {ip}:{port}")
+        self._cleanup_session()
+        self.setWindowTitle(f"ASTERIX Radar Decoder - LIVE UDP @ {ip}:{port}")
+        self._decode_complete = True
+        self._worker = AsterixWorker(
+            pcap_file=None,
+            sensores=self.sensores,
+            cache_dir=self.cache_dir,
+            udp_ip=ip,
+            udp_port=port
+        )
+        self._connect_worker_signals()
+        self._worker.start()
+        self.btn_play.setEnabled(True)
+
+    # ----------------------------------------------------------
+    # FASE 1 - Paso 2: DECODIFICAR ARCHIVO + FASE 2 HARD RESET
+    # ----------------------------------------------------------
+    def _on_decode_file(self, detected_from_scan: Set[Tuple[int, int]]):
+        if not self._pcap_path:
             return
-            
-        # Evitar mostrar un "manchón" de datos o "vista previa" antes de que el tiempo inicie
-        if not hasattr(self, 'current_tod') or self.current_tod is None:
-            if hasattr(self, 'ppi_scatters'): 
-                for scatter in self.ppi_scatters.values(): scatter.clear()
-            if hasattr(self, 'map_scatters'): 
-                for scatter in self.map_scatters.values(): scatter.clear()
-            return
-            
-        selected_tid = self.track_filter_combo.currentData()
-        selected_sensor = self.sensor_source_combo.currentData()
-        fade_limit = self.history_slider.value()
-        current_time = self.current_tod
-        label_mode = self.label_mode_combo.currentText()
-        
-        ppi_spots = {sym: [] for sym in ['o', 't', 's', 'x', '+']}
-        map_spots = {sym: [] for sym in ['o', 't', 's', 'x', '+']}
-        
-        # Anclaje de sincronización para el barrido
-        self.latest_sweep_anchor_time = -1
-        self.latest_sweep_anchor_az = 0.0
-        
-        degradation_pos = []
-        degradation_brushes = []
-        
-        active_tids = set()
-        
-        for tid, track_deque in self.current_tracks_dict.items():
-            if selected_tid != "ALL" and tid != selected_tid:
-                continue
-                
-            is_selected = (selected_tid == tid)
-            
-            # Filtrar historial de la traza hasta el TOD actual de la simulación
-            valid_records = [r for r in track_deque if r.get('timestamp') is not None and r['timestamp'] <= current_time]
-            if not valid_records:
-                continue
-                
-            latest_record = valid_records[-1]
-            cat = latest_record.get('category')
-            typ = latest_record.get('extra_data', {}).get('TYP', 0)
-            sac = latest_record.get('sac')
-            sic = latest_record.get('sic')
-            
-            # Criterios de Renderizado Separado (Fase 2)
-            is_ppi = True # Renderizar en PPI todas las categorías que posean coordenadas polares
-            is_map = True # Renderizar en Mapa todas las categorías que posean lat/lon
-            
-            ppi_track_points = []
-            map_track_points = []
-            
-            # 2. Sincronización de Iluminación y Efecto Fósforo (Afterglow)
-            for record in valid_records:
-                age = current_time - record['timestamp']
-                if age > fade_limit or age < 0:
-                    continue
-                
-                # Fading de Opacidad y Tamaño (Efecto Fósforo)
-                alpha = max(20, 255 - int((age / fade_limit) * 235))
-                size = max(4, 12 - int((age / fade_limit) * 8))
-                brush = pg.mkBrush(color=(0, 255, 0, alpha))
-                
-                # 3. Simbología Operativa ATM (PPS)
-                sq = record.get('mode_3a')
-                sym = 'o'
-                
-                # Blancos de Prueba (UMR/Parrot) o Squawk reservado (0000/7777)
-                is_test_target = (sq in [0, 7777]) or record.get('extra_data', {}).get('SIM', False) or record.get('extra_data', {}).get('TST', False)
-                
-                if is_test_target:
-                    sym = 't' # Triángulo
-                    brush = pg.mkBrush(color=(255, 255, 0, alpha)) # Amarillo estático
-                elif cat == 62:
-                    sym = 's' # Cuadrado (System Track)
-                elif cat == 21:
-                    sym = 'o' # Círculo (ADS-B)
-                elif cat in [1, 48]:
-                    if sq is not None:
-                        sym = 'x' # Cruz Diagonal (SSR Only)
-                    else:
-                        sym = '+' # Cruz Recta (PSR Only)
-                
-                if is_selected:
-                    brush = pg.mkBrush(color=(255, 255, 0, max(100, alpha)))
-                    size += 4
-                
-                # Vista 1: PPI (Local Polar convertido a Cartesiano)
-                if is_ppi and (selected_sensor is None or selected_sensor == (sac, sic)):
-                    r_hist = record.get('raw_range')
-                    az_hist = record.get('raw_azimuth')
-                    if r_hist is not None and az_hist is not None and r_hist >= 0 and az_hist >= 0:
-                        x_ppi_hist = r_hist * math.sin(math.radians(az_hist))
-                        y_ppi_hist = r_hist * math.cos(math.radians(az_hist))
-                        ppi_spots[sym].append({'pos': (x_ppi_hist, y_ppi_hist), 'brush': brush, 'size': size})
-                        ppi_track_points.append((x_ppi_hist, y_ppi_hist))
-                        
-                        if record['timestamp'] > self.latest_sweep_anchor_time:
-                            self.latest_sweep_anchor_time = record['timestamp']
-                            self.latest_sweep_anchor_az = az_hist
 
-                # Vista 2: Mapa Situacional (WGS84)
-                if is_map:
-                    lat = record.get('latitude')
-                    lon = record.get('longitude')
-                    if lat is not None and lon is not None:
-                        map_spots[sym].append({'pos': (lon, lat), 'brush': brush, 'size': size})
-                        map_track_points.append((lon, lat))
-            
-            # --- Simbología ATC Avanzada (Optimizada con Pool Multivista) ---
-            r = latest_record.get('raw_range')
-            az = latest_record.get('raw_azimuth')
-            x_ppi, y_ppi = None, None
-            if r is not None and az is not None and r >= 0 and az >= 0:
-                x_ppi = r * math.sin(math.radians(az))
-                y_ppi = r * math.cos(math.radians(az))
-                
-            lat = latest_record.get('latitude')
-            lon = latest_record.get('longitude')
-            
-            if (lat is not None and lon is not None) or (x_ppi is not None and y_ppi is not None):
-                age_latest = current_time - latest_record.get('timestamp', current_time)
-                if 0 <= age_latest <= fade_limit:
-                    active_tids.add(tid)
-                    
-                    # 4. Etiqueta Principal (Data Block Switch)
-                    callsign = latest_record.get('callsign', '').strip()
-                    sq = latest_record.get('mode_3a', 'N/A')
-                    sq_str = f"{sq:04o}" if isinstance(sq, int) else str(sq)
-                    
-                    main_label = callsign if (label_mode == "Callsign" and callsign) else sq_str
-                    
-                    fl = latest_record.get('flight_level', '---')
-                    gs_kts = latest_record.get('extra_data', {}).get('ground_speed_nms', 0) * 3600
-                    spd_text = f" {int(gs_kts)}kt" if gs_kts > 0 else ""
-                    
-                    text = f"{main_label}\nFL{fl}{spd_text}"
-                    text_color = (255, 255, 0) if is_selected else (200, 200, 200)
-                    
-                    def update_symbology(is_active, view, pools, pos, trend_pos, trail_points):
-                        text_pool, vector_pool, trail_pool = pools
-                        if not is_active or pos[0] is None:
-                            if tid in text_pool: text_pool[tid].setVisible(False)
-                            if tid in vector_pool: vector_pool[tid].setVisible(False)
-                            if tid in trail_pool: trail_pool[tid].setVisible(False)
-                            return
-                            
-                        # Text
-                        if tid not in text_pool:
-                            txt_item = pg.TextItem(anchor=(0, 1))
-                            view.addItem(txt_item)
-                            text_pool[tid] = txt_item
-                        text_item = text_pool[tid]
-                        text_item.setText(text, color=text_color)
-                        text_item.setPos(pos[0], pos[1])
-                        text_item.setVisible(True)
-                        
-                        if trend_pos:
-                            if tid not in vector_pool:
-                                vec_item = pg.PlotCurveItem()
-                                view.addItem(vec_item)
-                                vector_pool[tid] = vec_item
-                            vector_line = vector_pool[tid]
-                            vec_color_line = (255, 255, 0) if is_selected else (0, 255, 255)
-                            vector_line.setData([pos[0], trend_pos[0]], [pos[1], trend_pos[1]])
-                            vector_line.setPen(pg.mkPen(color=vec_color_line, width=1))
-                            vector_line.setVisible(True)
-                        else:
-                            if tid in vector_pool: vector_pool[tid].setVisible(False)
-                            
-                        # Trail
-                        if len(trail_points) > 1:
-                            if tid not in trail_pool:
-                                trail_item = pg.PlotCurveItem()
-                                view.addItem(trail_item)
-                                trail_pool[tid] = trail_item
-                            trail_item = trail_pool[tid]
-                            trail_item.setData([p[0] for p in trail_points], [p[1] for p in trail_points])
-                            trail_item.setPen(pg.mkPen(color=(0, 150, 0, 150), width=1))
-                            trail_item.setVisible(True)
-                        else:
-                            if tid in trail_pool: trail_pool[tid].setVisible(False)
-                    
-                    # Vector de velocidad tendencial a 3 Minutos (180s)
-                    trend_map = None
-                    trend_ppi = None
-                    if len(valid_records) >= 2:
-                        prev = valid_records[-2]
-                        dt = latest_record.get('timestamp', 0) - prev.get('timestamp', 0)
-                        if 0 < dt < 60:
-                            if lat is not None and lon is not None:
-                                v_lon = (lon - prev.get('longitude', lon)) / dt
-                                v_lat = (lat - prev.get('latitude', lat)) / dt
-                                trend_map = (lon + v_lon * 180, lat + v_lat * 180)
-                                
-                            if x_ppi is not None and y_ppi is not None:
-                                prev_r = prev.get('raw_range')
-                                prev_az = prev.get('raw_azimuth')
-                                if prev_r is not None and prev_az is not None:
-                                    prev_x = prev_r * math.sin(math.radians(prev_az))
-                                    prev_y = prev_r * math.cos(math.radians(prev_az))
-                                    v_x = (x_ppi - prev_x) / dt
-                                    v_y = (y_ppi - prev_y) / dt
-                                    trend_ppi = (x_ppi + v_x * 180, y_ppi + v_y * 180)
-                            
-                    is_ppi_valid = is_ppi and (selected_sensor is None or selected_sensor == (sac, sic))
-                    ppi_pools = (self.ppi_text_pool, self.ppi_vector_pool, self.ppi_trail_pool)
-                    update_symbology(is_ppi_valid, self.ppi_view, ppi_pools, (x_ppi, y_ppi), trend_ppi, ppi_track_points)
-                    
-                    map_pools = (self.map_text_pool, self.map_vector_pool, self.map_trail_pool)
-                    update_symbology(is_map, self.map_view, map_pools, (lon, lat), trend_map, map_track_points)
+        target_center_key = None
 
-        # Ocultar la simbología de los blancos caducados sin destruirlos
-        for tid in list(self.ppi_text_pool.keys()):
-            if tid not in active_tids:
-                if tid in self.ppi_text_pool: self.ppi_text_pool[tid].setVisible(False)
-                if tid in self.ppi_vector_pool: self.ppi_vector_pool[tid].setVisible(False)
-                if tid in self.ppi_trail_pool: self.ppi_trail_pool[tid].setVisible(False)
-                
-        for tid in list(self.map_text_pool.keys()):
-            if tid not in active_tids:
-                if tid in self.map_text_pool: self.map_text_pool[tid].setVisible(False)
-                if tid in self.map_vector_pool: self.map_vector_pool[tid].setVisible(False)
-                if tid in self.map_trail_pool: self.map_trail_pool[tid].setVisible(False)
+        if target_center_key is None and detected_from_scan:
+            # Convert set to list to get an element
+            target_center_key = list(detected_from_scan)[0]
+            if len(detected_from_scan) > 1:
+                sanluis_key = (226, 221)
+                cordoba_key = (226, 210)
+                if sanluis_key in detected_from_scan:
+                    target_center_key = sanluis_key
+                elif cordoba_key in detected_from_scan:
+                    target_center_key = cordoba_key
 
-        for sym in ['o', 't', 's', 'x', '+']:
-            if ppi_spots[sym]:
-                self.ppi_scatters[sym].setData(ppi_spots[sym])
+        if target_center_key is not None:
+            center_info = self.sensores.get(target_center_key, {})
+            lat = center_info.get('lat', 0.0)
+            lon = center_info.get('lon', 0.0)
+            name = center_info.get('name', f'Radar {target_center_key[0]}/{target_center_key[1]}')
+
+            if lat != 0.0 and lon != 0.0:
+                asterix_version = self._detect_asterix_version(self._pcap_path)
+                self._center_sensor_key = target_center_key
+                self.radar.reset_origin_for_new_file(
+                    lat, lon,
+                    target_center_key[0], target_center_key[1],
+                    name,
+                    asterix_version=asterix_version
+                )
+                self.main_sensor_set = True
+                if asterix_version:
+                    print(f"[ASE 1] Versión ASTERIX detectada: {asterix_version}")
+                else:
+                    print("[ASE 1] No se detectó CAT048 en la previsualización. Usando versión por defecto.")
             else:
-                self.ppi_scatters[sym].clear()
-                
-            if map_spots[sym]:
-                self.map_scatters[sym].setData(map_spots[sym])
-            else:
-                self.map_scatters[sym].clear()
-        
-        # Renderizar eventos de degradación en el PPI
-        for event in self.degradation_events:
-            details = event.get('details', '')
-            r_match = re.search(r"R:([\d\.]+)", details)
-            az_match = re.search(r"Az:([\d\.]+)|Az1:([\d\.]+)", details)
+                print(f"⚠ Sensor {target_center_key} sin coordenadas de ubicación")
+        else:
+            print("⚠ No se detectaron sensores en el archivo. La proyección usará valores por defecto.")
+
+        self.radar.clear_all_plots()
+        self._start_worker()
+
+    # ----------------------------------------------------------
+    # FILTROS
+    # ----------------------------------------------------------
+    def _on_filters_changed(self, active_sensors: Set[Tuple[int, int]],
+                            squawk_filter: str):
+        self.radar.update()
+
+    # ----------------------------------------------------------
+    # ASE 1: DETECCIÓN DE VERSIÓN ASTERIX
+    # ----------------------------------------------------------
+    def _detect_asterix_version(self, pcap_path: str) -> str:
+        try:
+            from scapy.all import PcapReader, UDP
+            from native_asterix import parse_payload
             
-            if r_match and az_match:
-                r = float(r_match.group(1))
-                az = float(az_match.group(1) or az_match.group(2))
-                x_ppi = r * math.sin(math.radians(az))
-                y_ppi = r * math.cos(math.radians(az))
-                degradation_pos.append((x_ppi, y_ppi))
-                degradation_brushes.append(pg.mkBrush(255, 0, 0, 150))
-        
-        if degradation_pos:
-            spots = [{'pos': pos, 'brush': br, 'size': 15} for pos, br in zip(degradation_pos, degradation_brushes)]
-            self.degradation_scatter.setData(spots)
-        else:
-            self.degradation_scatter.clear()
-
-    def _pulse_degradations(self):
-        """Anima el tamaño de los marcadores de degradación para que parpadeen."""
-        if not self.degradation_scatter.isVisible():
-            return
-        
-        self.pulse_state = (self.pulse_state + 1) % 2
-        if self.pulse_state == 0:
-            self.degradation_scatter.setSize(15)
-        else:
-            self.degradation_scatter.setSize(25)
-
-    def _on_ingestion_finished(self, total, pd_intervals, pd_dict, analytics_stats, degradations, detected_rpm):
-        self.statusBar.showMessage("Configurando entorno de simulación...", 3000)
-        
-        # Asignar resultados del hilo
-        self.pd_intervals = pd_intervals
-        self.pd_dict = pd_dict
-        self.analytics_stats = analytics_stats
-        self.degradation_events = degradations
-        self.detected_rpm = detected_rpm if detected_rpm > 0 else 15.0
-        
-        # Aplanar la lista de deques a una lista simple de récords (Para iniciar el TOD de la GUI)
-        all_records_in_tracks = [record for track_deque in self.track_manager.tracks.values() for record in track_deque]
-        
-        # --- Actualizar Módulo 1: Dashboard de Vistas Previas ---
-        pos_01, pos_48, pos_21, pos_62 = [], [], [], []
-        
-        for rec in all_records_in_tracks:
-            cat = rec.get('category')
-            if cat in [1, 48]:
-                r = rec.get('raw_range')
-                az = rec.get('raw_azimuth')
-                if r is not None and az is not None and r >= 0 and az >= 0:
-                    x = r * math.sin(math.radians(az))
-                    y = r * math.cos(math.radians(az))
-                    if cat == 1: pos_01.append({'pos': (x, y)})
-                    else: pos_48.append({'pos': (x, y)})
-            elif cat in [21, 62]:
-                lat = rec.get('latitude')
-                lon = rec.get('longitude')
-                if lat is not None and lon is not None:
-                    if cat == 21: pos_21.append({'pos': (lon, lat)})
-                    else: pos_62.append({'pos': (lon, lat)})
-                    
-        self.scatter_cat01.setData(pos_01)
-        self.scatter_cat48.setData(pos_48)
-        self.scatter_cat21.setData(pos_21)
-        self.scatter_cat62.setData(pos_62)
-        
-        # Cambiar a la pestaña del Dashboard automáticamente al terminar la carga
-        self.tabs.setCurrentIndex(0)
-
-        # Inicializar el Tiempo Base (TOD) de la simulación y llenar Combo de Sensores
-        min_t = float('inf')
-        sensors = set()
-        
-        for rec in all_records_in_tracks:
-            t = rec.get('timestamp')
-            if t is not None:
-                min_t = min(min_t, t)
-            sac = rec.get('sac')
-            sic = rec.get('sic')
-            if sac is not None and sic is not None:
-                sensors.add((sac, sic))
-                
-        if min_t != float('inf'):
-            # Avanzamos el TOD inicial 30 segundos para que la vista táctica ya tenga blancos visibles al cargar
-            self.current_tod = min_t + 30.0
-            self.time_label.setText(f"TOD: {time.strftime('%H:%M:%S', time.gmtime(self.current_tod))}")
-        else:
-            self.current_tod = 0
-            self.time_label.setText("TOD: 00:00:00")
+            if not os.path.exists(pcap_path):
+                return ""
             
-        # Calcular el Offset de la antena para sincronizar el barrido visual con los plots
-        self.antenna_offset_deg = 0.0
-        if self.detected_rpm > 0:
-            deg_per_sec = (self.detected_rpm / 60.0) * 360.0
-            for rec in all_records_in_tracks:
-                if rec.get('category') in [1, 48] and rec.get('raw_azimuth') is not None and rec.get('timestamp') is not None:
-                    expected_angle = (rec['timestamp'] * deg_per_sec) % 360
-                    self.antenna_offset_deg = rec['raw_azimuth'] - expected_angle
+            v1_30_hits = 0
+            v1_21_hits = 0
+            max_scan = 5000
+            
+            reader = PcapReader(pcap_path)
+            for i, pkt in enumerate(reader):
+                if i >= max_scan:
                     break
+                try:
+                    if UDP not in pkt:
+                        continue
+                    payload = bytes(pkt[UDP].payload)
+                    if len(payload) <= 10:
+                        continue
+                    
+                    records = parse_payload(payload)
+                    for rec in records:
+                        if rec.get('category') == 48:
+                            version_str = rec.get('version', '1.21')
+                            extra_data = rec.get('extra_data', {})
+                            max_we = extra_data.get('i048_030_max_we', 0)
+                            
+                            if version_str == '1.30' or max_we >= 24:
+                                v1_30_hits += 1
+                            else:
+                                v1_21_hits += 1
+                except Exception:
+                    continue
+            reader.close()
             
-        self.sensor_source_combo.clear()
-        for sac, sic in sorted(sensors):
-            self.sensor_source_combo.addItem(f"SAC: {sac:03d} / SIC: {sic:03d}", (sac, sic))
-        if self.sensor_source_combo.count() > 0:
-            self.sensor_source_combo.setCurrentIndex(0)
-        
-        self.statusBar.showMessage(f"Ingesta lista. RPM detectada (CAT 02/34): {self.detected_rpm:.2f}. Total targets: {total}", 5000)
-        self._force_redraw() # Forzar redibujo para mostrar marcadores de degradación
+            if v1_30_hits > 0 and v1_30_hits >= v1_21_hits:
+                return "v1.30"
+            elif v1_21_hits > 0:
+                return "v1.21"
+            
+            return ""
+            
+        except Exception as e:
+            print(f"[ASE 1] Error detectando versión ASTERIX: {e}")
+            return ""
 
-    def _on_ingestion_error(self, error_msg):
-        self.statusBar.showMessage(f"Error en la ingesta: {error_msg}", 10000)
-
-    def _show_pd_dialog(self):
-        if hasattr(self, 'pd_intervals'):
-            dialog = StatsDialog(self, self.pd_intervals, self.pd_dict, self.analytics_stats)
-            dialog.exec()
+    # ----------------------------------------------------------
+    # CONTROL DE PROYECCIÓN
+    # ----------------------------------------------------------
+    def _on_center_sensor_changed(self, sensor_key: Tuple[int, int]):
+        self._center_sensor_key = sensor_key
+        center_info = self.sensores.get(sensor_key)
+        if center_info and 'lat' in center_info and 'lon' in center_info:
+            lat, lon = center_info['lat'], center_info['lon']
+            name = center_info.get('name', f'Radar {sensor_key[0]}/{sensor_key[1]}')
+            self.radar.reset_origin_for_new_file(lat, lon, sensor_key[0], sensor_key[1], name)
+            self.main_sensor_set = True
+            rpm = self._sensor_rpms.get(sensor_key, 12.0)
+            self.radar.set_sweep_speed(rpm)
         else:
-            self.statusBar.showMessage("Primero debe cargar y procesar un archivo.", 3000)
+            print(f"[Main] No se pudo centrar en {sensor_key}, no se encontró información.")
+        self.radar.update()
 
-    def _show_degradation_dialog(self):
-        if hasattr(self, 'degradation_events'):
-            dialog = DegradationDialog(self, self.degradation_events)
-            dialog.exec()
+    # ----------------------------------------------------------
+    # CONTROL DE REPRODUCCIÓN
+    # ----------------------------------------------------------
+    def _on_play_toggle(self):
+        if self._worker is None:
+            return
+        self._worker.toggle_play_pause()
+
+    def _on_stop(self):
+        if self._worker is not None and self._decode_complete:
+            self._worker.stop_playback()
         else:
-            self.statusBar.showMessage("Primero debe cargar y procesar un archivo.", 3000)
+            self._playing = False
+            self.btn_decodificar.setText("Decodificar / Play")
+            self.radar.stop_sweep()
 
-    def _animate_sweep(self):
-        """Anima la línea de barrido del radar en el PPI (Rotación atada al TOD)."""
-        if hasattr(self, 'current_tod') and self.current_tod is not None:
-            rpm = getattr(self, 'detected_rpm', 15.0)
-            if rpm <= 0:
-                self.sweep_line.setVisible(False)
-                return
-                
-            deg_per_sec = (rpm / 60.0) * 360.0
-            
-            # Sincronización perfecta (Zero-Drift): Proyectar desde el último plot dibujado
-            anchor_time = getattr(self, 'latest_sweep_anchor_time', -1)
-            anchor_az = getattr(self, 'latest_sweep_anchor_az', 0.0)
-            
-            if anchor_time > 0 and self.current_tod >= anchor_time:
-                dt = self.current_tod - anchor_time
-                self.sweep_angle = (anchor_az + (dt * deg_per_sec)) % 360
-            else:
-                offset = getattr(self, 'antenna_offset_deg', 0.0)
-                self.sweep_angle = ((self.current_tod * deg_per_sec) + offset) % 360
-            
-            r_max = 250 
-            x = r_max * math.sin(math.radians(self.sweep_angle))
-            y = r_max * math.cos(math.radians(self.sweep_angle))
-            self.sweep_line.setData([0, x], [0, y])
-            self.sweep_line.setVisible(True)
+        if hasattr(self, 'radar'):
+            self.radar.limpiar_pantalla()
+        elif hasattr(self, 'radar_widget'):
+            self.radar_widget.limpiar_pantalla()
 
-    def _run_garbage_collection(self):
-        # Se desactiva intencionalmente durante la Fase 2 para que el Playback no pierda datos de memoria
-        pass
+    # ----------------------------------------------------------
+    # TDD: SLIDER, TIEMPO Y VELOCIDAD
+    # ----------------------------------------------------------
+    def _on_tod_update(self, tod: float):
+        """Actualiza el label del TDD con el formato HH:MM:SS."""
+        hours = int(tod // 3600) % 24
+        minutes = int((tod % 3600) // 60)
+        seconds = int(tod % 60)
+        self.lbl_tiempo.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
 
-    def _clear_buffer(self):
-        self.track_manager.clear_all()
-        self.known_track_ids.clear()
-        self.track_filter_combo.clear()
-        self.track_filter_combo.addItem("Mostrar Todos", "ALL")
-        for scatter in self.ppi_scatters.values(): scatter.clear()
-        for scatter in self.map_scatters.values(): scatter.clear()
-        self.degradation_scatter.clear()
-        
-        # Limpiar cuadrantes del Dashboard
-        if hasattr(self, 'scatter_cat01'):
-            self.scatter_cat01.clear()
-            self.scatter_cat48.clear()
-            self.scatter_cat21.clear()
-            self.scatter_cat62.clear()
-        
-        for item in self.ppi_text_pool.values(): self.ppi_view.removeItem(item)
-        for item in self.ppi_vector_pool.values(): self.ppi_view.removeItem(item)
-        for item in self.ppi_trail_pool.values(): self.ppi_view.removeItem(item)
-        self.ppi_text_pool.clear()
-        self.ppi_vector_pool.clear()
-        self.ppi_trail_pool.clear()
-        
-        for item in self.map_text_pool.values(): self.map_view.removeItem(item)
-        for item in self.map_vector_pool.values(): self.map_view.removeItem(item)
-        for item in self.map_trail_pool.values(): self.map_view.removeItem(item)
-        self.map_text_pool.clear()
-        self.map_vector_pool.clear()
-        self.map_trail_pool.clear()
-        
-        self.timeline_slider.setEnabled(False)
-        self.timeline_slider.setValue(0)
-        self.statusBar.showMessage("Buffer de memoria vaciado instantáneamente.", 5000)
-        
-    def _export_kml_advanced(self):
-        if not self.track_manager.tracks:
-            self.statusBar.showMessage("No hay datos de trazas para exportar.", 3000)
+    def actualizar_progreso(self, valor_slider: int, tiempo_str: str):
+        self.lbl_tiempo.setText(tiempo_str)
+        # Evitar recursividad bloqueando señales mientras actualizamos por código
+        self.slider_tiempo.blockSignals(True)
+        self.slider_tiempo.setValue(valor_slider)
+        self.slider_tiempo.blockSignals(False)
+
+    def cambiar_velocidad(self):
+        if hasattr(self, '_worker') and self._worker:
+            texto = self.combo_velocidad.currentText().replace('x', '')
+            try:
+                self._worker.velocidad = float(texto)
+                print(f"[Main] Velocidad cambiada a {texto}x")
+            except ValueError:
+                pass
+
+    def seek_tiempo(self, valor: int):
+        if hasattr(self, '_worker') and self._worker:
+            self._worker.paquete_actual = valor # Lógica de salto en el Worker
+            if self._worker.state != "PLAYING":
+                self._worker.toggle_play_pause()
+            print(f"[Main] Seek a frame index: {valor}")
+
+    def _on_sweep_toggled(self, visible: bool):
+        self.radar.set_sweep_visible(visible)
+
+    def _on_centrar_mendoza(self):
+        MENDOZA_LAT = -32.89
+        MENDOZA_LON = -69.95
+        self.radar.centrar_en_coordenadas(MENDOZA_LAT, MENDOZA_LON)
+
+    def _on_fit_view(self):
+        self.radar._needs_adjust = True
+        self.radar._adjust_view()
+
+    def _on_seek_requested(self, tod: float):
+        if self._worker is None or self._pcap_duration <= 0:
             return
-        
-        file_path, _ = QFileDialog.getSaveFileName(self, "Guardar KML Avanzado", "", "KML Files (*.kml)")
-        if file_path:
-            all_records = [rec for deq in self.track_manager.tracks.values() for rec in deq]
-            KMLExporter.export(all_records, file_path)
-            self.statusBar.showMessage(f"Exportado a {file_path}", 5000)
+        self._worker.seek_to_tod(tod)
+        if self._worker.state != "PLAYING":
+            self._worker.toggle_play_pause()
 
-    def _export_pdf_report(self):
-        if not self.track_manager.tracks:
-            self.statusBar.showMessage("No hay datos para generar un reporte.", 3000)
-            return
-            
-        file_path, _ = QFileDialog.getSaveFileName(self, "Guardar Reporte PDF", "", "PDF Files (*.pdf)")
-        if file_path:
-            all_records = [rec for deq in self.track_manager.tracks.values() for rec in deq]
-            summary_text = ReportGenerator.generate_summary(all_records, self.sensor_registry)
-            PDFReportGenerator.export_pdf(summary_text, file_path)
-            self.statusBar.showMessage(f"Reporte PDF guardado en {file_path}", 5000)
-
+    # ----------------------------------------------------------
+    # CIERRE SEGURO
+    # ----------------------------------------------------------
     def closeEvent(self, event):
-        if self.worker and self.worker.isRunning():
-            self.worker.stop()
-            self.worker.wait()
+        print("[Main] Cerrando aplicación...")
+        if self._worker is not None:
+            self._worker.stop()
+            if self._worker.isRunning():
+                self._worker.quit()
+                if not self._worker.wait(3000):
+                    print("[Main] Worker no respondió, forzando terminación")
+                    self._worker.terminate()
+                    self._worker.wait(2000)
+        if hasattr(self, 'dxf_loader') and self.dxf_loader.isRunning():
+            self.dxf_loader.wait(1000)
+        
+        if hasattr(self, 'cache_dir') and os.path.exists(self.cache_dir):
+            print(f"[Main] Limpiando directorio de caché de sesión: {self.cache_dir}")
+            shutil.rmtree(self.cache_dir, ignore_errors=True)
+
+        print("[Main] Cerrado completado")
         event.accept()
 
-if __name__ == "__main__":
+
+# ============================================================
+# PUNTO DE ENTRADA
+# ============================================================
+if __name__ == '__main__':
+    if 'QT_QPA_PLATFORM' not in os.environ:
+        os.environ['QT_QPA_PLATFORM'] = 'xcb'
+
     app = QApplication(sys.argv)
-    window = ATCNightWindow()
+    app.setFont(QFont("Consolas", 10))
+    
+    app.setStyleSheet("""
+        QToolTip {
+            background-color: #e8e8e8;
+            color: #222222;
+            border: 1px solid #999999;
+            padding: 6px;
+            font-family: 'Consolas', 'Monospace';
+            font-size: 11px;
+        }
+    """)
+
+    window = MainWindow()
     window.show()
     sys.exit(app.exec())

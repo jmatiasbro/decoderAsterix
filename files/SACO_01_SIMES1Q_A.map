@@ -1,0 +1,17 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                4    [SIMES1Q]
+320306.00S0633352.00W        [SIMES1Q]
+312604.00S0634300.00W        [SIMES1Q]
+312606.00S0635733.00W        [SIMES1Q]
+312606.00S0640256.00W        [SIMES1Q]

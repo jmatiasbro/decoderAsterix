@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.09277777777777,
+            -24.39361111111111
+          ],
+          [
+            -65.29957222222222,
+            -24.906155555555554
+          ],
+          [
+            -65.36305555555555,
+            -25.063055555555557
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "JUJ2A",
+        "type": "polyline"
+      }
+    }
+  ]
+}

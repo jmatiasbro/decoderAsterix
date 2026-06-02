@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_212",
+  "name": "Radar La Rioja",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 212,
+  "location": {
+    "latitude": -29.384722,
+    "longitude": -66.792222,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

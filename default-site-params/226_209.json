@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_209",
+  "name": "Radar Pehuajó",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 209,
+  "location": {
+    "latitude": -35.840555,
+    "longitude": -61.861666,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

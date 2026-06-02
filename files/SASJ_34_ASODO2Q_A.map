@@ -1,0 +1,18 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                5    [ASODO2Q]
+260628.00S0640842.00W        [ASODO2Q]
+255832.68S0640813.55W        [ASODO2Q]
+251315.00S0643328.00W        [ASODO2Q]
+244405.80S0645359.80W        [ASODO2Q]
+244133.71S0645546.35W        [ASODO2Q]

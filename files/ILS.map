@@ -1,0 +1,23 @@
+/*
+	 RUNWAYS MAP
+	 ========== 
+*/
+
+BrightnessGroup 	RUNWAYS
+Range 	2048
+
+ColorFill  23
+ColorLine    23
+LineStyle  4294967295
+LineWidth  0
+
+Line 311935.38S0641228.96W 310432.54S0641244.60W
+
+ColorFill  34
+ColorLine    34
+Polygon 4
+ 311935.38S0641228.96W
+ 310351.80S0641157.68W
+ 310432.54S0641244.60W
+ 310354.32S0641333.04W
+

@@ -1,0 +1,17 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                4    [GEMOP1Q]
+310121.00S0631124.00W        [GEMOP1Q]
+312604.00S0634300.00W        [GEMOP1Q]
+312606.00S0635733.00W        [GEMOP1Q]
+312606.00S0640256.00W        [GEMOP1Q]

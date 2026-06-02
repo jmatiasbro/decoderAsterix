@@ -1,0 +1,15 @@
+{
+  "radar_id": "ADSB_226_132",
+  "name": "ADS-B Saenz Peña",
+  "type": "ADS-B",
+  "category": "CAT021",
+  "sac": 226,
+  "sic": 132,
+  "location": {
+    "latitude": -26.750555,
+    "longitude": -60.481666,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360
+}

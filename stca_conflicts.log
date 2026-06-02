@@ -1,0 +1,393 @@
+[2026-05-30 20:38:29.799] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:38:56.452] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:38:57.863] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:39:12.381] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:39:13.647] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:39:24.184] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:39:25.458] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:39:55.488] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:50:18.249] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:50:52.017] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:50:53.475] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:51:10.258] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:51:11.752] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:51:28.473] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:51:29.652] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:51:46.101] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:51:47.303] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:52:24.698] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:52:26.269] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:53:11.349] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:53:13.230] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:53:33.910] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:53:35.641] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:54:43.845] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:54:45.450] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:55:06.790] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 20:55:08.717] NUEVO CONFLICTO detectado entre 2375 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 20:56:17.994] RESOLVIDO: Conflicto entre 2375 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 21:05:09.591] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 21:05:44.158] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 21:05:46.061] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 21:06:07.840] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 21:06:10.249] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 21:06:27.837] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 21:06:28.761] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 21:06:36.641] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 21:06:37.227] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-30 21:07:46.495] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-30 21:08:50.298] NUEVO CONFLICTO detectado entre 3321_226/212 y 2013_226/212 - Estado: PREDICTION (CPA estimado en 120s)
+[2026-05-30 21:08:50.377] RESOLVIDO: Conflicto entre 2013_226/212 y 3321_226/212 finalizado (Separación segura restablecida)
+[2026-05-30 21:39:32.868] NUEVO CONFLICTO detectado entre TRK_1346_226/2 y TRK_1394_226/2 - Estado: VIOLATION
+[2026-05-30 21:40:10.596] RESOLVIDO: Conflicto entre TRK_1346_226/2 y TRK_1394_226/2 finalizado (Separación segura restablecida)
+[2026-05-30 21:42:21.655] NUEVO CONFLICTO detectado entre TRK_1415_226/2 y TRK_1421_226/2 - Estado: VIOLATION
+[2026-05-31 12:48:51.278] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:48:57.197] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:49:02.506] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:49:08.622] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:49:13.700] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:49:19.387] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:49:24.699] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:49:30.887] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:49:36.850] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:49:43.789] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:49:49.762] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:49:56.944] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:50:03.581] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:50:10.618] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:50:16.833] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:50:23.901] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:50:30.298] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:50:37.365] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:50:43.743] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:50:51.539] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:50:58.902] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:51:06.886] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:51:14.554] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:51:23.431] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:51:32.062] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:51:40.948] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:51:48.434] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:51:56.556] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:52:04.000] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:52:15.066] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:52:22.968] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:52:33.123] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:52:42.215] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:52:51.403] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:52:54.848] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:53:08.432] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:53:10.001] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-05-31 12:53:11.710] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 12:53:25.705] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:53:29.352] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:53:46.358] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:53:48.218] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 1s)
+[2026-05-31 12:53:50.419] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 12:54:07.562] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:54:11.553] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:54:29.580] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:54:31.056] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-05-31 12:54:39.928] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 12:54:51.605] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:55:02.117] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:55:13.393] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:55:24.454] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:55:35.352] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:55:45.413] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:55:57.806] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:56:07.418] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 12:56:17.412] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 12:56:36.707] NUEVO CONFLICTO detectado entre 1665_226/214 y 1665_226/211 - Estado: VIOLATION
+[2026-05-31 12:56:43.587] RESOLVIDO: Conflicto entre 1665_226/211 y 1665_226/214 finalizado (Separación segura restablecida)
+[2026-05-31 12:56:49.995] NUEVO CONFLICTO detectado entre 1672_226/210 y 1672_226/232 - Estado: VIOLATION
+[2026-05-31 12:56:58.251] NUEVO CONFLICTO detectado entre JES3073 y ARG1420 - Estado: VIOLATION
+[2026-05-31 12:56:59.517] RESOLVIDO: Conflicto entre ARG1420 y JES3073 finalizado (Separación segura restablecida)
+[2026-05-31 12:56:59.827] NUEVO CONFLICTO detectado entre JES3073 y ARG1420 - Estado: VIOLATION
+[2026-05-31 12:57:10.792] RESOLVIDO: Conflicto entre 1672_226/210 y 1672_226/232 finalizado (Separación segura restablecida)
+[2026-05-31 12:58:02.310] RESOLVIDO: Conflicto entre ARG1420 y JES3073 finalizado (Separación segura restablecida)
+[2026-05-31 12:58:02.313] NUEVO CONFLICTO detectado entre JES3073 y ARG1420 - Estado: VIOLATION
+[2026-05-31 12:58:03.560] RESOLVIDO: Conflicto entre ARG1420 y JES3073 finalizado (Separación segura restablecida)
+[2026-05-31 12:58:03.562] NUEVO CONFLICTO detectado entre JES3073 y ARG1420 - Estado: VIOLATION
+[2026-05-31 12:58:03.821] RESOLVIDO: Conflicto entre ARG1420 y JES3073 finalizado (Separación segura restablecida)
+[2026-05-31 15:44:40.462] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 15:45:14.217] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 15:45:15.541] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:32:38.740] NUEVO CONFLICTO detectado entre ARG1505 y 2352_226/211 - Estado: VIOLATION
+[2026-05-31 16:33:12.879] RESOLVIDO: Conflicto entre 2352_226/211 y ARG1505 finalizado (Separación segura restablecida)
+[2026-05-31 16:50:19.381] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:50:46.785] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:50:48.008] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:51:02.928] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:51:04.116] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:51:19.922] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:51:21.211] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:51:35.893] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:51:37.043] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:52:09.382] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:52:10.265] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:52:36.735] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:52:37.710] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:52:50.792] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:52:51.867] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:53:35.127] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:53:36.263] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:53:50.203] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:53:51.145] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:54:05.514] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:54:06.700] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:54:36.475] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:54:37.604] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:54:52.953] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:54:53.274] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:55:23.192] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:55:24.207] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:55:38.682] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:55:39.756] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:56:25.713] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:56:26.668] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:56:41.179] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:56:42.284] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 16:56:57.265] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 16:56:58.208] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:11:47.301] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:12:18.785] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 17:12:20.148] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:12:36.085] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 17:12:37.332] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:12:53.229] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 17:12:54.499] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:13:10.857] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 17:13:12.224] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:13:43.897] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 17:13:45.183] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:14:19.927] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 17:14:21.175] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:14:36.973] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 17:14:38.375] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:15:31.250] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 17:15:32.496] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:15:49.997] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 17:15:51.254] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:16:09.700] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 17:16:11.032] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 17:17:20.087] RESOLVIDO: Conflicto entre 2375_226/232 y E0B147 finalizado (Separación segura restablecida)
+[2026-05-31 21:01:07.332] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 21:01:15.312] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:01:23.569] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 21:01:32.065] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:01:34.754] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-05-31 21:01:40.625] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 21:01:50.206] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:01:59.689] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 21:02:09.464] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:02:13.058] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-05-31 21:02:16.866] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:02:18.879] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 21:02:29.092] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:02:32.617] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-05-31 21:02:38.613] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 21:02:49.005] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:02:59.935] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 21:03:10.870] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:03:13.482] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 1s)
+[2026-05-31 21:03:16.992] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 21:03:23.459] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:03:29.837] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 21:03:36.795] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:03:39.072] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 1s)
+[2026-05-31 21:03:43.023] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 21:03:51.218] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:03:52.638] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-05-31 21:03:57.703] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 21:04:05.153] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:04:07.014] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-05-31 21:04:12.334] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 21:04:21.529] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:04:22.855] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-05-31 21:04:23.344] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:04:28.747] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 21:04:36.364] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:04:38.526] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 1s)
+[2026-05-31 21:04:43.892] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 21:04:54.207] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:04:55.852] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-05-31 21:05:02.954] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-05-31 21:05:11.755] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:05:20.285] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 21:05:28.813] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:05:36.544] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 21:05:44.931] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:05:48.594] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-05-31 21:06:02.490] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-05-31 21:08:31.147] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 21:09:06.413] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 21:09:07.771] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 21:09:24.917] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-05-31 21:09:27.019] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-05-31 23:58:54.583] NUEVO CONFLICTO detectado entre 2346_226/213 y 2346_226/205 - Estado: VIOLATION
+[2026-05-31 23:58:55.403] RESOLVIDO: Conflicto entre 2346_226/205 y 2346_226/213 finalizado (Separación segura restablecida)
+[2026-05-31 23:58:58.543] NUEVO CONFLICTO detectado entre 0432_226/230 y 0432_226/232 - Estado: VIOLATION
+[2026-05-31 23:58:59.160] RESOLVIDO: Conflicto entre 0432_226/230 y 0432_226/232 finalizado (Separación segura restablecida)
+[2026-06-01 00:00:54.830] NUEVO CONFLICTO detectado entre 2112_226/230 y JES3157 - Estado: VIOLATION
+[2026-06-01 00:01:05.554] RESOLVIDO: Conflicto entre 2112_226/230 y JES3157 finalizado (Separación segura restablecida)
+[2026-06-01 00:02:45.062] NUEVO CONFLICTO detectado entre 6316_226/232 y A9B9E3 - Estado: VIOLATION
+[2026-06-01 00:02:58.308] RESOLVIDO: Conflicto entre 6316_226/232 y A9B9E3 finalizado (Separación segura restablecida)
+[2026-06-01 00:12:07.381] NUEVO CONFLICTO detectado entre DAL101 y 2346_226/205 - Estado: PREDICTION (CPA estimado en 119s)
+[2026-06-01 00:12:09.543] RESOLVIDO: Conflicto entre 2346_226/205 y DAL101 finalizado (Separación segura restablecida)
+[2026-06-01 00:12:18.732] NUEVO CONFLICTO detectado entre DAL101 y 2346_226/205 - Estado: PREDICTION (CPA estimado en 118s)
+[2026-06-01 00:12:24.327] RESOLVIDO: Conflicto entre 2346_226/205 y DAL101 finalizado (Separación segura restablecida)
+[2026-06-01 00:12:33.696] NUEVO CONFLICTO detectado entre DAL101 y 2346_226/205 - Estado: PREDICTION (CPA estimado en 120s)
+[2026-06-01 00:12:34.328] RESOLVIDO: Conflicto entre 2346_226/205 y DAL101 finalizado (Separación segura restablecida)
+[2026-06-01 00:12:34.337] NUEVO CONFLICTO detectado entre DAL101 y 2346_226/205 - Estado: PREDICTION (CPA estimado en 120s)
+[2026-06-01 00:12:37.006] RESOLVIDO: Conflicto entre 2346_226/205 y DAL101 finalizado (Separación segura restablecida)
+[2026-06-01 00:12:56.294] NUEVO CONFLICTO detectado entre DAL101 y 2346_226/205 - Estado: PREDICTION (CPA estimado en 104s)
+[2026-06-01 00:13:02.023] RESOLVIDO: Conflicto entre 2346_226/205 y DAL101 finalizado (Separación segura restablecida)
+[2026-06-01 00:13:18.831] NUEVO CONFLICTO detectado entre DAL101 y 2346_226/205 - Estado: PREDICTION (CPA estimado en 113s)
+[2026-06-01 00:13:21.087] RESOLVIDO: Conflicto entre 2346_226/205 y DAL101 finalizado (Separación segura restablecida)
+[2026-06-01 00:14:23.708] NUEVO CONFLICTO detectado entre DAL101 y 2346_226/205 - Estado: PREDICTION (CPA estimado en 103s)
+[2026-06-01 00:14:23.832] ACTUALIZACIÓN: Conflicto predictivo entre DAL101 y 2346_226/205 - CPA en 88s
+[2026-06-01 00:14:29.824] RESOLVIDO: Conflicto entre 2346_226/205 y DAL101 finalizado (Separación segura restablecida)
+[2026-06-01 00:19:56.071] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:20:02.444] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:20:17.615] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:20:21.273] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:20:22.320] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:20:34.919] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:20:36.041] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:20:49.929] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:20:51.051] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:21:05.837] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:21:06.975] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:21:27.836] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:21:40.408] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:22:08.022] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:22:09.127] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:22:23.595] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:22:24.650] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:23:09.481] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:23:10.543] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:23:25.017] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:23:26.243] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:23:40.978] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:23:42.036] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:24:14.729] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:24:15.836] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:24:32.615] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:24:32.861] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:24:43.383] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:29:31.116] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:31:13.778] RESOLVIDO: Conflicto entre 2375_226/232 y E0B147 finalizado (Separación segura restablecida)
+[2026-06-01 00:41:24.873] NUEVO CONFLICTO detectado entre LAN427 y 5242_153/6 - Estado: VIOLATION
+[2026-06-01 00:46:48.952] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:47:15.251] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:47:16.401] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:47:30.563] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:47:31.654] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:47:45.423] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:47:46.545] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:47:59.671] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:48:00.603] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:48:29.605] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:48:30.802] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:49:00.796] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:49:01.983] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:49:16.383] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:49:17.452] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:50:03.113] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:50:04.186] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:50:18.981] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:50:20.045] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:50:35.688] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:50:36.947] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:51:10.602] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:51:11.959] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:51:28.935] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:51:29.341] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:52:02.438] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:52:03.624] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:52:19.224] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:52:20.098] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:53:06.519] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:53:07.465] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 00:53:22.202] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 00:53:23.135] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 01:00:57.918] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 01:01:23.710] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 01:01:24.777] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 01:01:39.620] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 01:01:40.805] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 01:01:56.336] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 01:01:57.590] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 01:02:07.296] RESOLVIDO: Conflicto entre 2375_226/232 y E0B147 finalizado (Separación segura restablecida)
+[2026-06-01 10:26:02.911] NUEVO CONFLICTO detectado entre FBZ5480 y 2375_226/232 - Estado: VIOLATION
+[2026-06-01 10:26:31.659] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 10:26:32.954] NUEVO CONFLICTO detectado entre FBZ5480 y 2375_226/232 - Estado: VIOLATION
+[2026-06-01 10:26:48.229] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 10:26:49.484] NUEVO CONFLICTO detectado entre FBZ5480 y 2375_226/232 - Estado: VIOLATION
+[2026-06-01 10:27:07.132] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 10:27:08.641] NUEVO CONFLICTO detectado entre FBZ5480 y 2375_226/232 - Estado: VIOLATION
+[2026-06-01 10:27:26.401] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 10:27:27.795] NUEVO CONFLICTO detectado entre FBZ5480 y 2375_226/232 - Estado: VIOLATION
+[2026-06-01 10:28:02.298] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 10:28:03.434] NUEVO CONFLICTO detectado entre FBZ5480 y 2375_226/232 - Estado: VIOLATION
+[2026-06-01 13:14:34.880] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 13:15:07.922] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 13:15:08.910] NUEVO CONFLICTO detectado entre 2375_226/232 y FBZ5480 - Estado: VIOLATION
+[2026-06-01 13:16:06.666] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 13:19:26.956] NUEVO CONFLICTO detectado entre FBZ5480 y 2375_226/232 - Estado: VIOLATION
+[2026-06-01 13:20:00.017] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 13:20:01.190] NUEVO CONFLICTO detectado entre FBZ5480 y 2375_226/232 - Estado: VIOLATION
+[2026-06-01 13:20:16.877] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 13:20:17.931] NUEVO CONFLICTO detectado entre FBZ5480 y 2375_226/232 - Estado: VIOLATION
+[2026-06-01 13:21:17.101] RESOLVIDO: Conflicto entre 2375_226/232 y FBZ5480 finalizado (Separación segura restablecida)
+[2026-06-01 13:21:27.722] NUEVO CONFLICTO detectado entre 2112_226/230 y JES3157 - Estado: VIOLATION
+[2026-06-01 13:21:42.614] RESOLVIDO: Conflicto entre 2112_226/230 y JES3157 finalizado (Separación segura restablecida)
+[2026-06-01 13:23:38.882] NUEVO CONFLICTO detectado entre 6316_226/230 y A9B9E3 - Estado: VIOLATION
+[2026-06-01 13:23:52.773] RESOLVIDO: Conflicto entre 6316_226/230 y A9B9E3 finalizado (Separación segura restablecida)
+[2026-06-01 13:37:17.817] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-06-01 13:37:24.624] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:37:30.758] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-06-01 13:37:38.466] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:37:45.848] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-06-01 13:37:53.106] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:38:00.497] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-06-01 13:38:07.888] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:38:14.884] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-06-01 13:38:22.472] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:38:29.842] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-06-01 13:38:37.774] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:38:40.411] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-06-01 13:38:44.813] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-06-01 13:38:53.113] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:38:56.191] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 1s)
+[2026-06-01 13:39:00.545] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-06-01 13:39:08.683] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:39:15.854] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-06-01 13:39:23.670] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:39:26.534] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-06-01 13:39:31.729] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-06-01 13:39:38.007] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:39:39.142] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-06-01 13:39:44.571] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:39:45.401] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 3s)
+[2026-06-01 13:39:45.651] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-06-01 13:39:54.203] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:39:56.330] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 1s)
+[2026-06-01 13:40:02.080] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-06-01 13:40:11.155] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:40:12.626] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-06-01 13:40:19.001] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-06-01 13:40:29.015] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:40:30.568] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: PREDICTION (CPA estimado en 0s)
+[2026-06-01 13:40:37.355] ESCALACIÓN: Conflicto entre 2351_226/214 y ARG1491 evolucionó de PREDICCIÓN a VIOLACIÓN DE SEPARACIÓN
+[2026-06-01 13:41:11.903] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:43:39.464] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-06-01 13:43:46.955] RESOLVIDO: Conflicto entre 2351_226/214 y ARG1491 finalizado (Separación segura restablecida)
+[2026-06-01 13:43:53.661] NUEVO CONFLICTO detectado entre 2351_226/214 y ARG1491 - Estado: VIOLATION
+[2026-06-01 17:07:08.961] NUEVO CONFLICTO detectado entre 1756_153/6 y 3006_153/6 - Estado: PREDICTION (CPA estimado en 103s)
+[2026-06-01 17:07:10.995] RESOLVIDO: Conflicto entre 1756_153/6 y 3006_153/6 finalizado (Separación segura restablecida)
+[2026-06-01 17:15:21.479] NUEVO CONFLICTO detectado entre 2070_153/6 y 7074_153/6 - Estado: VIOLATION
+[2026-06-01 17:15:23.343] NUEVO CONFLICTO detectado entre 1756_153/6 y 3006_226/221 - Estado: PREDICTION (CPA estimado en 85s)
+[2026-06-01 17:15:25.554] RESOLVIDO: Conflicto entre 1756_153/6 y 3006_226/221 finalizado (Separación segura restablecida)
+[2026-06-01 17:15:26.162] RESOLVIDO: Conflicto entre 2070_153/6 y 7074_153/6 finalizado (Separación segura restablecida)

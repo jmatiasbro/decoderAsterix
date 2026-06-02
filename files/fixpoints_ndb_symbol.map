@@ -1,0 +1,19 @@
+/*
+       NDB SYMBOLS FIXPOINTS MAP       
+      ===========================      
+*/
+BrightnessGroup NDB_FIXPOINTS
+
+Range                2048
+
+ColorSymbol           2
+FixpointRouSimbolo    344901.00S0583353.00W    261    Y    Adap 
+FixpointRouSimbolo    312616.00S0641633.00W    260    Y    Adap 
+FixpointRouSimbolo    371403.00S0570124.00W    261    Y    Adap 
+FixpointRouSimbolo    344239.00S0581425.00W    261    Y    Adap 
+FixpointRouSimbolo    343506.00S0582208.00W    261    Y    Adap 
+FixpointRouSimbolo    345325.00S0583021.00W    261    Y    Adap 
+FixpointRouSimbolo    344817.00S0583800.00W    261    Y    Adap 
+FixpointRouSimbolo    343105.00S0582912.00W    261    Y    Adap 
+FixpointRouSimbolo    343247.00S0582622.00W    261    Y    Adap 
+FixpointRouSimbolo    314241.00S0604823.00W    261    Y    Adap 

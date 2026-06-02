@@ -1,0 +1,17 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                4    [UTRAX1G]
+312729.44S0640439.57W        [UTRAX1G]
+313157.00S0635717.00W        [UTRAX1G]
+314026.45S0634310.98W        [UTRAX1G]
+315310.00S0632153.00W        [UTRAX1G]

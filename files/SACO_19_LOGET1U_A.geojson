@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.23416666666667,
+            -30.39472222222222
+          ],
+          [
+            -64.22722222222222,
+            -30.595277777777778
+          ],
+          [
+            -64.21361111111112,
+            -30.981388888888887
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "LOGET1U",
+        "type": "polyline"
+      }
+    }
+  ]
+}

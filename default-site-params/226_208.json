@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_208",
+  "name": "Radar Santa Rosa",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 208,
+  "location": {
+    "latitude": -36.590555,
+    "longitude": -64.280555,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

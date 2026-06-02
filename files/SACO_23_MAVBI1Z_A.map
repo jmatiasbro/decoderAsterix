@@ -1,0 +1,17 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                4    [MAVBI1Z]
+311521.00S0630810.00W        [MAVBI1Z]
+310410.00S0632444.00W        [MAVBI1Z]
+310428.00S0634245.00W        [MAVBI1Z]
+310441.00S0635551.00W        [MAVBI1Z]

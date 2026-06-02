@@ -1,0 +1,18 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                5    [GENAS1Z]
+312755.00S0630851.00W        [GENAS1Z]
+312053.83S0631905.75W        [GENAS1Z]
+311530.54S0632655.26W        [GENAS1Z]
+310428.00S0634245.00W        [GENAS1Z]
+310441.00S0635551.00W        [GENAS1Z]

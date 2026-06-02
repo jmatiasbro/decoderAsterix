@@ -1,0 +1,20 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                7    [ALGAR2U]
+254630.00S0660438.00W        [ALGAR2U]
+253846.64S0655937.76W        [ALGAR2U]
+252127.98S0654827.48W        [ALGAR2U]
+250408.43S0653720.38W        [ALGAR2U]
+245108.00S0652902.00W        [ALGAR2U]
+244528.18S0650533.80W        [ALGAR2U]
+242143.50S0652025.64W        [ALGAR2U]

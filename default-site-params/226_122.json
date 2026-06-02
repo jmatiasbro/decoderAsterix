@@ -1,0 +1,15 @@
+{
+  "radar_id": "ADSB_226_122",
+  "name": "ADS-B Malargüe",
+  "type": "ADS-B",
+  "category": "CAT021",
+  "sac": 226,
+  "sic": 122,
+  "location": {
+    "latitude": -35.481111,
+    "longitude": -69.580277,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360
+}

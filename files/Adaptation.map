@@ -1,0 +1,17 @@
+files/msaw_zones.map                     GENERICO          MSAW
+files/qnh_zones.map                      GENERICO          QNH
+files/radars_and_sensors.map             SUBMAP            SENSORS
+files/control_sectors.map                SUBMAP            SECTORS
+files/fixpoints_name_menu.map            SUBMAP            FIX_NAMES
+files/fixpoints_symb_menu.map            SUBMAP            FIX_SYMBOLS
+files/airways.map                        GENERICO          AIRWAYS
+files/airports_symbols.map               GENERICO          AIRPORT_SYMBOLS
+files/airports_names.map                 GENERICO          AIRPORT_NAMES
+files/airports_runways.map               GENERICO          AIRPORT_RUNWAYS
+files/profiles.map                       GENERICO          PROFILES
+files/departure_procedures_menu.map      SUBMAP            SIDs
+files/arrival_procedures_menu.map        SUBMAP            STARs
+files/stca_zones.map                     GENERICO          STCA_INHIBITION
+files/stca_separation_zones.map          GENERICO          STCA_ZONES
+files/boundary.map                       GENERICO          BOUNDARY
+files/interest_area.map                  GENERICO          AOI

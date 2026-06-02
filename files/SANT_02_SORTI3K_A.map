@@ -1,0 +1,18 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                5    [SORTI3K]
+274305.00S0652534.00W        [SORTI3K]
+272835.00S0652037.00W        [SORTI3K]
+272214.00S0651159.00W        [SORTI3K]
+271033.00S0651009.00W        [SORTI3K]
+270535.00S0650912.00W        [SORTI3K]
