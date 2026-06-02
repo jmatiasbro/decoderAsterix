@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.45111111111112,
+            -24.479166666666664
+          ],
+          [
+            -64.57777777777777,
+            -24.4625
+          ],
+          [
+            -64.74586944444445,
+            -24.504716666666667
+          ],
+          [
+            -64.86472222222221,
+            -24.56277777777778
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "KOVAT1Q",
+        "type": "polyline"
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                3    [DONKA1U]
+302433.00S0642336.00W        [DONKA1U]
+303543.00S0641338.00W        [DONKA1U]
+305853.00S0641249.00W        [DONKA1U]

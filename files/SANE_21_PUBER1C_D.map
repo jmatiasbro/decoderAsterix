@@ -1,0 +1,16 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                3    [PUBER1C]
+274911.00S0642031.00W        [PUBER1C]
+274425.00S0643027.00W        [PUBER1C]
+273151.00S0643911.00W        [PUBER1C]

@@ -1,0 +1,20 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                7    [ALGAR1C]
+241838.86S0650856.84W        [ALGAR1C]
+241838.76S0651425.26W        [ALGAR1C]
+242746.41S0651621.52W        [ALGAR1C]
+243410.94S0651749.88W        [ALGAR1C]
+243946.00S0651907.00W        [ALGAR1C]
+245108.00S0652902.00W        [ALGAR1C]
+254630.00S0660438.00W        [ALGAR1C]

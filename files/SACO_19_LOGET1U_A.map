@@ -1,0 +1,16 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                3    [LOGET1U]
+302341.00S0641403.00W        [LOGET1U]
+303543.00S0641338.00W        [LOGET1U]
+305853.00S0641249.00W        [LOGET1U]

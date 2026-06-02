@@ -1,0 +1,17 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                4    [MAVBI1C]
+311429.85S0640655.16W        [MAVBI1C]
+311427.90S0640154.47W        [MAVBI1C]
+311446.94S0634427.15W        [MAVBI1C]
+311521.00S0630810.00W        [MAVBI1C]

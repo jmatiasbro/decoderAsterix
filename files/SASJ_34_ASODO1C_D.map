@@ -1,0 +1,23 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline               10    [ASODO1C]
+241838.86S0650856.84W        [ASODO1C]
+241838.76S0651425.26W        [ASODO1C]
+242746.41S0651621.52W        [ASODO1C]
+243218.92S0651331.99W        [ASODO1C]
+244131.81S0650747.30W        [ASODO1C]
+244742.11S0650355.89W        [ASODO1C]
+250539.90S0645239.78W        [ASODO1C]
+252430.48S0644046.40W        [ASODO1C]
+255847.49S0642142.93W        [ASODO1C]
+260628.00S0640842.00W        [ASODO1C]

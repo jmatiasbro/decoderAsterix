@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.07765833333333,
+            -31.458177777777777
+          ],
+          [
+            -63.95472222222222,
+            -31.5325
+          ],
+          [
+            -63.56444444444444,
+            -32.05166666666666
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "SIMES1G",
+        "type": "polyline"
+      }
+    }
+  ]
+}

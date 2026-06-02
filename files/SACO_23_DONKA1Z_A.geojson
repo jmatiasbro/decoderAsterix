@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.39333333333335,
+            -30.409166666666664
+          ],
+          [
+            -64.22722222222222,
+            -30.595277777777778
+          ],
+          [
+            -64.21361111111112,
+            -30.981388888888887
+          ],
+          [
+            -64.09555555555555,
+            -31.080277777777777
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "DONKA1Z",
+        "type": "polyline"
+      }
+    }
+  ]
+}

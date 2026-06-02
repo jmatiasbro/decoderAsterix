@@ -1,0 +1,788 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.987747222222225,
+            -31.182258333333333
+          ],
+          [
+            -64.0770111111111,
+            -31.236580555555555
+          ],
+          [
+            -64.17993055555556,
+            -31.298830555555558
+          ],
+          [
+            -64.19138333333333,
+            -31.308922222222222
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "VOR_Z",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.17993055555556,
+            -31.298830555555558
+          ],
+          [
+            -64.20368611111111,
+            -31.313219444444446
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "FRUSTRADA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.19760000000001,
+            -31.357722222222225
+          ],
+          [
+            -64.09619166666666,
+            -31.390130555555555
+          ],
+          [
+            -64.00025833333333,
+            -31.458927777777777
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "LINEAS_DE_MAPA",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.97734444444445,
+            -31.433469444444444
+          ],
+          [
+            -63.917563888888886,
+            -31.47413333333333
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.94116666666666,
+            -31.499111111111112
+          ],
+          [
+            -64.00025833333333,
+            -31.458927777777777
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.0770111111111,
+          -31.236580555555555
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "FAP",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.20368611111111,
+          -31.313219444444446
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "CBA",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.0770111111111,
+          -31.236580555555555
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "FAP",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.20368611111111,
+          -31.313219444444446
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "CBA",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.20368611111111,
+            -31.313219444444446
+          ],
+          [
+            -63.95137777777778,
+            -31.241316666666666
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "VOR_Y",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.987747222222225,
+            -31.182258333333333
+          ],
+          [
+            -64.0770111111111,
+            -31.236580555555555
+          ],
+          [
+            -64.17993055555556,
+            -31.298830555555558
+          ],
+          [
+            -64.19138333333333,
+            -31.308922222222222
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "LINEAS_DE_MAPA",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.17993055555556,
+            -31.298830555555558
+          ],
+          [
+            -64.20368611111111,
+            -31.313219444444446
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "FRUSTRADA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.19760000000001,
+            -31.357722222222225
+          ],
+          [
+            -64.09619166666666,
+            -31.390130555555555
+          ],
+          [
+            -64.00025833333333,
+            -31.458927777777777
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "LINEAS_DE_MAPA",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.97734444444445,
+            -31.433469444444444
+          ],
+          [
+            -63.917563888888886,
+            -31.47413333333333
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.94116666666666,
+            -31.499111111111112
+          ],
+          [
+            -64.00025833333333,
+            -31.458927777777777
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.20368611111111,
+          -31.313219444444446
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "CBA",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.0770111111111,
+          -31.236580555555555
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "FAP",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.20368611111111,
+          -31.313219444444446
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "CBA",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.0770111111111,
+          -31.236580555555555
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "FAP",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.01196666666667,
+            -31.14995
+          ],
+          [
+            -64.08898888888888,
+            -31.218294444444442
+          ],
+          [
+            -64.19138611111111,
+            -31.308925000000002
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "RNP",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.095625,
+            -31.080205555555555
+          ],
+          [
+            -64.0538111111111,
+            -31.11508611111111
+          ],
+          [
+            -64.01196666666667,
+            -31.14995
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "LINEAS_DE_MAPA",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.91298611111111,
+            -31.20288611111111
+          ],
+          [
+            -64.01196666666667,
+            -31.14995
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "LINEAS_DE_MAPA",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.93096666666666,
+            -31.07792222222222
+          ],
+          [
+            -64.01196666666667,
+            -31.14995
+          ],
+          [
+            -64.19138611111111,
+            -31.308925000000002
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "LINEAS_DE_MAPA",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.60976388888889,
+            -31.364636111111114
+          ],
+          [
+            -63.54868333333333,
+            -31.403452777777776
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.570952777777784,
+            -31.429266666666667
+          ],
+          [
+            -63.63185,
+            -31.390594444444442
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.01196666666667,
+          -31.14995
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "GIBNA",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.08898888888888,
+          -31.218294444444442
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "TISTI",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.095625,
+          -31.080205555555555
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "DOSMO",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.0538111111111,
+          -31.11508611111111
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "CO876",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.91298611111111,
+          -31.20288611111111
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "DIKEX",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.93096666666666,
+          -31.07792222222222
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "DALUX",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.23959444444445,
+          -31.351508333333335
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "CO880",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.16977777777778,
+          -31.409705555555554
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "CO384",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.63185,
+          -31.390594444444442
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "ILKUL",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.01196666666667,
+          -31.14995
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "\"GIBNA\"",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.08898888888888,
+          -31.218294444444442
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "\"TISTI\"",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.095625,
+          -31.080205555555555
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "\"DOSMO\"",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.0538111111111,
+          -31.11508611111111
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "\"CO876\"",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.91298611111111,
+          -31.20288611111111
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "\"DIKEX\"",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.93096666666666,
+          -31.07792222222222
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "\"DALUX\"",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.23959444444445,
+          -31.351508333333335
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "\"CO880\"",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.16977777777778,
+          -31.409705555555554
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "\"CO384\"",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.63185,
+          -31.390594444444442
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "\"ILKUL\"",
+        "type": "symbol"
+      }
+    }
+  ]
+}

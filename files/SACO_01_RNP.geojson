@@ -1,0 +1,285 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.04876388888889,
+            -31.434952777777777
+          ],
+          [
+            -64.16443333333333,
+            -31.4349
+          ],
+          [
+            -64.20730277777778,
+            -31.373261111111113
+          ],
+          [
+            -64.2081,
+            -31.324530555555555
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "RNP",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.2081,
+            -31.324530555555555
+          ],
+          [
+            -64.20928888888889,
+            -31.251775
+          ],
+          [
+            -64.04876388888889,
+            -31.25037222222222
+          ],
+          [
+            -63.854286111111115,
+            -31.16666111111111
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "FRUSTRADA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.854286111111115,
+            -31.16666111111111
+          ],
+          [
+            -63.815780555555556,
+            -31.111244444444445
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.78330277777778,
+            -31.127188888888888
+          ],
+          [
+            -63.82208611111111,
+            -31.183116666666667
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.854286111111115,
+          -31.16666111111111
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "DEVEB",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.04876388888889,
+          -31.25037222222222
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "CO129",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.20928888888889,
+          -31.251775
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "CO128",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.04876388888889,
+          -31.434952777777777
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "EDNUL",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.16443333333333,
+          -31.4349
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "ESONA",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.20730277777778,
+          -31.373261111111113
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "LIVUS",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.04876388888889,
+          -31.434952777777777
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "CO129",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.16443333333333,
+          -31.4349
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "ESONA",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.20730277777778,
+          -31.373261111111113
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "LIVUS",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.20928888888889,
+          -31.251775
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "CO128",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.04876388888889,
+          -31.25037222222222
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "EDNUL",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.854286111111115,
+          -31.16666111111111
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "DEVEB",
+        "type": "symbol"
+      }
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+/*
+      IAC  MAP       
+      =========================     
+*/
+BrightnessGroup IAC
+
+LineStyle     1
+
+ColorLine            10
+
+Range                2048
+
+Polyline                2    [VOR_Y]
+311847.59S0641213.27W        [CBA]
+311428.74S0635704.96W
+
+Arc 311056.13S0635915.89W 311138.10S0635545.32W 311428.74S0635704.96W Arc
+
+Polyline                4
+311056.13S0635915.89W
+311411.69S0640437.24W        [FAP]
+311755.79S0641047.75W
+311832.12S0641128.98W        [RW23]
+
+BrightnessGroup IAC
+
+LineStyle     2
+
+ColorLine            10
+
+Range                2048
+
+Polyline                2    [FRUSTRADA]
+311755.79S0641047.75W
+311847.59S0641213.27W        [CBA]
+
+Arc 312127.80S0641151.36W 312107.22S0641219.32W 311847.59S0641213.27W Arc
+
+Polyline                3
+312127.80S0641151.36W
+312324.47S0640546.29W
+312732.14S0640000.93W
+
+BrightnessGroup IAC
+
+LineStyle     1
+
+ColorLine            10
+
+Range                2048
+
+Arc 312732.14S0640000.93W 312608.57S0640009.28W 312600.49S0635838.44W Arc
+
+Polyline                2    [ESPERA]
+312600.49S0635838.44W
+312826.88S0635503.23W
+
+Arc 312826.88S0635503.23W 312921.53S0635440.28W 312956.80S0635628.20W Arc
+
+Polyline                2    [ESPERA]
+312956.80S0635628.20W
+312732.14S0640000.93W
+
+
+
+ColorText    1
+Font 10 0 0
+Text     311847.59S0641213.27W      "CBA"
+Text     311411.69S0640437.24W      "FAP"
+
+
+ColorSymbol   1
+FixPointSymbol      311847.59S0641213.27W    257    CBA
+FixPointSymbol      311411.69S0640437.24W    212    FAP

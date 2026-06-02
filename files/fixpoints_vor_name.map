@@ -1,0 +1,81 @@
+/*
+       VOR NAMES FIXPOINTS MAP       
+      =========================      
+*/
+BrightnessGroup VOR_FIXPOINTS
+
+Range                2048
+
+ColorText             1
+FixPointText   332511.00S0704704.00W    AMB    256    Y  External  Adap 
+FixPointText   455447.00S0714245.00W    BAL    257    Y  External  Adap 
+FixPointText   410825.00S0711120.00W    BAR    257    Y  External  Adap 
+FixPointText   384312.00S0620930.00W    BCA    257    Y  External  Adap 
+FixPointText   283501.00S0654448.00W    CAT    257    Y  Internal  Adap 
+FixPointText   311848.00S0641213.00W    CBA    257    Y  Internal  Adap 
+FixPointText   363511.00S0720158.00W    CHI    256    Y  External  Adap 
+FixPointText   400256.00S0710543.00W    CHP    257    Y  External  Adap 
+FixPointText   344958.00S0560130.00W    CRR    257    Y  External  Adap 
+FixPointText   272614.00S0584542.00W    CRS    257    Y  External  Adap 
+FixPointText   454624.00S0672218.00W    CRV    257    Y  External  Adap 
+FixPointText   371330.00S0591346.00W    DIL    257    Y  External  Adap 
+FixPointText   324955.00S0684727.00W    DOZ    257    Y  External  Adap 
+FixPointText   424536.00S0650603.00W    DRY    257    Y  External  Adap 
+FixPointText   332123.00S0562946.00W    DUR    256    Y  External  Adap 
+FixPointText   501642.00S0720244.00W    ECA    257    Y  External  Adap 
+FixPointText   295224.00S0615531.00W    ERE    257    Y  Internal  Adap 
+FixPointText   425314.00S0710601.00W    ESQ    257    Y  External  Adap 
+FixPointText   344927.00S0583207.00W    EZE    257    Y  External  Adap 
+FixPointText   342705.00S0583503.00W    FDO    257    Y  External  Adap 
+FixPointText   253500.00S0543013.00W    FOZ    257    Y  External  Adap 
+FixPointText   261237.00S0581329.00W    FSA    257    Y  External  Adap 
+FixPointText   513640.00S0691949.00W    GAL    257    Y  External  Adap 
+FixPointText   354503.00S0582753.00W    GBE    253    Y  External  Adap 
+FixPointText   354132.00S0634544.00W    GPI    253    Y  External  Adap 
+FixPointText   534631.00S0674445.00W    GRA    257    Y  External  Adap 
+FixPointText   330035.00S0583651.00W    GUA    257    Y  External  Adap 
+FixPointText   345804.00S0711257.00W    ICO    256    Y  External  Adap 
+FixPointText   254404.00S0542909.00W    IGU    257    Y  External  Adap 
+FixPointText   621127.00S0585757.00W    IRJ    257    Y  External  Adap 
+FixPointText   313350.00S0682517.00W    JUA    257    Y  External  Adap 
+FixPointText   242337.00S0650534.00W    JUJ    257    Y  Internal  Adap 
+FixPointText   292319.00S0664813.00W    LAR    257    Y  Internal  Adap 
+FixPointText   223007.00S0685232.00W    LOA    256    Y  External  Adap 
+FixPointText   340829.00S0632139.00W    LYE    253    Y  External  Adap 
+FixPointText   641405.00S0563712.00W    MBI    257    Y  External  Adap 
+FixPointText   375547.00S0573435.00W    MDP    257    Y  External  Adap 
+FixPointText   324110.00S0620940.00W    MJZ    253    Y  Internal  Adap 
+FixPointText   352910.00S0693443.00W    MLG    257    Y  External  Adap 
+FixPointText   412545.00S0730531.00W    MON    256    Y  External  Adap 
+FixPointText   514934.00S0582511.00W    MTP    257    Y  External  Adap 
+FixPointText   530015.00S0705119.00W    NAS    257    Y  External  Adap 
+FixPointText   385701.00S0680917.00W    NEU    257    Y  External  Adap 
+FixPointText   385422.00S0723838.00W    NIA    256    Y  External  Adap 
+FixPointText   343228.00S0605602.00W    NIN    253    Y  External  Adap 
+FixPointText   391657.00S0653633.00W    OEL    257    Y  External  Adap 
+FixPointText   363501.00S0641622.00W    OSA    257    Y  External  Adap 
+FixPointText   343642.00S0583650.00W    PAL    257    Y  External  Adap 
+FixPointText   314830.00S0602905.00W    PAR    257    Y  External  Adap 
+FixPointText   352043.00S0571632.00W    PDI    257    Y  External  Adap 
+FixPointText   272308.00S0555809.00W    POS    257    Y  External  Adap 
+FixPointText   345833.00S0575354.00W    PTA    253    Y  External  Adap 
+FixPointText   545546.00S0673716.00W    PWL    257    Y  External  Adap 
+FixPointText   330532.00S0641554.00W    RCU    257    Y  Internal  Adap 
+FixPointText   325418.00S0604653.00W    ROS    257    Y  External  Adap 
+FixPointText   291231.00S0594057.00W    RTA    257    Y  External  Adap 
+FixPointText   334343.00S0652252.00W    RYD    257    Y  External  Adap 
+FixPointText   245108.00S0652902.00W    SAL    257    Y  Internal  Adap 
+FixPointText   274532.00S0641810.00W    SDE    253    Y  Internal  Adap 
+FixPointText   272649.00S0590326.00W    SIS    257    Y  External  Adap 
+FixPointText   491835.00S0674846.00W    SJU    257    Y  External  Adap 
+FixPointText   341320.00S0592629.00W    SNT    257    Y  External  Adap 
+FixPointText   343522.00S0682341.00W    SRA    257    Y  External  Adap 
+FixPointText   322221.00S0651100.00W    SRC    257    Y  Internal  Adap 
+FixPointText   325506.00S0705014.00W    TBN    256    Y  External  Adap 
+FixPointText   431209.00S0651450.00W    TRE    257    Y  External  Adap 
+FixPointText   272948.00S0645601.00W    TRH    257    Y  Internal  Adap 
+FixPointText   265045.00S0650630.00W    TUC    257    Y  Internal  Adap 
+FixPointText   331606.00S0662128.00W    UIS    257    Y  External  Adap 
+FixPointText   545017.00S0681703.00W    USU    257    Y  External  Adap 
+FixPointText   251439.00S0573119.00W    VAS    257    Y  External  Adap 
+FixPointText   405202.00S0630003.00W    VIE    253    Y  External  Adap 

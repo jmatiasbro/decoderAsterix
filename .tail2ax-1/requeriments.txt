@@ -1,0 +1,5 @@
+pyYAML
+lxml
+asterix-decoder
+pyzmq
+numpy

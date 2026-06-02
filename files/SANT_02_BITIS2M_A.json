@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.08944444444444,
+            -26.97222222222222
+          ],
+          [
+            -64.57662777777777,
+            -27.005847222222222
+          ],
+          [
+            -65.0286111111111,
+            -27.035555555555558
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "BITIS2M",
+        "type": "polyline"
+      }
+    }
+  ]
+}

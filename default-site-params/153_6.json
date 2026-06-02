@@ -1,0 +1,15 @@
+{
+  "radar_id": "RADAR_153_6",
+  "name": "Radar Mendoza",
+  "type": "SSR",
+  "category": "CAT048",
+  "sac": 153,
+  "sic": 6,
+  "location": {
+    "latitude": -32.8317,
+    "longitude": -68.7928,
+    "altitude": 704
+  },
+  "range": 250,
+  "azimuth_coverage": 360
+}

@@ -1,0 +1,83 @@
+/*
+      IAC  MAP       
+      =========================     
+*/
+BrightnessGroup IAC
+
+LineStyle     1
+
+ColorLine            10
+
+Range                2048
+
+Polyline                4    [RNP]
+312605.83S0640255.55W        [EDNUL]
+312605.64S0640951.96W        [ESONA]
+312223.74S0641226.29W        [LIVUS]
+311928.31S0641229.16W        [RW01]
+
+BrightnessGroup IAC
+
+LineStyle     2
+
+ColorLine            10
+
+Range                2048
+
+Polyline                4    [FRUSTRADA]
+311928.31S0641229.16W        [RW01]
+311506.39S0641233.44W        [CO128]
+311501.34S0640255.55W        [CO129]
+310959.98S0635115.43W        [DEVEB]
+
+BrightnessGroup IAC
+
+LineStyle     1
+
+ColorLine            10
+
+Range                2048
+
+Arc 311059.22S0634919.51W 311111.26S0635103.94W 310959.98S0635115.43W Arc
+
+Polyline                2    [ESPERA]
+310959.98S0635115.43W        [DEVEB]
+310640.48S0634856.81W
+
+Arc 310640.48S0634856.81W 310615.51S0634740.65W 310737.88S0634659.89W Arc
+
+Polyline                2    [ESPERA]
+310737.88S0634659.89W
+311059.22S0634919.51W
+
+
+
+
+ColorText    1
+Font 10 0 0
+Text  310959.98S0635115.43W  "DEVEB"
+Text  311501.34S0640255.55W  "CO129"
+Text  311506.39S0641233.44W  "CO128"
+Text  312605.83S0640255.55W  "EDNUL"
+Text  312605.64S0640951.96W  "ESONA"
+Text  312223.74S0641226.29W  "LIVUS"
+
+
+ColorSymbol   1
+FixPointSymbol  312605.83S0640255.55W  265     CO129
+FixPointSymbol  312605.64S0640951.96W  264     ESONA
+FixPointSymbol  312223.74S0641226.29W  216     LIVUS
+FixPointSymbol  311506.39S0641233.44W  264     CO128
+FixPointSymbol  311501.34S0640255.55W  264     EDNUL
+FixPointSymbol  310959.98S0635115.43W  267     DEVEB
+
+
+
+
+
+
+
+
+
+
+

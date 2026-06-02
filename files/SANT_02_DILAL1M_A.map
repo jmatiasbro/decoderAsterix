@@ -1,0 +1,18 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                5    [DILAL1M]
+260802.00S0654519.00W        [DILAL1M]
+262332.84S0653111.93W        [DILAL1M]
+264035.00S0651536.00W        [DILAL1M]
+265036.72S0651531.05W        [DILAL1M]
+270001.00S0651526.00W        [DILAL1M]

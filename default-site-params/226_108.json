@@ -1,0 +1,15 @@
+{
+  "radar_id": "ADSB_226_108",
+  "name": "ADS-B Santa Rosa",
+  "type": "ADS-B",
+  "category": "CAT021",
+  "sac": 226,
+  "sic": 108,
+  "location": {
+    "latitude": -36.590555,
+    "longitude": -64.280555,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360
+}

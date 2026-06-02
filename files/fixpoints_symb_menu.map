@@ -1,0 +1,4 @@
+files/fixpoints_vor_symbol.map   GENERICO   VOR_SYMBOLS
+files/fixpoints_ndb_symbol.map   GENERICO   NDB_SYMBOLS
+files/fixpoints_rou_symbol.map   GENERICO   ROUTE_SYMBOLS
+files/fixpoints_app_symbol.map   GENERICO   APP_SYMBOLS

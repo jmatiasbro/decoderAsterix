@@ -1,0 +1,81 @@
+/*
+       VOR SYMBOLS FIXPOINTS MAP       
+      ===========================      
+*/
+BrightnessGroup VOR_FIXPOINTS
+
+Range                2048
+
+ColorSymbol           2
+FixpointRouSimbolo    332511.00S0704704.00W    256    Y   Adap 
+FixpointRouSimbolo    455447.00S0714245.00W    257    Y   Adap 
+FixpointRouSimbolo    410825.00S0711120.00W    257    Y   Adap 
+FixpointRouSimbolo    384312.00S0620930.00W    257    Y   Adap 
+FixpointRouSimbolo    283501.00S0654448.00W    257    Y   Adap 
+FixpointRouSimbolo    311848.00S0641213.00W    257    Y   Adap 
+FixpointRouSimbolo    363511.00S0720158.00W    256    Y   Adap 
+FixpointRouSimbolo    400256.00S0710543.00W    257    Y   Adap 
+FixpointRouSimbolo    344958.00S0560130.00W    257    Y   Adap 
+FixpointRouSimbolo    272614.00S0584542.00W    257    Y   Adap 
+FixpointRouSimbolo    454624.00S0672218.00W    257    Y   Adap 
+FixpointRouSimbolo    371330.00S0591346.00W    257    Y   Adap 
+FixpointRouSimbolo    324955.00S0684727.00W    257    Y   Adap 
+FixpointRouSimbolo    424536.00S0650603.00W    257    Y   Adap 
+FixpointRouSimbolo    332123.00S0562946.00W    256    Y   Adap 
+FixpointRouSimbolo    501642.00S0720244.00W    257    Y   Adap 
+FixpointRouSimbolo    295224.00S0615531.00W    257    Y   Adap 
+FixpointRouSimbolo    425314.00S0710601.00W    257    Y   Adap 
+FixpointRouSimbolo    344927.00S0583207.00W    257    Y   Adap 
+FixpointRouSimbolo    342705.00S0583503.00W    257    Y   Adap 
+FixpointRouSimbolo    253500.00S0543013.00W    257    Y   Adap 
+FixpointRouSimbolo    261237.00S0581329.00W    257    Y   Adap 
+FixpointRouSimbolo    513640.00S0691949.00W    257    Y   Adap 
+FixpointRouSimbolo    354503.00S0582753.00W    253    Y   Adap 
+FixpointRouSimbolo    354132.00S0634544.00W    253    Y   Adap 
+FixpointRouSimbolo    534631.00S0674445.00W    257    Y   Adap 
+FixpointRouSimbolo    330035.00S0583651.00W    257    Y   Adap 
+FixpointRouSimbolo    345804.00S0711257.00W    256    Y   Adap 
+FixpointRouSimbolo    254404.00S0542909.00W    257    Y   Adap 
+FixpointRouSimbolo    621127.00S0585757.00W    257    Y   Adap 
+FixpointRouSimbolo    313350.00S0682517.00W    257    Y   Adap 
+FixpointRouSimbolo    242337.00S0650534.00W    257    Y   Adap 
+FixpointRouSimbolo    292319.00S0664813.00W    257    Y   Adap 
+FixpointRouSimbolo    223007.00S0685232.00W    256    Y   Adap 
+FixpointRouSimbolo    340829.00S0632139.00W    253    Y   Adap 
+FixpointRouSimbolo    641405.00S0563712.00W    257    Y   Adap 
+FixpointRouSimbolo    375547.00S0573435.00W    257    Y   Adap 
+FixpointRouSimbolo    324110.00S0620940.00W    253    Y   Adap 
+FixpointRouSimbolo    352910.00S0693443.00W    257    Y   Adap 
+FixpointRouSimbolo    412545.00S0730531.00W    256    Y   Adap 
+FixpointRouSimbolo    514934.00S0582511.00W    257    Y   Adap 
+FixpointRouSimbolo    530015.00S0705119.00W    257    Y   Adap 
+FixpointRouSimbolo    385701.00S0680917.00W    257    Y   Adap 
+FixpointRouSimbolo    385422.00S0723838.00W    256    Y   Adap 
+FixpointRouSimbolo    343228.00S0605602.00W    253    Y   Adap 
+FixpointRouSimbolo    391657.00S0653633.00W    257    Y   Adap 
+FixpointRouSimbolo    363501.00S0641622.00W    257    Y   Adap 
+FixpointRouSimbolo    343642.00S0583650.00W    257    Y   Adap 
+FixpointRouSimbolo    314830.00S0602905.00W    257    Y   Adap 
+FixpointRouSimbolo    352043.00S0571632.00W    257    Y   Adap 
+FixpointRouSimbolo    272308.00S0555809.00W    257    Y   Adap 
+FixpointRouSimbolo    345833.00S0575354.00W    253    Y   Adap 
+FixpointRouSimbolo    545546.00S0673716.00W    257    Y   Adap 
+FixpointRouSimbolo    330532.00S0641554.00W    257    Y   Adap 
+FixpointRouSimbolo    325418.00S0604653.00W    257    Y   Adap 
+FixpointRouSimbolo    291231.00S0594057.00W    257    Y   Adap 
+FixpointRouSimbolo    334343.00S0652252.00W    257    Y   Adap 
+FixpointRouSimbolo    245108.00S0652902.00W    257    Y   Adap 
+FixpointRouSimbolo    274532.00S0641810.00W    253    Y   Adap 
+FixpointRouSimbolo    272649.00S0590326.00W    257    Y   Adap 
+FixpointRouSimbolo    491835.00S0674846.00W    257    Y   Adap 
+FixpointRouSimbolo    341320.00S0592629.00W    257    Y   Adap 
+FixpointRouSimbolo    343522.00S0682341.00W    257    Y   Adap 
+FixpointRouSimbolo    322221.00S0651100.00W    257    Y   Adap 
+FixpointRouSimbolo    325506.00S0705014.00W    256    Y   Adap 
+FixpointRouSimbolo    431209.00S0651450.00W    257    Y   Adap 
+FixpointRouSimbolo    272948.00S0645601.00W    257    Y   Adap 
+FixpointRouSimbolo    265045.00S0650630.00W    257    Y   Adap 
+FixpointRouSimbolo    331606.00S0662128.00W    257    Y   Adap 
+FixpointRouSimbolo    545017.00S0681703.00W    257    Y   Adap 
+FixpointRouSimbolo    251439.00S0573119.00W    257    Y   Adap 
+FixpointRouSimbolo    405202.00S0630003.00W    253    Y   Adap 

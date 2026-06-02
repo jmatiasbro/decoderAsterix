@@ -1,0 +1,17 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                4    [TEGAV2U]
+251315.00S0643328.00W        [TEGAV2U]
+250534.47S0645253.47W        [TEGAV2U]
+244528.18S0650533.80W        [TEGAV2U]
+242143.50S0652025.64W        [TEGAV2U]

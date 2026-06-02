@@ -1,0 +1,17 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                4    [SIBOL1Z]
+302927.00S0644043.00W        [SIBOL1Z]
+303543.00S0641338.00W        [SIBOL1Z]
+305853.00S0641249.00W        [SIBOL1Z]
+310449.00S0640544.00W        [SIBOL1Z]

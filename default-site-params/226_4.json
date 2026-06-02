@@ -1,0 +1,13 @@
+{
+  "radar_id": "RADAR_226_4",
+  "name": "Radar Bariloche BRC",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 4,
+  "location": {
+    "latitude": -41.145277,
+    "longitude": -71.155555,
+    "altitude": 0
+  }
+}

@@ -1,0 +1,17 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                4    [MOXAT1U]
+240605.00S0645500.00W        [MOXAT1U]
+243812.51S0645236.24W        [MOXAT1U]
+244528.18S0650533.80W        [MOXAT1U]
+242143.00S0652026.00W        [MOXAT1U]

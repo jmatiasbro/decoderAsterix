@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_214",
+  "name": "Radar Salta",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 214,
+  "location": {
+    "latitude": -24.840833,
+    "longitude": -65.478888,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

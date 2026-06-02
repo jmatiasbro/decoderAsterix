@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_203",
+  "name": "Radar Parana",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 203,
+  "location": {
+    "latitude": -31.791388,
+    "longitude": -60.486111,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

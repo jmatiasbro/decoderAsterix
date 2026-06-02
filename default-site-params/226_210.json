@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_210",
+  "name": "Radar Córdoba",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 210,
+  "location": {
+    "latitude": -31.310555,
+    "longitude": -64.214166,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

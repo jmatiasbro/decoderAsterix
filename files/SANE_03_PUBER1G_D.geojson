@@ -1,0 +1,26 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.27777777777777,
+            -27.711666666666666
+          ],
+          [
+            -64.65305555555557,
+            -27.530833333333334
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "PUBER1G",
+        "type": "polyline"
+      }
+    }
+  ]
+}

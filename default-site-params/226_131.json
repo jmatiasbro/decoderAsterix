@@ -1,0 +1,15 @@
+{
+  "radar_id": "ADSB_226_131",
+  "name": "ADS-B Posadas",
+  "type": "ADS-B",
+  "category": "CAT021",
+  "sac": 226,
+  "sic": 131,
+  "location": {
+    "latitude": -27.385,
+    "longitude": -55.966666,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360
+}

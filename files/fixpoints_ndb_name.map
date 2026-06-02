@@ -1,0 +1,19 @@
+/*
+       NDB NAMES FIXPOINTS MAP       
+      =========================      
+*/
+BrightnessGroup NDB_FIXPOINTS
+
+Range                2048
+
+ColorText             1
+FixPointText   344901.00S0583353.00W    CC     261    Y  External  Adap 
+FixPointText   312616.00S0641633.00W    ESC    260    Y  Internal  Adap 
+FixPointText   371403.00S0570124.00W    GES    261    Y  External  Adap 
+FixPointText   344239.00S0581425.00W    ILM    261    Y  External  Adap 
+FixPointText   343506.00S0582208.00W    NN     261    Y  External  Adap 
+FixPointText   345325.00S0583021.00W    OA     261    Y  External  Adap 
+FixPointText   344817.00S0583800.00W    OC     261    Y  External  Adap 
+FixPointText   343105.00S0582912.00W    OP     261    Y  External  Adap 
+FixPointText   343247.00S0582622.00W    PP     261    Y  External  Adap 
+FixPointText   314241.00S0604823.00W    SVO    261    Y  External  Adap 

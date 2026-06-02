@@ -1,0 +1,18 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                5    [SIMES1C]
+311429.85S0640655.16W        [SIMES1C]
+311641.13S0640234.67W        [SIMES1C]
+312813.73S0634939.35W        [SIMES1C]
+313523.00S0633926.00W        [SIMES1C]
+320306.00S0633352.00W        [SIMES1C]

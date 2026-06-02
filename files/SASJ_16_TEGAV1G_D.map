@@ -1,0 +1,17 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                4    [TEGAV1G]
+243329.09S0650011.19W        [TEGAV1G]
+243812.51S0645236.24W        [TEGAV1G]
+250003.01S0644041.97W        [TEGAV1G]
+251315.00S0643328.00W        [TEGAV1G]

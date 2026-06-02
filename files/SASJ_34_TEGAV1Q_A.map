@@ -1,0 +1,16 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                3    [TEGAV1Q]
+251315.00S0643328.00W        [TEGAV1Q]
+244405.80S0645359.80W        [TEGAV1Q]
+244134.00S0645546.00W        [TEGAV1Q]

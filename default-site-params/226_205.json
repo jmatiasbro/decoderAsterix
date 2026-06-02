@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_205",
+  "name": "Radar Quilmes",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 205,
+  "location": {
+    "latitude": -34.708611,
+    "longitude": -58.253055,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

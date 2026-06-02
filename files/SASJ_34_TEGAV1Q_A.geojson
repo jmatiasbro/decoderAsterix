@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.55777777777777,
+            -25.22083333333333
+          ],
+          [
+            -64.89994444444446,
+            -24.734944444444444
+          ],
+          [
+            -64.92944444444444,
+            -24.692777777777778
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "TEGAV1Q",
+        "type": "polyline"
+      }
+    }
+  ]
+}

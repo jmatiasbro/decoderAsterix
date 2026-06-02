@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.93166666666667,
+            -27.74888888888889
+          ],
+          [
+            -65.10046388888888,
+            -27.34228333333333
+          ],
+          [
+            -65.16916666666667,
+            -27.175833333333333
+          ],
+          [
+            -65.15805555555556,
+            -27.11722222222222
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "IMBOL2M",
+        "type": "polyline"
+      }
+    }
+  ]
+}

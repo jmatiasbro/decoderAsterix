@@ -1,0 +1,15 @@
+{
+  "radar_id": "ADSB_226_144",
+  "name": "ADS-B San Julián",
+  "type": "ADS-B",
+  "category": "CAT021",
+  "sac": 226,
+  "sic": 144,
+  "location": {
+    "latitude": -49.310277,
+    "longitude": -67.802777,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360
+}

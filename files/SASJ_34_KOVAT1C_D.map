@@ -1,0 +1,19 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                6    [KOVAT1C]
+241838.86S0650856.84W        [KOVAT1C]
+241838.76S0651425.26W        [KOVAT1C]
+242746.41S0651621.52W        [KOVAT1C]
+242744.92S0645706.80W        [KOVAT1C]
+242745.00S0643440.00W        [KOVAT1C]
+242845.00S0642704.00W        [KOVAT1C]

@@ -1,0 +1,17 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                4    [ILPAR2U]
+254158.00S0650533.00W        [ILPAR2U]
+250534.47S0645253.47W        [ILPAR2U]
+244528.18S0650533.80W        [ILPAR2U]
+242143.50S0652025.64W        [ILPAR2U]

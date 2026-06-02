@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.00310833333333,
+            -24.558080555555556
+          ],
+          [
+            -65.09272222222222,
+            -24.757827777777777
+          ],
+          [
+            -65.48388888888888,
+            -24.852222222222224
+          ],
+          [
+            -66.07722222222222,
+            -25.775
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ALGAR2G",
+        "type": "polyline"
+      }
+    }
+  ]
+}

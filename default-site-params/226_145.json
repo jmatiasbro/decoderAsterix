@@ -1,0 +1,15 @@
+{
+  "radar_id": "ADSB_226_145",
+  "name": "ADS-B Ushuaia",
+  "type": "ADS-B",
+  "category": "CAT021",
+  "sac": 226,
+  "sic": 145,
+  "location": {
+    "latitude": -54.847807,
+    "longitude": -68.305139,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360
+}

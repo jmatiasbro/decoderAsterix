@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_211",
+  "name": "Radar Tucumán",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 211,
+  "location": {
+    "latitude": -26.8325,
+    "longitude": -65.108611,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

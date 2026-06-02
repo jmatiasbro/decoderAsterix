@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_222",
+  "name": "Radar Malargüe",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 222,
+  "location": {
+    "latitude": -35.481111,
+    "longitude": -69.580277,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}
