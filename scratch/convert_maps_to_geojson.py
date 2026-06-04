@@ -134,6 +134,57 @@ def map_to_geojson(filepath: str) -> Dict[str, Any]:
             idx += 1
             continue
             
+        # AirportTexto
+        elif line_lower.startswith('airporttexto'):
+            parts = line.split()
+            if len(parts) >= 3:
+                coord_str = parts[1].strip()
+                label_str = parts[2].strip()
+                res = parse_coordinate_robust(coord_str)
+                if res:
+                    lat, lon = res
+                    features.append({
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [lon, lat]
+                        },
+                        "properties": {
+                            "layer": "NOMBRES_AEROPUERTOS",
+                            "name": label_str,
+                            "type": "text"
+                        }
+                    })
+            idx += 1
+            continue
+
+        # RunwayLinea
+        elif line_lower.startswith('runwaylinea'):
+            parts = line.split()
+            if len(parts) >= 4:
+                coord_str1 = parts[1].strip()
+                coord_str2 = parts[2].strip()
+                label_str = parts[3].strip()
+                res1 = parse_coordinate_robust(coord_str1)
+                res2 = parse_coordinate_robust(coord_str2)
+                if res1 and res2:
+                    lat1, lon1 = res1
+                    lat2, lon2 = res2
+                    features.append({
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[lon1, lat1], [lon2, lat2]]
+                        },
+                        "properties": {
+                            "layer": "PISTAS",
+                            "name": label_str,
+                            "type": "polyline"
+                        }
+                    })
+            idx += 1
+            continue
+            
         idx += 1
         
     return {
@@ -142,39 +193,25 @@ def map_to_geojson(filepath: str) -> Dict[str, Any]:
     }
 
 def main():
-    base_dir = r"c:\documentos\decode_asterix\files\INFERIOR"
+    base_dir = r"c:\documentos\decode_asterix\files"
     
     files_to_convert = [
-        "RNAV_INF.map",
-        "NO_RNAV_INF.map",
-        "fix_nombres_RNAV_INF.map",
-        "fix_nombres_NO_RNAV_INF.map"
+        "nombres.map",
+        "pistas.map"
     ]
-    
-    merged_features = []
     
     for filename in files_to_convert:
         map_path = os.path.join(base_dir, filename)
         if os.path.exists(map_path):
             geojson_data = map_to_geojson(map_path)
-            out_filename = filename.replace(".map", ".geojson")
+            out_filename = filename.replace(".map", ".json")
             out_path = os.path.join(base_dir, out_filename)
             
             with open(out_path, 'w', encoding='utf-8') as f:
                 json.dump(geojson_data, f, indent=2)
-            print(f"Successfully wrote GeoJSON to: {out_path} with {len(geojson_data['features'])} features.")
-            
-            merged_features.extend(geojson_data['features'])
-            
-    # Also create the merged INFERIOR.geojson containing everything
-    merged_data = {
-        "type": "FeatureCollection",
-        "features": merged_features
-    }
-    merged_path = os.path.join(base_dir, "INFERIOR.geojson")
-    with open(merged_path, 'w', encoding='utf-8') as f:
-        json.dump(merged_data, f, indent=2)
-    print(f"Successfully wrote MERGED GeoJSON to: {merged_path} with {len(merged_features)} total features.")
+            print(f"Successfully wrote JSON to: {out_path} with {len(geojson_data['features'])} features.")
+        else:
+            print(f"File not found: {map_path}")
 
 if __name__ == "__main__":
     main()

@@ -689,6 +689,7 @@ class MainWindow(QMainWindow):
         
         self.worker: Optional[PlaybackWorker] = None
         self.profile_manager = ProfileManager()
+        self.techo_incumbencia = self.profile_manager.get_nivel_incumbencia()
         self.cache_dir = tempfile.mkdtemp(prefix="asterix_cache_")
         
         self.exporter = PassExporter()
@@ -709,6 +710,9 @@ class MainWindow(QMainWindow):
         self.duration = 0.0
         self.pcap_path = ""
         self.udp_active = False
+
+        # Aplicar el perfil guardado en disco
+        self._aplicar_perfil(self.profile_manager.profile)
 
     def _setup_ui(self):
         # 1. Widget Central (El Mapa de Radar)
@@ -792,8 +796,14 @@ class MainWindow(QMainWindow):
         self.act_toggle_dock.setText("Panel Lateral de Controles")
         menu_ver.addAction(self.act_toggle_dock)
 
+        # Menú Configuración
+        menu_config = menu_bar.addMenu("Configuración")
+        menu_config.addAction("⚙ Perfil Operativo / Jurisdicción...", self._abrir_perfil_admin)
+
         # Menú Mapas
         self.menu_mapas = menu_bar.addMenu("Mapas")
+        self.act_map_editor = self.menu_mapas.addAction("Gestor de Capas del Sector...", self._abrir_map_editor)
+        self.menu_mapas.addSeparator()
         submenu_inf = self.menu_mapas.addMenu("Rutas Inferiores")
         
         for name, path in [
@@ -1172,6 +1182,27 @@ class MainWindow(QMainWindow):
             }
         """)
 
+        self.chk_modo_crudo = QCheckBox("Ver Plots Crudos (Sin Filtros)")
+        self.chk_modo_crudo.setChecked(False)
+        self.chk_modo_crudo.toggled.connect(self._on_modo_crudo_toggled)
+        self.chk_modo_crudo.setStyleSheet("""
+            QCheckBox {
+                color: #E0E6ED;
+                font-size: 8pt;
+                font-weight: bold;
+            }
+            QCheckBox::indicator {
+                width: 12px;
+                height: 12px;
+                border: 1px solid #FFD700;
+                background-color: #2D313C;
+                border-radius: 2px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #FFD700;
+            }
+        """)
+
         l_hist.addWidget(self.chk_show_history)
         l_hist.addLayout(l_modo)
         l_hist.addLayout(l_cant)
@@ -1179,6 +1210,7 @@ class MainWindow(QMainWindow):
         l_hist.addWidget(self.chk_sweep)
         l_hist.addWidget(self.chk_silence_cone)
         l_hist.addWidget(self.chk_modo_integrado)
+        l_hist.addWidget(self.chk_modo_crudo)
         l_hist.addWidget(self.chk_show_mtr)
         grupo_hist.setLayout(l_hist)
         v_layout.addWidget(grupo_hist)
@@ -1374,6 +1406,11 @@ class MainWindow(QMainWindow):
                 self, "Información", 
                 "El archivo de log de STCA no existe o aún no se han registrado alertas en esta sesión."
             )
+
+    def _abrir_map_editor(self):
+        from player.map_dialog import MapEditorDialog
+        dialog = MapEditorDialog(self.radar.map_manager, self)
+        dialog.show()
 
     def _cargar_pcap(self):
         file_paths, _ = QFileDialog.getOpenFileNames(
@@ -1695,8 +1732,14 @@ class MainWindow(QMainWindow):
         self.radar.update()
 
     def _on_modo_integrado_toggled(self, checked: bool):
-        if self.radar is not None:
+        if hasattr(self, 'radar'):
             self.radar.modo_integrado = checked
+
+    def _on_modo_crudo_toggled(self, checked: bool):
+        if hasattr(self, 'radar'):
+            self.radar.modo_crudo = checked
+            # Si se activa el modo crudo, forzar el repintado
+            self.radar.update()
             if hasattr(self.radar, 'tracks'):
                 self.radar.tracks.clear()
             if hasattr(self.radar, 'pending_tracks'):
@@ -2133,14 +2176,108 @@ class MainWindow(QMainWindow):
 
     def _abrir_filtro_etiquetas(self):
         from player.dialogs import LabelFilterDialog
-        fields = self._get_available_fields()
-        dialog = LabelFilterDialog(self.label_filter_config, fields, self)
+        dialog = LabelFilterDialog(self.label_filter_config, None, self)
         dialog.config_changed.connect(self._aplicar_filtro_etiquetas)
         dialog.exec()
 
     def _aplicar_filtro_etiquetas(self, config):
         self.label_filter_config = config
         self.radar.set_label_filter_config(config)
+        self.radar.update()
+
+    def _abrir_perfil_admin(self):
+        from player.profile_dialog import ProfileAdminDialog
+        dialog = ProfileAdminDialog(self.profile_manager, self)
+        dialog.profile_saved.connect(self._aplicar_perfil)
+        dialog.hot_load_triggered.connect(self.hot_load_profile)
+        dialog.exec()
+
+    def hot_load_profile(self, profile_name: str):
+        """
+        Carga y aplica un perfil de trabajo en caliente sin reiniciar la aplicación.
+        """
+        try:
+            # 1. Leer el perfil mediante el profile_manager
+            perfil_data = self.profile_manager.leer_perfil(profile_name)
+            
+            # 2. Establecer como perfil activo y guardarlo
+            self.profile_manager.update_profile(perfil_data)
+            
+            # 3. Ancla y Zoom Geográfico
+            lat = perfil_data.get("center_lat")
+            lon = perfil_data.get("center_lon")
+            if lat is not None and lon is not None:
+                self.radar.configurar_vista_perfil(lat, lon)
+                
+            # 4. Lógica de Propiedad (Jurisdicción)
+            self.techo_incumbencia = perfil_data.get("nivel_incumbencia", 95)
+            self.radar.techo_incumbencia = self.techo_incumbencia
+            self.radar.aeropuerto_lat = lat
+            self.radar.aeropuerto_lon = lon
+            
+            # 5. Seguridad Operativa
+            self.radar.stca_habilitado = bool(perfil_data.get("stca_habilitado", True))
+            
+            # 6. Carga de Mapas Preexistentes
+            if hasattr(self.radar, 'map_manager') and hasattr(self.radar.map_manager, 'load_profile_maps'):
+                self.radar.map_manager.load_profile_maps(perfil_data, self.profile_manager)
+                self.radar.map_manager.reproject_all(self.radar.proy)
+                
+            # 7. Re-dibujar los mapas y re-anclar el boundary
+            self._rebuild_and_draw_maps()
+            self.radar.update()
+            
+            # 8. Actualizar título de la ventana
+            apt = perfil_data.get("aeropuerto", "")
+            nombre = perfil_data.get("name", "")
+            fl = perfil_data.get("nivel_incumbencia", 95)
+            self.setWindowTitle(f"ASTERIX Decoder — {nombre} [{apt}] — FL{fl}")
+            
+            print(f"[HOT SWAP] Perfil '{profile_name}' cargado en caliente con éxito.")
+            
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error de Carga", f"No se pudo cargar el perfil '{profile_name}': {e}")
+
+    def _aplicar_perfil(self, perfil_data: dict):
+        """Aplica el perfil operativo guardado: actualiza jurisdicción, recentra mapa."""
+        # 1. Persistir al disco
+        self.profile_manager.update_profile(perfil_data)
+
+        # 2. Actualizar techo de incumbencia operativa
+        self.techo_incumbencia = perfil_data.get("nivel_incumbencia", 95)
+
+        # 3. Exportar el techo al RadarWidget para que la máquina de estados lo use
+        self.radar.techo_incumbencia = self.techo_incumbencia
+        self.radar.aeropuerto_lat = perfil_data.get("center_lat", -31.31548)
+        self.radar.aeropuerto_lon = perfil_data.get("center_lon", -64.21545)
+        
+        # 3.5. Seguridad operativa STCA
+        self.radar.stca_habilitado = bool(perfil_data.get("stca_habilitado", True))
+
+        # 4. Recentrar el mapa en el aeropuerto seleccionado
+        lat = perfil_data.get("center_lat")
+        lon = perfil_data.get("center_lon")
+        if lat is not None and lon is not None:
+            self.radar.set_projection_center(lat, lon)
+            self.radar.centrar_en_coordenadas(lat, lon)
+
+        # 5. Actualizar título de la ventana con el aeropuerto
+        apt = perfil_data.get("aeropuerto", "")
+        nombre = perfil_data.get("name", "")
+        fl = perfil_data.get("nivel_incumbencia", 95)
+        self.setWindowTitle(f"ASTERIX Decoder — {nombre} [{apt}] — FL{fl}")
+
+        print(f"[Perfil] Aplicado: {nombre} | Aeropuerto: {apt} | Techo: FL{fl} | "
+              f"Centro: ({lat:.5f}, {lon:.5f})")
+        
+        # Carga en Caliente de Mapas de Perfil y Globales
+        if hasattr(self.radar, 'map_manager') and hasattr(self.radar.map_manager, 'load_profile_maps'):
+            self.radar.map_manager.load_profile_maps(perfil_data, self.profile_manager)
+            self.radar.map_manager.reproject_all(self.radar.proy)
+            
+        # Re-dibujar los mapas y re-anclar el boundary
+        self._rebuild_and_draw_maps()
         self.radar.update()
 
     def _abrir_filtro_calidad(self):
@@ -2173,6 +2310,8 @@ class MainWindow(QMainWindow):
             self.btn_play.setText(f"Decodificando... {pct}%")
 
     def _on_tod_update(self, tod: float):
+        from player.radar_widget import SimulationTime
+        SimulationTime.instance().set_time(tod)
         hours = int(tod // 3600) % 24
         minutes = int((tod % 3600) // 60)
         seconds = int(tod % 60)
@@ -2403,32 +2542,25 @@ class MainWindow(QMainWindow):
         self._rebuild_and_draw_maps()
 
     def _rebuild_and_draw_maps(self):
-        merged_segments = []
+        # 1. Limpiar las capas tácticas previas en el manager para no duplicar
+        capas_a_borrar = [name for name, layer in self.radar.map_manager.layers.items() if layer.tipo == "TACTICO"]
+        for nombre in capas_a_borrar:
+            del self.radar.map_manager.layers[nombre]
+            
+        # 2. Agregar el mapa por defecto (si existe)
         if self._default_map_segments:
-            merged_segments.extend(self._default_map_segments)
+            self.radar.set_raw_map_segments(
+                self._default_map_segments, -100.0, -100.0, 100.0, 100.0, "Mapa Defecto"
+            )
             
-        if self._default_map_bounds:
-            min_x, min_y, max_x, max_y = self._default_map_bounds
-        else:
-            min_x = min_y = float('inf')
-            max_x = max_y = float('-inf')
-            
+        # 3. Agregar los mapas tácticos seleccionados
         for path in list(self._active_map_paths):
             if path in self._loaded_custom_maps:
                 segs, mx, my, max_x_val, max_y_val = self._loaded_custom_maps[path]
-                merged_segments.extend(segs)
-                min_x = min(min_x, mx)
-                min_y = min(min_y, my)
-                max_x = max(max_x, max_x_val)
-                max_y = max(max_y, max_y_val)
+                nombre_base = os.path.basename(path)
+                self.radar.set_raw_map_segments(segs, mx, my, max_x_val, max_y_val, nombre_base)
                 
-        print(f"[MAPAS] Reconstruyendo visualización. Total de segmentos combinados: {len(merged_segments)}")
-        
-        if min_x == float('inf'):
-            min_x, min_y, max_x, max_y = -100.0, -100.0, 100.0, 100.0
-            
-        self.radar.map_is_absolute = True
-        self.radar.set_raw_map_segments(merged_segments, min_x, min_y, max_x, max_y)
+        # 4. Forzar dibujado
         self.radar.update()
 
     def _toggle_udp(self):

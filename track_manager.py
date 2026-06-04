@@ -27,6 +27,7 @@ class ManagedTrack:
         # State for promotion/demotion
         self.consecutive_hits = 1
         self.is_local_track = False
+        self.en_jurisdiccion = False
         self.last_update_time = first_record.get('timestamp', time.time())
 
         # CAT 62 or 21 (ADS-B) are born as tracks
@@ -34,6 +35,7 @@ class ManagedTrack:
             self.is_local_track = True
         
         first_record['is_local_track'] = self.is_local_track
+        first_record['en_jurisdiccion'] = self.en_jurisdiccion
         self.plots.append(first_record)
 
     def update_from_record(self, data: Dict):
@@ -93,6 +95,54 @@ class TrackManager:
             # Update track state
             track.last_update_time = current_time
             data['is_local_track'] = track.is_local_track
+
+            # Actualizar jurisdicción
+            try:
+                import json
+                import os
+                import math
+                config_path = "config/profile.json"
+                if not os.path.exists(config_path):
+                    base_dir = os.path.dirname(os.path.abspath(__file__))
+                    config_path = os.path.join(base_dir, "config", "profile.json")
+                if os.path.exists(config_path):
+                    with open(config_path, "r", encoding="utf-8") as f:
+                        perfil_data = json.load(f)
+                else:
+                    perfil_data = {}
+            except Exception:
+                perfil_data = {}
+
+            apt_lat = perfil_data.get("center_lat", -31.31548)
+            apt_lon = perfil_data.get("center_lon", -64.21545)
+            techo = perfil_data.get("nivel_incumbencia", 95)
+            
+            fl_val = data.get("flight_level")
+            fl_num = 0.0
+            if fl_val is not None:
+                try:
+                    fl_num = float(fl_val)
+                except (ValueError, TypeError):
+                    pass
+
+            track_lat = track.latitude
+            track_lon = track.longitude
+            dist_nm = None
+            if track_lat is not None and track_lon is not None and apt_lat is not None and apt_lon is not None:
+                try:
+                    dlat = math.radians(track_lat - apt_lat)
+                    dlon = math.radians(track_lon - apt_lon)
+                    a = math.sin(dlat/2)**2 + math.cos(math.radians(apt_lat)) * math.cos(math.radians(track_lat)) * math.sin(dlon/2)**2
+                    c = 2 * math.asin(math.sqrt(a))
+                    dist_nm = (c * 6371.0) / 1.852
+                except Exception:
+                    pass
+
+            if dist_nm is None and track.x is not None and track.y is not None:
+                dist_nm = math.sqrt(track.x**2 + track.y**2) / 1852.0
+
+            track.en_jurisdiccion = (dist_nm is not None) and (dist_nm <= 50.0) and (fl_num <= techo)
+            data['en_jurisdiccion'] = track.en_jurisdiccion
 
             # Si es CAT 62 real del archivo, fusionar datos
             if track.category == 62 and track.plots:

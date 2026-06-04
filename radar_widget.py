@@ -304,15 +304,20 @@ class RadarPlot:
 
     @property
     def alpha(self) -> int:
-        max_age = MAX_AGE_TRACK if self.is_track else MAX_AGE_PLOT
+        return self.get_alpha(None)
+
+    def get_alpha(self, max_age: Optional[float] = None) -> int:
+        if max_age is None:
+            max_age = MAX_AGE_TRACK if self.is_track else MAX_AGE_PLOT
         age = self.age
         if age >= max_age:
             return 0
         ratio = age / max_age
         return max(30, int(255 * (1.0 - ratio * ratio)))
 
-    def is_alive(self) -> bool:
-        max_age = MAX_AGE_TRACK if self.is_track else MAX_AGE_PLOT
+    def is_alive(self, max_age: Optional[float] = None) -> bool:
+        if max_age is None:
+            max_age = MAX_AGE_TRACK if self.is_track else MAX_AGE_PLOT
         return self.age < max_age
 
 
@@ -1438,8 +1443,15 @@ class RadarWidget(QWidget):
                 self._timer_tick_count = 0
 
                 # 1. Poda de blancos muertos
+                T = 60.0 / self.sweep_rpm if self.sweep_rpm > 0 else 5.0
+                max_age_plot = T * 6.0
+                max_age_track = T * 12.0
                 for d in (self.tracks, self.pending_tracks):
-                    muertos = [pid for pid, plot in d.items() if not plot.is_alive()]
+                    muertos = []
+                    for pid, plot in d.items():
+                        m_age = max_age_track if plot.is_track else max_age_plot
+                        if not plot.is_alive(m_age):
+                            muertos.append(pid)
                     for pid in muertos:
                         if pid in self.history:
                             del self.history[pid]
@@ -1594,14 +1606,23 @@ class RadarWidget(QWidget):
             if self.history_limit > 0:
                 for track_id, history_points in list(self.history.items()):
                     plot = self.tracks.get(track_id) or self.pending_tracks.get(track_id)
-                    if not plot or not plot.is_alive():
+                    if not plot:
+                        continue
+                    T = 60.0 / self.sweep_rpm if self.sweep_rpm > 0 else 5.0
+                    max_age_plot = T * 6.0
+                    max_age_track = T * 12.0
+                    m_age = max_age_track if plot.is_track else max_age_plot
+                    coasting_threshold = T * 1.2
+                    is_coasting = plot.age > coasting_threshold
+
+                    if not plot.is_alive(m_age):
                         continue
 
                     try:
-                        alpha = plot.alpha
+                        alpha = plot.get_alpha(m_age)
                         if alpha <= 0:
                             continue
-                        plot_color = self._get_sensor_color(plot.sac, plot.sic)
+                        plot_color = QColor("#888888") if is_coasting else self._get_sensor_color(plot.sac, plot.sic)
                         base_color = QColor(plot_color)
 
                         limit = self.history_limit
@@ -1615,7 +1636,7 @@ class RadarWidget(QWidget):
                                 for pt in points_to_draw[1:]:
                                     path.lineTo(pt.x, pt.y)
                                 pen = QPen(base_color, safe_divide(2.0, z, 0.5))
-                                pen.setStyle(Qt.PenStyle.SolidLine)
+                                pen.setStyle(Qt.PenStyle.DashLine if is_coasting else Qt.PenStyle.SolidLine)
                                 painter.setPen(pen)
                                 painter.setBrush(Qt.BrushStyle.NoBrush)
                                 painter.drawPath(path)
@@ -1720,9 +1741,16 @@ class RadarWidget(QWidget):
                         continue
 
                     # Lógica original e intacta para el resto de categorías
-                    if not plot.is_alive():
+                    T = 60.0 / self.sweep_rpm if self.sweep_rpm > 0 else 5.0
+                    max_age_plot = T * 6.0
+                    max_age_track = T * 12.0
+                    m_age = max_age_track if plot.is_track else max_age_plot
+                    coasting_threshold = T * 1.2
+                    is_coasting = plot.age > coasting_threshold
+
+                    if not plot.is_alive(m_age):
                         continue
-                    alpha = plot.alpha
+                    alpha = plot.get_alpha(m_age)
                     if alpha <= 0:
                         continue
                     x, y = plot.x, plot.y
@@ -1769,8 +1797,10 @@ class RadarWidget(QWidget):
                             else:
                                 is_psr = True
 
-                    # Colores específicos curados para tema cyber-radar
-                    if is_psr:
+                    # Colores específicos curados para tema cyber-radar o gris para coasting
+                    if is_coasting:
+                        plot_color = QColor("#888888")  # Gris neutro para Coasting
+                    elif is_psr:
                         plot_color = QColor(204, 85, 0)  # Dark Orange (PSR)
                     elif is_ssr:
                         plot_color = COLOR_GREEN_NEON  # Verde Neón (SSR)
@@ -1797,18 +1827,17 @@ class RadarWidget(QWidget):
                             painter.rotate(plot.track_angle)
 
                         sym_size = safe_divide(8.0, z, 1.0)
+                        pen = QPen(base_color, safe_divide(2.0, z, 0.5))
+                        pen.setStyle(Qt.PenStyle.DashLine if is_coasting else Qt.PenStyle.SolidLine)
+                        painter.setPen(pen)
 
                         if is_psr:
                             # Radar Primario (PSR): Cruz pequeña (+)
-                            pen_psr = QPen(base_color, safe_divide(2.0, z, 0.5))
-                            painter.setPen(pen_psr)
                             s_r = sym_size * 0.5
                             painter.drawLine(QPointF(-s_r, 0), QPointF(s_r, 0))
                             painter.drawLine(QPointF(0, -s_r), QPointF(0, s_r))
                         elif is_combined:
                             # Combinado PSR + SSR: Cuadrado con cruz adentro (⊞)
-                            pen_c = QPen(base_color, safe_divide(2.0, z, 0.5))
-                            painter.setPen(pen_c)
                             painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
                             painter.drawRect(QRectF(-sym_size / 2, -sym_size / 2, sym_size, sym_size))
                             s_r = sym_size * 0.5
@@ -1816,12 +1845,10 @@ class RadarWidget(QWidget):
                             painter.drawLine(QPointF(0, -s_r), QPointF(0, s_r))
                         elif is_ssr:
                             # Radar Secundario (SSR): Cuadrado hueco (□)
-                            painter.setPen(QPen(base_color, safe_divide(2.0, z, 0.5)))
                             painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
                             painter.drawRect(QRectF(-sym_size / 2, -sym_size / 2, sym_size, sym_size))
                         elif is_adsb:
                             # ADS-B (CAT 21): Triángulo apuntando hacia arriba (△) o Diamante (♢)
-                            painter.setPen(QPen(base_color, safe_divide(2.0, z, 0.5)))
                             painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
                             if plot.track_angle is not None:
                                 t = QPainterPath()
@@ -1840,7 +1867,6 @@ class RadarWidget(QWidget):
                                 painter.drawPath(t)
                         elif is_mlat:
                             # Multilateración (MLAT): Triángulo apuntando hacia abajo (▽)
-                            painter.setPen(QPen(base_color, safe_divide(2.0, z, 0.5)))
                             painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
                             t = QPainterPath()
                             t.moveTo(0, sym_size * 0.66)
@@ -1850,7 +1876,6 @@ class RadarWidget(QWidget):
                             painter.drawPath(t)
                         else:
                             # Fallback por defecto: Círculo hueco (○)
-                            painter.setPen(QPen(base_color, safe_divide(2.0, z, 0.5)))
                             painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
                             painter.drawEllipse(QPointF(0, 0), sym_size / 2, sym_size / 2)
                     finally:

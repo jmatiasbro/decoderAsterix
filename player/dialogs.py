@@ -198,12 +198,8 @@ class LabelFilterDialog(QDialog):
     def _load_config(self):
         # Campos
         for key, chk in self.chks.items():
-            # Solo marcar si tiene información en la captura actual
             val = self.config.get(key, True)
-            if chk.isEnabled():
-                chk.setChecked(val)
-            else:
-                chk.setChecked(False)
+            chk.setChecked(val)
             
         # Orientación
         orient = self.config.get("orientacion", "NE")
@@ -219,7 +215,7 @@ class LabelFilterDialog(QDialog):
     def _on_change(self):
         # Actualizar config
         for key, chk in self.chks.items():
-            self.config[key] = chk.isChecked() and chk.isEnabled()
+            self.config[key] = chk.isChecked()
             
         if self.rb_no.isChecked(): self.config["orientacion"] = "NO"
         elif self.rb_so.isChecked(): self.config["orientacion"] = "SO"

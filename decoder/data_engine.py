@@ -506,13 +506,20 @@ class DataEngine:
                 print(f"[DataEngine] Escaneando archivo PCAP {file_idx + 1}/{total_files}: {pcap_file}")
 
                 try:
+                    datalink_type = getattr(pcap, 'datalink', lambda: 1)()
+                    is_sll = (datalink_type == 113) # DLT_LINUX_SLL
+
                     for timestamp, buf in pcap:
                         if not self._running:
                             break
                         try:
-                            eth = dpkt.ethernet.Ethernet(buf)
-                            if not isinstance(eth.data, dpkt.ip.IP): continue
-                            ip = eth.data
+                            if is_sll:
+                                packet = dpkt.sll.SLL(buf)
+                            else:
+                                packet = dpkt.ethernet.Ethernet(buf)
+                                
+                            if not isinstance(packet.data, dpkt.ip.IP): continue
+                            ip = packet.data
                             if not isinstance(ip.data, dpkt.udp.UDP): continue
                             udp = ip.data
                             asterix_payload = udp.data
