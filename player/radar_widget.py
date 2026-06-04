@@ -76,6 +76,7 @@ class SimulationTime:
         self._frozen: bool = False
         self._rwlock = RLock()
         self._origin: float = self._sim_clock
+        self._use_pcap_time: bool = False
 
     @classmethod
     def instance(cls) -> 'SimulationTime':
@@ -92,16 +93,30 @@ class SimulationTime:
         Congela el reloj si _frozen está activo (timer detenido).
         """
         with self._rwlock:
-            if self._frozen:
+            if self._use_pcap_time or self._frozen:
                 return self._sim_clock
             self._sim_clock = time_module.time()
             return self._sim_clock
+
+    def set_time(self, t: float):
+        """Fuerza el reloj de simulación al tiempo indicado (típicamente del PCAP)."""
+        with self._rwlock:
+            self._sim_clock = t
+            self._use_pcap_time = True
+
+    def reset(self):
+        """Restablece el singleton de tiempo al tiempo del sistema y desactiva el modo PCAP."""
+        with self._rwlock:
+            self._sim_clock = time_module.time()
+            self._frozen = False
+            self._use_pcap_time = False
 
     def freeze(self):
         """Congela el tiempo de simulación (no avanza)."""
         with self._rwlock:
             if not self._frozen:
-                self._sim_clock = time_module.time()
+                if not self._use_pcap_time:
+                    self._sim_clock = time_module.time()
                 self._frozen = True
 
     def unfreeze(self):
@@ -109,7 +124,8 @@ class SimulationTime:
         with self._rwlock:
             if self._frozen:
                 self._frozen = False
-                self._sim_clock = time_module.time()
+                if not self._use_pcap_time:
+                    self._sim_clock = time_module.time()
 
     @property
     def is_frozen(self) -> bool:
@@ -243,7 +259,8 @@ class RadarPlot:
                  'altitude_ft', 'raw_azimuth', 'is_illuminated', 'id', 'track_number',
                  'raw_range', 'bds_data', 'raw_dict', 'reporting_sensors',
                  'is_reflection', 'linked_real_id', 'has_reflection', 'ab_filter',
-                 'garbled', 'degradada', 'dqf_razon', '_update_count', '_first_seen')
+                 'garbled', 'degradada', 'dqf_razon', '_update_count', '_first_seen',
+                 'en_jurisdiccion')
 
     def __init__(self, x: float, y: float, sac_sic: str, category: int,
                  timestamp: float, mode3a: str, callsign: str,
@@ -298,6 +315,7 @@ class RadarPlot:
         self.dqf_razon = ""
         self._update_count = 0
         self._first_seen = SimulationTime.time()  # Momento de creación (no se resetea)
+        self.en_jurisdiccion = False
 
     def set_highlight_filter(self, filtro: str):
         self._highlight_filter = filtro
@@ -571,7 +589,18 @@ class TargetInspectionDialog(QDialog):
         self._add_field("Resumen", "Total Campos", f"{self.table.rowCount()} ítems")
 
 
+def _filter_mode3a(value):
+    """Devuelve el squawk sólo si es válido (no None, vacío, '----' ó '0000'/0)."""
+    if value is None or value == '' or value == '----':
+        return ''
+    m3a_str = f"{value:04o}" if isinstance(value, int) else str(value).strip()
+    if m3a_str == '0000':
+        return ''
+    return value
+
+
 class RadarWidget(QWidget):
+
     """
     Widget PPI con sincronización de barrido e historial de trayectoria.
 
@@ -597,13 +626,16 @@ class RadarWidget(QWidget):
         self.center_key: Optional[Tuple[int, int]] = None
 
         # Variables de estado RBL (Range & Bearing Line)
+        # rbl_activo / rbl_origen_anchor / rbl_destino_anchor → RBL en construcción (aun no persistente)
         self.rbl_activo = False
-        self.rbl_persistente = False
         self.rbl_origen_anchor = None
         self.rbl_destino_anchor = None
-        self.rbl_label_hitbox = None
-        self.rbl_p_origen_screen = None
-        self.rbl_p_destino_screen = None
+        # Lista de RBLs persistentes. Cada elemento es un dict:
+        # { 'origen': anchor, 'destino': anchor,
+        #   'label_hitbox': QRectF|None, 'p_origen': QPointF|None, 'p_destino': QPointF|None,
+        #   'color': QColor }
+        self.rbl_lines = []
+        self._rbl_color = QColor("#FFD700")  # Color único para todos los RBLs
         self.focused_target_id = None
         self.rbl_drag_origin_anchor = None
         self.mouse_press_pos = None
@@ -616,6 +648,11 @@ class RadarWidget(QWidget):
         # Centro geográfico de referencia (ACC Córdoba / Taravella)
         self.centro_lat = -31.31
         self.centro_lon = -64.21
+
+        # Jurisdicción operativa y nivel de incumbencia
+        self.techo_incumbencia = 95
+        self.aeropuerto_lat = -31.31548
+        self.aeropuerto_lon = -64.21545
 
         # FASE 2: Bloqueo de señales
         self._command_lock = Lock()
@@ -636,22 +673,15 @@ class RadarWidget(QWidget):
         self.history_visible = True
         self.mtr_visible = True
 
-        # Mapa DXF
-        self.map_is_absolute = False
-        self._raw_dxf_segments: List[Tuple] = []
-        self._dxf_has_data = False
-        self._dxf_raw_min_x = 0.0
-        self._dxf_raw_min_y = 0.0
-        self._dxf_raw_max_x = 1.0
-        self._dxf_raw_max_y = 1.0
-        self.map_path = QPainterPath()
-        self.map_path_borders = QPainterPath()
-        self.map_path_airways = QPainterPath()
-        self.map_path_runways = QPainterPath()
-        self.map_path_other = QPainterPath()
-        self.map_has_data = False
-        self.map_min_x = self.map_min_y = 0.0
-        self.map_max_x = self.map_max_y = 1.0
+        from player.map_manager import MapManager
+        self.map_manager = MapManager()
+        self.map_manager.cargar_cartografia_base()
+
+        # FASE 1 (OACI DOC 4444): Temporizador de Parpadeo (Blink Timer) para alertas visuales
+        self.blink_flag = False
+        self.blink_timer = QTimer(self)
+        self.blink_timer.timeout.connect(self._toggle_blink)
+        self.blink_timer.start(500)  # Parpadeo cada 500ms
 
         # Filtros
         self.active_sensors: Set[Tuple[int, int]] = set()
@@ -737,6 +767,7 @@ class RadarWidget(QWidget):
         from analysis.quality_manager import QualityManager
         self.stca_engine = STCA_Engine()
         self.stca_dialog = STCADialog(self)
+        self.stca_habilitado = True
         self.quality_manager = QualityManager()
         self.modo_integrado = True
         self.tracks_en_alerta = set()
@@ -799,6 +830,11 @@ class RadarWidget(QWidget):
         self.pending_tracks.clear()
 
     @pyqtSlot()
+    def _toggle_blink(self):
+        self.blink_flag = not self.blink_flag
+        self.update()
+
+    @pyqtSlot()
     def play(self):
         acquired = self._command_lock.acquire(blocking=False)
         if not acquired:
@@ -819,7 +855,7 @@ class RadarWidget(QWidget):
             return
         try:
             sim_time = SimulationTime.instance()
-            sim_time.freeze()
+            sim_time.reset()
             self.timer.stop()
             self._last_tod = 0.0
             self.sweep_angle = 0.0
@@ -885,6 +921,27 @@ class RadarWidget(QWidget):
     # MAPA DXF
     # ================================================================
 
+    @property
+    def map_has_data(self):
+        if not hasattr(self, 'map_manager'): return False
+        return bool(self.map_manager.get_visible_layers())
+
+    @property
+    def map_min_x(self):
+        return self.map_manager.get_bounds()[0] if hasattr(self, 'map_manager') else 0.0
+
+    @property
+    def map_min_y(self):
+        return self.map_manager.get_bounds()[1] if hasattr(self, 'map_manager') else 0.0
+
+    @property
+    def map_max_x(self):
+        return self.map_manager.get_bounds()[2] if hasattr(self, 'map_manager') else 1.0
+
+    @property
+    def map_max_y(self):
+        return self.map_manager.get_bounds()[3] if hasattr(self, 'map_manager') else 1.0
+
     def _nm_offset_to_latlon(self, x_nm: float, y_nm: float) -> Tuple[float, float]:
         if abs(x_nm) < 1e-9 and abs(y_nm) < 1e-9:
             return DXF_REF_LAT, DXF_REF_LON
@@ -899,120 +956,16 @@ class RadarWidget(QWidget):
             return DXF_REF_LAT, DXF_REF_LON
 
     def _reproject_dxf_to_current_proy(self):
-        if not self._dxf_has_data or not self.proy.activo:
+        if not self.proy or not self.proy.activo:
             return
-        
-        self.map_path = QPainterPath()
-        self.map_path_borders = QPainterPath()
-        self.map_path_airways = QPainterPath()
-        self.map_path_runways = QPainterPath()
-        self.map_path_other = QPainterPath()
-        
-        # Nuevas listas de símbolos y textos tácticos georeferenciados
-        self.map_labels = []
-        self.map_symbols = []
-        
-        new_min_x = new_min_y = float('inf')
-        new_max_x = new_max_y = float('-inf')
-        
-        for seg in self._raw_dxf_segments:
-            if len(seg) < 2:
-                continue
-            t = seg[0]
-            layer = seg[1]
-            coords = seg[2:]
-            
-            # Soporte de Textos y Símbolos tácticos georeferenciados
-            if t == 'T' and len(seg) >= 5:
-                lat = seg[2]
-                lon = seg[3]
-                text = seg[4]
-                try:
-                    px, py = self.proy.latlon_to_xy(lat, lon)
-                    if is_valid_coord(px, py):
-                        self.map_labels.append((px, py, text))
-                        new_min_x = min(new_min_x, px)
-                        new_max_x = max(new_max_x, px)
-                        new_min_y = min(new_min_y, py)
-                        new_max_y = max(new_max_y, py)
-                except Exception:
-                    pass
-                continue
-                
-            if t == 'S' and len(seg) >= 5:
-                lat = seg[2]
-                lon = seg[3]
-                text = seg[4]
-                try:
-                    px, py = self.proy.latlon_to_xy(lat, lon)
-                    if is_valid_coord(px, py):
-                        self.map_symbols.append((px, py, text))
-                        new_min_x = min(new_min_x, px)
-                        new_max_x = max(new_max_x, px)
-                        new_min_y = min(new_min_y, py)
-                        new_max_y = max(new_max_y, py)
-                except Exception:
-                    pass
-                continue
+        self.map_manager.reproject_all(self.proy)
 
-            # Clasificar path por nombre de capa
-            layer_upper = str(layer).upper()
-            if "LINEAS_DE_MAPA" in layer_upper or "MAPA" in layer_upper or "LIMITES" in layer_upper or "FRONTERA" in layer_upper:
-                path = self.map_path_borders
-            elif "AEROVIAS" in layer_upper or "AIRWAYS" in layer_upper or "RUTAS" in layer_upper:
-                path = self.map_path_airways
-            elif "PISTAS" in layer_upper or "RUNWAYS" in layer_upper:
-                path = self.map_path_runways
-            else:
-                path = self.map_path_other
-
-            if t == 'C':
-                path.closeSubpath()
-                continue
-                
-            pts_converted = []
-            for i in range(0, len(coords), 2):
-                if getattr(self, 'map_is_absolute', False):
-                    lat = coords[i]
-                    lon = coords[i + 1]
-                else:
-                    x_nm = coords[i]
-                    y_nm = coords[i + 1]
-                    lat, lon = self._nm_offset_to_latlon(x_nm, y_nm)
-                try:
-                    px, py = self.proy.latlon_to_xy(lat, lon)
-                    if not is_valid_coord(px, py):
-                        px, py = 0.0, 0.0
-                except Exception:
-                    px, py = 0.0, 0.0
-                pts_converted.append((px, py))
-                new_min_x = min(new_min_x, px)
-                new_max_x = max(new_max_x, px)
-                new_min_y = min(new_min_y, py)
-                new_max_y = max(new_max_y, py)
-                
-            for j, (px, py) in enumerate(pts_converted):
-                if j == 0 and t == 'M':
-                    path.moveTo(px, py)
-                else:
-                    path.lineTo(px, py)
-                    
-        if new_min_x == float('inf'):
-            return
-            
-        self.map_min_x, self.map_min_y = new_min_x, new_min_y
-        self.map_max_x, self.map_max_y = new_max_x, new_max_y
-        self.map_has_data = True
 
     def set_raw_map_segments(self, raw_segments: list, min_x: float, min_y: float,
-                              max_x: float, max_y: float):
-        self._raw_dxf_segments = raw_segments
-        self._dxf_has_data = bool(raw_segments)
-        self._dxf_raw_min_x = min_x
-        self._dxf_raw_min_y = min_y
-        self._dxf_raw_max_x = max_x
-        self._dxf_raw_max_y = max_y
+                              max_x: float, max_y: float, name: str = "Mapa Táctico"):
+        self.map_manager.add_layer(name, raw_segments, "TACTICO")
         self._reproject_dxf_to_current_proy()
+        self.update()
 
     # ================================================================
     # HARD RESET GEOGRÁFICO
@@ -1060,7 +1013,7 @@ class RadarWidget(QWidget):
         self._setup_default_colors()
         self._reproject_dxf_to_current_proy()
         print(f"[GEODESIA] Centro: [{name}] (Lat: {lat:.5f}, Lon: {lon:.5f}){version_str}")
-        print(f"[GEODESIA] Mapa DXF reproyectado: {len(self._raw_dxf_segments)} segmentos")
+        print(f"[GEODESIA] Mapas reproyectados: {len(self.map_manager.layers)} capas activas")
         self.update()
 
     def set_projection_center(self, lat: float, lon: float, sensor_key: Optional[Tuple[int, int]] = None):
@@ -1148,6 +1101,22 @@ class RadarWidget(QWidget):
         # 4) Forzar actualización visual
         self.update()
         print(f"[GEODESIA] Vista centrada en Lat: {target_lat:.5f}, Lon: {target_lon:.5f}")
+
+    def configurar_vista_perfil(self, lat: float, lon: float):
+        """
+        Ancla y zoom geográfico del PPI al aeródromo de trabajo,
+        recalculando el factor de escala de píxeles por milla náutica.
+        """
+        # 1) Desplazar el centro al aeródromo
+        self.centrar_en_coordenadas(lat, lon)
+        
+        # 2) Recalcular el zoom para un rango óptimo de 80 NM (50 NM jurisdicción + margen)
+        widget_radius_px = min(self.width(), self.height()) / 2.0
+        if widget_radius_px > 0:
+            self.zoom_factor = widget_radius_px / (80.0 * 1852.0)
+            self._clamp_zoom()
+        self.update()
+        print(f"[RADAR VIEW] Perfil configurado: Centro Lat={lat:.5f}, Lon={lon:.5f}, Zoom={self.zoom_factor:.6f}")
 
     def set_map_path(self, path: QPainterPath, min_x: float, min_y: float,
                      max_x: float, max_y: float):
@@ -1439,8 +1408,11 @@ class RadarWidget(QWidget):
 
             # 4. Correlación / Actualización del Diccionario de Pistas
             def update_track(track: RadarPlot):
+                # 0. Actualizar el timestamp del track primero para que los filtros y el historial usen el tiempo correcto
+                track.timestamp = data.get('time', track.timestamp)
+
                 # 1. Adoptar la nueva posición física con suavizado de alineación de múltiples radares en Modo Integrado
-                if getattr(self, 'modo_integrado', True) and (len(track.reporting_sensors) > 1 or track.category == 62 or track.is_track):
+                if getattr(self, 'modo_integrado', True) and (len(track.reporting_sensors) > 1 or track.category == 62 or track.is_track) and not getattr(self, 'modo_crudo', False):
                     if track.ab_filter is None:
                         from analysis.filters import AlphaBetaFilter
                         track.ab_filter = AlphaBetaFilter(track.x, track.y, alpha=0.6, beta=0.005)
@@ -1479,8 +1451,9 @@ class RadarWidget(QWidget):
                 # Evitar ráfagas o respuestas raw duplicadas en el historial durante el mismo barrido (PLL temporal)
                 # Si el último punto de historial fue hace menos de 1.5 segundos, reemplazamos el último punto con
                 # el nuevo para conservar únicamente la coordenada consolidada final y evitar estelas con grupos de puntos.
+                # (A menos que estemos en modo crudo, en cuyo caso guardamos todo)
                 hist_queue = self.history[target_id]
-                if hist_queue and (track.timestamp - hist_queue[-1].timestamp < 1.5):
+                if hist_queue and (track.timestamp - hist_queue[-1].timestamp < 1.5) and not getattr(self, 'modo_crudo', False):
                     hist_queue[-1] = hp
                 else:
                     hist_queue.append(hp)
@@ -1502,7 +1475,6 @@ class RadarWidget(QWidget):
                 track.raw_dict = data
                 
                 # Actualizar campos individuales del track para mantener coherencia en las estelas e inspecciones
-                track.timestamp = data.get('time', track.timestamp)
                 track.raw_azimuth = raw_az
                 track.raw_range = data.get('raw_range', track.raw_range)
                 track.altitude_ft = data.get('altitude_ft', track.altitude_ft)
@@ -1511,15 +1483,47 @@ class RadarWidget(QWidget):
                 # Matriz de Detección: Si hay Garbling activo, ignorar cambios en Squawk (mode3a) y Flight Level,
                 # manteniendo los del paquete anterior (Coast/extrapolación).
                 if not track.garbled:
-                    if data.get('mode3a') is not None and data.get('mode3a') not in ('', '----'):
-                        track.mode3a = data.get('mode3a')
+                    m3a = data.get('mode3a')
+                    # Rechazar squawk inválido: 0 (int) ó "0000" son equivalentes a "sin transponder"
+                    m3a_str = f"{m3a:04o}" if isinstance(m3a, int) else str(m3a).strip()
+                    if m3a is not None and m3a not in ('', '----') and m3a_str != '0000':
+                        track.mode3a = m3a
                     if data.get('flight_level') is not None:
-                        track.flight_level = data.get('flight_level')
+                        new_fl = data.get('flight_level')
+                        # Filtro de plausibilidad: rechazar saltos de FL físicamente imposibles.
+                        # Tasa de ascenso/descenso máxima real: ~6000 ft/min ≈ 100 FL/min.
+                        # En un barrido de 10s: máximo cambio admisible = 100/60 * 10 ≈ 17 FL.
+                        if track.flight_level is not None:
+                            dt_fl = track.timestamp - getattr(track, '_last_fl_time', track.timestamp)
+                            max_fl_change = max(3.0, (6000.0 / 60.0 / 100.0) * max(dt_fl, 1.0))  # FL por segundo
+                            fl_diff = abs(new_fl - track.flight_level)
+                            if fl_diff <= max_fl_change:
+                                track.flight_level = new_fl
+                                track._last_fl_time = track.timestamp
+                            # else: descartamos el FL ruidoso y conservamos el anterior
+                        else:
+                            track.flight_level = new_fl
+                            track._last_fl_time = track.timestamp
                 
                 if data.get('callsign'):
                     track.callsign = data.get('callsign')
                 if data.get('ground_speed') is not None:
-                    track.ground_speed = data.get('ground_speed')
+                    new_gs = data.get('ground_speed')
+                    # Filtro de plausibilidad: rechazar saltos de velocidad físicamente imposibles.
+                    # Aceleración máxima comercial realista: ~2 kt/s (120 kt/min).
+                    # Usamos 3 kt/s como límite para cubrir también aviación militar / emergencias.
+                    # Ejemplo: salto de 50 kt en 10 s requiere 5 kt/s → rechazado (ruido de sensor).
+                    if track.ground_speed is not None:
+                        dt_gs = track.timestamp - getattr(track, '_last_gs_time', track.timestamp)
+                        max_gs_change = max(5.0, 3.0 * max(dt_gs, 1.0))  # kt
+                        gs_diff = abs(new_gs - track.ground_speed)
+                        if gs_diff <= max_gs_change:
+                            track.ground_speed = new_gs
+                            track._last_gs_time = track.timestamp
+                        # else: descartamos la velocidad ruidosa y conservamos la anterior
+                    else:
+                        track.ground_speed = new_gs
+                        track._last_gs_time = track.timestamp
                 if data.get('track_angle') is not None:
                     track.track_angle = data.get('track_angle')
                 if data.get('mode_s'):
@@ -1539,6 +1543,24 @@ class RadarWidget(QWidget):
                 
                 track.reporting_sensors.add(sensor_id)
                 track.illuminate()
+                
+                # --- JURISDICTION CHECK ---
+                track_lat = data.get('latitude') or data.get('lat') or data.get('lat_render')
+                track_lon = data.get('longitude') or data.get('lon') or data.get('lon_render')
+                
+                dist_nm = None
+                if track_lat is not None and track_lon is not None and getattr(self, 'aeropuerto_lat', None) is not None and getattr(self, 'aeropuerto_lon', None) is not None:
+                    try:
+                        from analysis.stca_analyzer import STCA_Engine
+                        dist_nm = STCA_Engine.haversine_nm(self.aeropuerto_lat, self.aeropuerto_lon, track_lat, track_lon)
+                    except Exception:
+                        pass
+                if dist_nm is None:
+                    dist_nm = math.sqrt(track.x**2 + track.y**2) / 1852.0
+                
+                fl_val = track.flight_level if track.flight_level is not None else 0.0
+                track.en_jurisdiccion = (dist_nm <= 50.0) and (fl_val <= getattr(self, 'techo_incumbencia', 95))
+                data['en_jurisdiccion'] = track.en_jurisdiccion
 
             if bypass_pending:
                 if target_id in self.pending_tracks:
@@ -1561,7 +1583,7 @@ class RadarWidget(QWidget):
                     sac_sic=data['sac_sic'],
                     category=data.get('category', 0),
                     timestamp=data.get('time', 0.0),
-                    mode3a=data.get('mode3a', ''),
+                    mode3a=_filter_mode3a(data.get('mode3a', '')),
                     callsign=data.get('callsign', ''),
                     flight_level=data.get('flight_level'),
                     is_track=data.get('is_track', False),
@@ -1717,6 +1739,14 @@ class RadarWidget(QWidget):
         Evalúa conflictos STCA con lógica de inhibición multisensor (Regla de Oro de la FASE 3).
         """
         if not hasattr(self, 'stca_engine') or not hasattr(self, 'stca_dialog'):
+            return
+
+        # Seguridad Operativa: Desactivar procesamiento si stca_habilitado es False
+        if not getattr(self, 'stca_habilitado', True):
+            self.tracks_en_alerta = set()
+            self.conflictos_activos = []
+            if hasattr(self, 'stca_dialog') and self.stca_dialog:
+                self.stca_dialog.actualizar_alertas([])
             return
 
         # 1. LÓGICA DE INHIBICIÓN MULTISENSOR
@@ -2204,6 +2234,164 @@ class RadarWidget(QWidget):
         except Exception:
             pass
 
+    def _draw_video_maps(self, painter: QPainter, inv_z: float, tipo: str):
+        if not hasattr(self, 'map_manager'):
+            return
+            
+        visibles = self.map_manager.get_visible_layers(tipo)
+        if not visibles:
+            return
+            
+        try:
+            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+            
+            for layer in visibles:
+                # Estilos visuales: TACTICO usa el color guardado por el usuario; ESTRUCTURAL usa colores semánticos fijos
+                alpha_base = 255 if tipo == "TACTICO" else 150
+                
+                if tipo == "TACTICO":
+                    # Color dinámico guardado en la capa
+                    layer_color = QColor(getattr(layer, 'color', '#00E5FF'))
+                    layer_color.setAlpha(alpha_base)
+                    
+                    # A. Fronteras / geometría principal → color del usuario
+                    pen_borders = QPen(layer_color)
+                    pen_borders.setWidthF(max(1.5, inv_z * 1.5))
+                    painter.setPen(pen_borders)
+                    painter.drawPath(layer.path_borders)
+                    
+                    # B. Aerovías → mismo color, línea discontinua
+                    pen_airways = QPen(layer_color)
+                    pen_airways.setWidthF(max(1.2, inv_z * 1.5))
+                    pen_airways.setStyle(Qt.PenStyle.DashLine)
+                    painter.setPen(pen_airways)
+                    painter.drawPath(layer.path_airways)
+                    
+                    # C. Pistas → mismo color
+                    pen_runways = QPen(layer_color)
+                    pen_runways.setWidthF(max(1.8, inv_z * 1.8))
+                    painter.setPen(pen_runways)
+                    painter.drawPath(layer.path_runways)
+                    
+                    # D. Otros → mismo color
+                    pen_other = QPen(layer_color)
+                    pen_other.setWidthF(max(1.0, inv_z * 1.2))
+                    painter.setPen(pen_other)
+                    painter.drawPath(layer.path_other)
+                    
+                    # E. Símbolos
+                    if layer.map_symbols:
+                        painter.save()
+                        pen_symbol = QPen(layer_color)
+                        pen_symbol.setWidthF(max(1.0, inv_z * 1.0))
+                        painter.setPen(pen_symbol)
+                        sz = 4.0 * inv_z
+                        for px, py, text in layer.map_symbols:
+                            painter.drawPolygon([
+                                QPointF(px, py + sz),
+                                QPointF(px - sz, py - sz),
+                                QPointF(px + sz, py - sz),
+                            ])
+                        painter.restore()
+                        
+                    # F. Textos
+                    if layer.map_labels or layer.map_symbols:
+                        font = painter.font()
+                        font.setPointSizeF(7.5)
+                        font.setBold(True)
+                        pen_text = QPen(layer_color)
+                        
+                        for px, py, text in (layer.map_labels + layer.map_symbols):
+                            if text:
+                                painter.save()
+                                painter.translate(px, py)
+                                painter.scale(inv_z, -inv_z)
+                                painter.setFont(font)
+                                fm = QFontMetrics(font)
+                                tw = fm.horizontalAdvance(text)
+                                th = fm.height()
+                                tx = 7
+                                ty = th / 2 - 2
+                                
+                                painter.setPen(Qt.PenStyle.NoPen)
+                                painter.setBrush(QBrush(QColor(0, 0, 0, min(180, alpha_base))))
+                                painter.drawRect(QRectF(tx - 2, ty - fm.ascent() - 1, tw + 4, th + 2))
+                                
+                                painter.setPen(pen_text)
+                                painter.drawText(QPointF(tx, ty), text)
+                                painter.restore()
+                else:
+                    # ESTRUCTURAL: colores semánticos fijos (cartografía base)
+                    # A. Fronteras
+                    pen_borders = QPen(QColor(0, 229, 255, alpha_base))
+                    pen_borders.setWidthF(max(1.0, inv_z * 1.2))
+                    painter.setPen(pen_borders)
+                    painter.drawPath(layer.path_borders)
+                    
+                    # B. Aerovías
+                    pen_airways = QPen(QColor(0, 180, 255, alpha_base))
+                    pen_airways.setWidthF(max(1.2, inv_z * 1.5))
+                    pen_airways.setStyle(Qt.PenStyle.DashLine)
+                    painter.setPen(pen_airways)
+                    painter.drawPath(layer.path_airways)
+                    
+                    # C. Pistas
+                    pen_runways = QPen(QColor(57, 255, 20, alpha_base)) # Neon green
+                    pen_runways.setWidthF(max(1.8, inv_z * 1.8))
+                    painter.setPen(pen_runways)
+                    painter.drawPath(layer.path_runways)
+                    
+                    # D. Otros
+                    pen_other = QPen(QColor(52, 73, 94, min(100, alpha_base)))
+                    pen_other.setWidthF(max(0.4, inv_z * 0.5))
+                    painter.setPen(pen_other)
+                    painter.drawPath(layer.path_other)
+                    
+                    # E. Símbolos
+                    if layer.map_symbols:
+                        painter.save()
+                        pen_symbol = QPen(QColor(0, 229, 255, alpha_base))
+                        pen_symbol.setWidthF(max(1.0, inv_z * 1.0))
+                        painter.setPen(pen_symbol)
+                        sz = 4.0 * inv_z
+                        for px, py, text in layer.map_symbols:
+                            painter.drawPolygon([
+                                QPointF(px, py + sz),
+                                QPointF(px - sz, py - sz),
+                                QPointF(px + sz, py - sz),
+                            ])
+                        painter.restore()
+                        
+                    # F. Textos
+                    if layer.map_labels or layer.map_symbols:
+                        font = painter.font()
+                        font.setPointSizeF(7.5)
+                        font.setBold(True)
+                        pen_text = QPen(QColor(0, 229, 255, alpha_base))
+                        
+                        for px, py, text in (layer.map_labels + layer.map_symbols):
+                            if text:
+                                painter.save()
+                                painter.translate(px, py)
+                                painter.scale(inv_z, -inv_z)
+                                painter.setFont(font)
+                                fm = QFontMetrics(font)
+                                tw = fm.horizontalAdvance(text)
+                                th = fm.height()
+                                tx = 7
+                                ty = th / 2 - 2
+                                
+                                # Fondo del texto oscuro
+                                painter.setPen(Qt.PenStyle.NoPen)
+                                painter.setBrush(QBrush(QColor(0, 0, 0, min(180, alpha_base))))
+                                painter.drawRect(QRectF(tx - 2, ty - fm.ascent() - 1, tw + 4, th + 2))
+                                
+                                painter.setPen(pen_text)
+                                painter.drawText(QPointF(tx, ty), text)
+                                painter.restore()
+        except Exception as e:
+            print(f"[RadarWidget] Error renderizando mapa de video {tipo}: {e}")
+
     # ================================================================
     # PAINT EVENT
     # ================================================================
@@ -2230,114 +2418,8 @@ class RadarWidget(QWidget):
             painter.translate(center_x, center_y)
             painter.scale(z, -z)
 
-            # ---- 1. MAPA DXF ----
-            if self.map_has_data:
-                try:
-                    painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                    
-                    # A. Líneas de Fronteras y Provincias (Layer: LINEAS_DE_MAPA)
-                    # Color cian táctico semi-transparente bien definido
-                    pen_borders = QPen(QColor(0, 229, 255, 180))
-                    pen_borders.setWidthF(max(1.0, inv_z * 1.2))
-                    painter.setPen(pen_borders)
-                    painter.drawPath(self.map_path_borders)
-                    
-                    # B. Aerovías (Layer: AEROVIAS)
-                    # Línea discontinua color cian-azul de alta visibilidad táctica
-                    pen_airways = QPen(QColor(0, 180, 255, 255))
-                    pen_airways.setWidthF(max(1.2, inv_z * 1.5))
-                    pen_airways.setStyle(Qt.PenStyle.DashLine)
-                    painter.setPen(pen_airways)
-                    painter.drawPath(self.map_path_airways)
-                    
-                    # C. Pistas de aeropuertos (Layer: PISTAS)
-                    pen_runways = QPen(COLOR_GREEN_NEON)
-                    pen_runways.setWidthF(max(1.8, inv_z * 1.8))
-                    painter.setPen(pen_runways)
-                    painter.drawPath(self.map_path_runways)
-                    
-                    # D. Otras capas auxiliares del DXF
-                    pen_other = QPen(COLOR_MAP_LINE)
-                    pen_other.setWidthF(max(0.4, inv_z * 0.5))
-                    painter.setPen(pen_other)
-                    painter.drawPath(self.map_path_other)
-                    
-                    # E. Dibujar Símbolos de Waypoints (FixPoints)
-                    if getattr(self, 'map_symbols', None):
-                        painter.save()
-                        # Color celeste táctico muy estético, vivo y de alta visibilidad
-                        pen_symbol = QPen(QColor(0, 229, 255, 255))
-                        pen_symbol.setWidthF(max(1.0, inv_z * 1.0))
-                        painter.setPen(pen_symbol)
-                        painter.setBrush(Qt.BrushStyle.NoBrush)
-                        
-                        sz = 4.0 * inv_z
-                        for px, py, text in self.map_symbols:
-                            points = [
-                                QPointF(px, py + sz),
-                                QPointF(px - sz, py - sz),
-                                QPointF(px + sz, py - sz),
-                            ]
-                            painter.drawPolygon(points)
-                        painter.restore()
- 
-                    # F. Dibujar Textos / Nombres de Waypoints (Upright)
-                    if getattr(self, 'map_labels', None) or getattr(self, 'map_symbols', None):
-                        font = painter.font()
-                        font.setPointSizeF(7.5)
-                        font.setBold(True)
-                        pen_text = QPen(QColor(0, 229, 255, 255))
-                        
-                        if getattr(self, 'map_labels', None):
-                            for px, py, text in self.map_labels:
-                                if text:
-                                    painter.save()
-                                    painter.translate(px, py)
-                                    painter.scale(inv_z, -inv_z)
-                                    painter.setFont(font)
-                                    
-                                    fm = QFontMetrics(font)
-                                    tw = fm.horizontalAdvance(text)
-                                    th = fm.height()
-                                    
-                                    tx = 7
-                                    ty = th / 2 - 2
-                                    rect_bg = QRectF(tx - 2, ty - fm.ascent() - 1, tw + 4, th + 2)
-                                    
-                                    painter.setPen(Qt.PenStyle.NoPen)
-                                    painter.setBrush(QBrush(QColor("#000000")))
-                                    painter.drawRect(rect_bg)
-                                    
-                                    painter.setPen(pen_text)
-                                    painter.drawText(QPointF(tx, ty), text)
-                                    painter.restore()
-                                
-                        if getattr(self, 'map_symbols', None):
-                            for px, py, text in self.map_symbols:
-                                if text:
-                                    painter.save()
-                                    painter.translate(px, py)
-                                    painter.scale(inv_z, -inv_z)
-                                    painter.setFont(font)
-                                    
-                                    fm = QFontMetrics(font)
-                                    tw = fm.horizontalAdvance(text)
-                                    th = fm.height()
-                                    
-                                    tx = 7
-                                    ty = th / 2 - 2
-                                    rect_bg = QRectF(tx - 2, ty - fm.ascent() - 1, tw + 4, th + 2)
-                                    
-                                    painter.setPen(Qt.PenStyle.NoPen)
-                                    painter.setBrush(QBrush(QColor("#000000")))
-                                    painter.drawRect(rect_bg)
-                                    
-                                    painter.setPen(pen_text)
-                                    painter.drawText(QPointF(tx, ty), text)
-                                    painter.restore()
-                        
-                except Exception:
-                    pass
+            # ---- 1. MAPA ESTRUCTURAL (FONDO) ----
+            self._draw_video_maps(painter, inv_z, "ESTRUCTURAL")
 
             # ---- 1.5. COBERTURAS DE RADAR (Fase 16) ----
             if getattr(self, 'radar_coverages', None) and self.projection_set and self.proy.activo:
@@ -2838,6 +2920,9 @@ class RadarWidget(QWidget):
                                 label_shifts[tid2][0] -= rep_x
                                 label_shifts[tid2][1] -= rep_y
 
+            # Store label shifts in cache for use in drawing methods
+            self._label_shifts_cache = label_shifts
+
             for track_id, plot in all_active_plots:
                 try:
                     # Filtro de datos personalizado
@@ -2845,409 +2930,22 @@ class RadarWidget(QWidget):
                         continue
                     # FASE 2: INMUNIDAD ABSOLUTA PARA CAT 62
                     # Los System Tracks (CAT 62) NO se filtran por sensor visible.
-                    # El bypass ya está en _plot_passes_filter() y se refuerza aquí.
                     if plot.category == 62:
                         self._draw_cat62_plot(painter, plot, z, inv_z)
                         continue  # No pasa por filtro de sensores ni lógica PSR/SSR/ADS-B
 
                     # 🔓 FILTRO DE SENSORES MÚLTIPLES ACTIVADO:
-                    # El normalizador universal inyecta el ID del sensor.
-                    # Comprobamos si está en el set de sensores visibles.
                     sensor_id = getattr(plot, 'sac_sic', f"UNK_CAT{plot.category}")
                     visibles = getattr(self, 'sensores_visibles', None)
                     if visibles is not None and sensor_id not in visibles:
                         continue
 
-                    # Lógica original e intacta para el resto de categorías
                     if not plot.is_alive():
                         continue
-                    alpha = plot.alpha
-                    if alpha <= 0:
-                        continue
-                    x, y = plot.x, plot.y
-                    if not is_valid_coord(x, y):
-                        continue
 
-                    # FASE 2: Clasificar tipo de blanco y definir color/estilo de símbolo
-                    painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                    sensor_info = self.sensor_info.get((plot.sac, plot.sic))
-                    sensor_type = str(sensor_info.get('type', '')).upper() if sensor_info else ''
+                    # Draw target using OACI Doc 4444 standards
+                    self._draw_oaci_track(painter, plot, z, inv_z, alertas_dict)
 
-                    is_psr = False
-                    is_ssr = False
-                    is_combined = False
-                    is_adsb = False
-                    is_mlat = False
-                    is_fused = (plot.category == 62) or (len(getattr(plot, 'reporting_sensors', [])) > 1)
-
-                    if plot.category == 21:
-                        is_adsb = True
-                    elif sensor_type == 'MLAT':
-                        is_mlat = True
-                    elif plot.category == 1:
-                        has_ssr_info = bool(plot.mode3a and plot.mode3a != "----")
-                        if has_ssr_info:
-                            is_ssr = True
-                        else:
-                            is_psr = True
-                    elif plot.category == 48:
-                        has_ssr_info = bool(plot.mode3a or plot.mode_s)
-                        if sensor_type == 'SSR/PSR' and has_ssr_info:
-                            is_combined = True
-                        elif not has_ssr_info:
-                            is_psr = True
-                        else:
-                            is_ssr = True
-                    else:
-                        if 'PSR' in sensor_type and 'SSR' in sensor_type:
-                            is_combined = True
-                        elif 'PSR' in sensor_type:
-                            is_psr = True
-                        elif 'SSR' in sensor_type:
-                            is_ssr = True
-                        elif 'ADS-B' in sensor_type:
-                            is_adsb = True
-                        else:
-                            if plot.mode3a or plot.mode_s:
-                                is_ssr = True
-                            else:
-                                is_psr = True
-
-                    # Colores específicos curados para tema cyber-radar
-                    # DQF: Color diferenciado por tipo de anomalía
-                    if getattr(plot, 'degradada', False):
-                        _dqf_r = getattr(plot, 'dqf_razon', '')
-                        if _dqf_r == 'GARBLING':
-                            plot_color = QColor("#FF00FF")   # Magenta brillante — Garbling/Solapamiento SSR
-                        elif _dqf_r == 'FRUIT':
-                            plot_color = QColor("#FFA500")   # Naranja — FRUIT/Ruido (ploteo huérfano)
-                        elif _dqf_r == 'PISTA INMADURA':
-                            plot_color = QColor("#FFD700")   # Dorado/Ámbar — Pista inmadura (transitorio)
-                        else:
-                            plot_color = QColor("#FFA500")   # Fallback naranja genérico
-                    elif track_id in alertas_dict:
-                        estado, tiempo, _ = alertas_dict[track_id]
-                        plot_color = QColor("#FF0000") if estado == 'VIOLATION' else QColor("#FFFF00")
-                    elif getattr(plot, 'is_reflection', False):
-                        plot_color = QColor(255, 51, 102)  # Rojo coral neón brillante para reflexiones fantasmas
-                    elif getattr(plot, 'has_reflection', False):
-                        plot_color = QColor(255, 128, 0)   # Naranja neón de advertencia para el blanco real duplicado (conflicto)
-                    elif is_fused:
-                        plot_color = QColor("#FFFFFF")     # Blanco puro para pistas fusionadas multi-sensor (MRT)
-                    elif is_psr:
-                        plot_color = QColor(204, 85, 0)  # Dark Orange (PSR)
-                    elif is_ssr:
-                        plot_color = COLOR_GREEN_NEON  # Verde Neón (SSR)
-                    elif is_combined:
-                        plot_color = COLOR_GREEN_NEON  # Verde Neón para combinado
-                    elif is_adsb:
-                        plot_color = QColor("#FFFF00")  # Yellow (ADS-B)
-                    elif is_mlat:
-                        plot_color = QColor(255, 0, 255)  # Magenta (MLAT)
-                    else:
-                        plot_color = self._get_sensor_color(plot.sac, plot.sic)
-
-                    if plot.highlighted:
-                        base_color = QColor(255, 255, 0, alpha)
-                    else:
-                        base_color = QColor(plot_color)
-                        base_color.setAlpha(alpha)
-
-                    # Símbolo
-                    painter.save()
-                    try:
-                        painter.translate(x, y)
-                        if is_adsb and plot.track_angle is not None:
-                            painter.rotate(plot.track_angle)
-
-                        sym_size = safe_divide(8.0, z, 1.0)
-                        pen_style = Qt.PenStyle.DashLine if getattr(plot, 'is_reflection', False) else Qt.PenStyle.SolidLine
-
-                        if is_fused:
-                            # Fusión / Pista Integrada (igual a CAT 62): Cuadrado sólido blanco
-                            pen_f = QPen(base_color, safe_divide(2.0, z, 0.5))
-                            pen_f.setStyle(pen_style)
-                            painter.setPen(pen_f)
-                            painter.setBrush(QBrush(base_color, Qt.BrushStyle.SolidPattern))
-                            painter.drawRect(QRectF(-sym_size / 2, -sym_size / 2, sym_size, sym_size))
-                        elif is_psr:
-                            # Radar Primario (PSR): Cruz pequeña (+)
-                            pen_psr = QPen(base_color, safe_divide(2.0, z, 0.5))
-                            pen_psr.setStyle(pen_style)
-                            painter.setPen(pen_psr)
-                            s_r = sym_size * 0.5
-                            painter.drawLine(QPointF(-s_r, 0), QPointF(s_r, 0))
-                            painter.drawLine(QPointF(0, -s_r), QPointF(0, s_r))
-                        elif is_combined:
-                            # Combinado PSR + SSR: Cuadrado con cruz adentro (⊞)
-                            pen_c = QPen(base_color, safe_divide(2.0, z, 0.5))
-                            pen_c.setStyle(pen_style)
-                            painter.setPen(pen_c)
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            painter.drawRect(QRectF(-sym_size / 2, -sym_size / 2, sym_size, sym_size))
-                            s_r = sym_size * 0.5
-                            painter.drawLine(QPointF(-s_r, 0), QPointF(s_r, 0))
-                            painter.drawLine(QPointF(0, -s_r), QPointF(0, s_r))
-                        elif is_ssr:
-                            # Radar Secundario (SSR): Cuadrado hueco (□)
-                            pen_ssr = QPen(base_color, safe_divide(2.0, z, 0.5))
-                            pen_ssr.setStyle(pen_style)
-                            painter.setPen(pen_ssr)
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            painter.drawRect(QRectF(-sym_size / 2, -sym_size / 2, sym_size, sym_size))
-                        elif is_adsb:
-                            # ADS-B (CAT 21): Triángulo apuntando hacia arriba (△) o Diamante (♢)
-                            painter.setPen(QPen(base_color, safe_divide(2.0, z, 0.5)))
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            if plot.track_angle is not None:
-                                t = QPainterPath()
-                                t.moveTo(0, -sym_size * 0.66)
-                                t.lineTo(-sym_size * 0.5, sym_size * 0.33)
-                                t.lineTo(sym_size * 0.5, sym_size * 0.33)
-                                t.closeSubpath()
-                                painter.drawPath(t)
-                            else:
-                                t = QPainterPath()
-                                t.moveTo(0, -sym_size * 0.5)
-                                t.lineTo(sym_size * 0.5, 0)
-                                t.lineTo(0, sym_size * 0.5)
-                                t.lineTo(-sym_size * 0.5, 0)
-                                t.closeSubpath()
-                                painter.drawPath(t)
-                        elif is_mlat:
-                            # Multilateración (MLAT): Triángulo apuntando hacia abajo (▽)
-                            painter.setPen(QPen(base_color, safe_divide(2.0, z, 0.5)))
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            t = QPainterPath()
-                            t.moveTo(0, sym_size * 0.66)
-                            t.lineTo(-sym_size * 0.5, -sym_size * 0.33)
-                            t.lineTo(sym_size * 0.5, -sym_size * 0.33)
-                            t.closeSubpath()
-                            painter.drawPath(t)
-                        else:
-                            # Fallback por defecto: Círculo hueco (○)
-                            painter.setPen(QPen(base_color, safe_divide(2.0, z, 0.5)))
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            painter.drawEllipse(QPointF(0, 0), sym_size / 2, sym_size / 2)
-                    finally:
-                        painter.restore()
-
-                    # Dibujar encuadre concéntrico de selección o hover en el símbolo
-                    is_focused = self.focused_target_id and plot.id == self.focused_target_id
-                    is_hovered = getattr(self, 'hovered_target_id', None) and plot.id == self.hovered_target_id
-                    if is_focused or is_hovered:
-                        try:
-                            painter.save()
-                            painter.translate(x, y)
-                            color_val = QColor("#FFD700") if is_focused else QColor("#00FFFF")
-                            pen_focused = QPen(color_val, safe_divide(1.5, z, 0.3), Qt.PenStyle.DashLine)
-                            painter.setPen(pen_focused)
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            r_val = safe_divide(12.0, z, 2.0)
-                            painter.drawEllipse(QPointF(0, 0), r_val, r_val)
-                            d_val = safe_divide(10.0, z, 2.0)
-                            l_val = safe_divide(4.0, z, 1.0)
-                            painter.drawLine(QPointF(-d_val, d_val), QPointF(-d_val + l_val, d_val))
-                            painter.drawLine(QPointF(-d_val, d_val), QPointF(-d_val, d_val - l_val))
-                            painter.drawLine(QPointF(d_val, d_val), QPointF(d_val - l_val, d_val))
-                            painter.drawLine(QPointF(d_val, d_val), QPointF(d_val, d_val - l_val))
-                            painter.drawLine(QPointF(-d_val, -d_val), QPointF(-d_val + l_val, -d_val))
-                            painter.drawLine(QPointF(-d_val, -d_val), QPointF(-d_val, -d_val + l_val))
-                            painter.drawLine(QPointF(d_val, -d_val), QPointF(d_val - l_val, -d_val))
-                            painter.drawLine(QPointF(d_val, -d_val), QPointF(d_val, -d_val + l_val))
-                            painter.restore()
-                        except Exception:
-                            pass
-
-                    # Dibuja la bounding box si está en conflicto
-                    if track_id in alertas_dict:
-                        try:
-                            estado, tiempo, _ = alertas_dict[track_id]
-                            color_alerta = QColor("#FF0000") if estado == 'VIOLATION' else QColor("#FFFF00")
-                            
-                            painter.save()
-                            painter.translate(x, y)
-                            pen_box = QPen(color_alerta, safe_divide(2.0, z, 0.5))
-                            painter.setPen(pen_box)
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            box_size = safe_divide(30.0, z, 1.0)
-                            painter.drawRect(QRectF(-box_size / 2, -box_size / 2, box_size, box_size))
-                            painter.restore()
-                        except Exception:
-                            pass
-
-                    # Vector de tendencia
-                    es_pista = plot.is_track or is_fused
-                    if (es_pista and plot.ground_speed is not None and
-                            plot.track_angle is not None and plot.ground_speed > 10):
-                        try:
-                            speed_mps = plot.ground_speed * (METERS_PER_NM / 3600.0)
-                            v_len = speed_mps * 60.0
-                            a_rad = math.radians(plot.track_angle)
-                            ex = x + v_len * math.sin(a_rad)
-                            ey = y + v_len * math.cos(a_rad)
-                            if is_valid_coord(ex, ey):
-                                pen_v = QPen(base_color)
-                                pen_v.setWidthF(safe_divide(1.0, z, 0.3))
-                                painter.setPen(pen_v)
-                                painter.drawLine(QPointF(x, y), QPointF(ex, ey))
-                        except Exception:
-                            pass
-
-                    # Dibujar línea de enlace si es una reflexión y el blanco real está visible
-                    if getattr(plot, 'is_reflection', False) and getattr(plot, 'linked_real_id', None):
-                        real_plot = self.tracks.get(plot.linked_real_id) or self.pending_tracks.get(plot.linked_real_id)
-                        if real_plot and real_plot.is_alive():
-                            try:
-                                pen_link = QPen(QColor(150, 150, 150, min(alpha, 80)))
-                                pen_link.setStyle(Qt.PenStyle.DotLine)
-                                pen_link.setWidthF(safe_divide(1.2, z, 0.3))
-                                painter.setPen(pen_link)
-                                painter.drawLine(QPointF(x, y), QPointF(real_plot.x, real_plot.y))
-                            except Exception:
-                                pass
-
-                    # DATA BLOCK (TEXTO) — FASE 3: ADAPTATIVO
-                    lines = self._build_plot_label_lines(plot)
-                    if lines:
-                        painter.save()
-                        try:
-                            painter.translate(x, y)
-                            painter.scale(inv_z, -inv_z)
-                            painter.setFont(font_sq)
-                            lc = QColor(plot_color)
-                            lc.setAlpha(alpha)
-                            painter.setPen(lc)
-
-                            fm = QFontMetrics(font_sq)
-
-                            # Dibujar texto y calcular hitbox exacto con QFontMetrics.boundingRect
-                            total_hitbox = None  # QRectF en viewport coords para todas las líneas
-                            
-                            cfg_or = self.label_filter_config.get("orientacion", "NE")
-                            
-                            # Calcular el ancho máximo de la etiqueta para alineaciones
-                            max_w = 0
-                            for line in lines:
-                                w = fm.horizontalAdvance(str(line))
-                                if w > max_w:
-                                    max_w = w
-                                    
-                            # Offsets base X e Y según la orientación
-                            if cfg_or == "NE":
-                                base_x = 10
-                                base_y = -10
-                            elif cfg_or == "NO":
-                                base_x = -10 - max_w
-                                base_y = -10
-                            elif cfg_or == "SE":
-                                base_x = 10
-                                base_y = 10
-                            elif cfg_or == "SO":
-                                base_x = -10 - max_w
-                                base_y = 10
-                            # Aplicar desplazamiento dinámico anti-solapamiento (FASE 3)
-                            shift_x, shift_y = label_shifts.get(plot.id or track_id, [0.0, 0.0])
-                            base_x = base_x + shift_x
-                            # Y está invertido dentro del painter por scale(inv_z, -inv_z)
-                            base_y = base_y - shift_y
-
-                            # Dibujar la línea guía (Leader Line)
-                            pen_leader = QPen(base_color)
-                            pen_leader.setWidthF(0.6)  # Ancho fijo en píxeles (ya estamos en coord. de pantalla)
-                            # Línea delgada y translúcida
-                            leader_alpha = min(alpha, 80)
-                            pen_leader.setColor(QColor(base_color.red(), base_color.green(), base_color.blue(), leader_alpha))
-                            
-                            # Destino de la línea guía según orientación
-                            if cfg_or == "NE":
-                                leader_target = QPointF(base_x, base_y)
-                            elif cfg_or == "NO":
-                                leader_target = QPointF(base_x + max_w, base_y)
-                            elif cfg_or == "SE":
-                                leader_target = QPointF(base_x, base_y)
-                            elif cfg_or == "SO":
-                                leader_target = QPointF(base_x + max_w, base_y)
-                            else:
-                                leader_target = QPointF(base_x, base_y)
-                                
-                            painter.setPen(pen_leader)
-                            painter.drawLine(QPointF(0, 0), leader_target)
-
-                            # Si el blanco está en conflicto STCA, dibujamos un recuadro neón alrededor de su etiqueta de datos (data block)
-                            if track_id in alertas_dict:
-                                try:
-                                    estado, tiempo, _ = alertas_dict[track_id]
-                                    color_alerta = QColor("#FF0000") if estado == 'VIOLATION' else QColor("#FFFF00")
-                                    pen_box = QPen(color_alerta, 1.2)
-                                    painter.setPen(pen_box)
-                                    painter.setBrush(QBrush(QColor(11, 14, 20, 180))) # fondo oscuro translúcido
-                                    rect_label = QRectF(base_x - 5, base_y - 2, max_w + 10, len(lines) * 14 + 3)
-                                    painter.drawRect(rect_label)
-                                    
-                                    # Dibujar el contador del tiempo si es una predicción (FASE DE PREDICCIÓN)
-                                    if estado == 'PREDICTION':
-                                        badge_txt = f"T-{tiempo}s"
-                                        painter.save()
-                                        painter.setFont(QFont("Monospace", 7, QFont.Weight.Bold))
-                                        fm_badge = QFontMetrics(painter.font())
-                                        badge_w = fm_badge.horizontalAdvance(badge_txt) + 6
-                                        badge_h = 11
-                                        
-                                        # Posición del badge justo sobre la esquina superior derecha del recuadro de la etiqueta
-                                        rect_badge = QRectF(rect_label.right() - badge_w - 4, rect_label.top() - 9, badge_w, badge_h)
-                                        painter.setPen(Qt.PenStyle.NoPen)
-                                        painter.setBrush(QBrush(QColor("#FFFF00")))
-                                        painter.drawRect(rect_badge)
-                                        
-                                        # Dibujar el texto negro sobre fondo amarillo neón
-                                        painter.setPen(QColor("#000000"))
-                                        painter.drawText(rect_badge, Qt.AlignmentFlag.AlignCenter, badge_txt)
-                                        painter.restore()
-                                        
-                                    # Restaurar brush transparente para no afectar el renderizado de texto
-                                    painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                                except Exception:
-                                    pass
-
-                            # Restaurar color de texto
-                            painter.setPen(lc)
-
-                            for i, line in enumerate(lines):
-                                yo = base_y + (i * 14)
-                                w = fm.horizontalAdvance(str(line))
-                                
-                                # Alinear a la derecha si es cuadrante izquierdo (NO, SO), de lo contrario a la izquierda
-                                if cfg_or in ("NO", "SO"):
-                                    x_line = base_x + (max_w - w)
-                                else:
-                                    x_line = base_x
-                                    
-                                text_pos = QPointF(x_line, yo)
-
-                                # boundingRect en coordenadas del painter (texto)
-                                br = fm.boundingRect(int(text_pos.x()), int(text_pos.y()),
-                                                      int(1e6), int(1e6),
-                                                      Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
-                                                      str(line))
-
-                                # Convertir boundingRect del painter a coordenadas de viewport
-                                mapped_rect = painter.transform().mapRect(br)
-
-                                # Acumular en el hitbox combinado
-                                if total_hitbox is None:
-                                    total_hitbox = QRectF(mapped_rect)
-                                else:
-                                    total_hitbox = total_hitbox.united(QRectF(mapped_rect))
-
-                                # Dibujar texto
-                                painter.drawText(text_pos, str(line))
-                        finally:
-                            painter.restore()
-
-                        # Guardar hitbox en viewport coords referenciado por plot.id
-                        if total_hitbox is not None:
-                            self.label_hitboxes[plot.id] = total_hitbox
                 except Exception as e:
                     # Si un plot está corrupto, lo informamos en consola pero NO CORTAMOS EL BUCLE
                     print(f"[RENDER WARNING] Error al dibujar target {track_id}: {e}")
@@ -3337,6 +3035,9 @@ class RadarWidget(QWidget):
                 except Exception as e:
                     print(f"[RENDER WARNING] Error drawing reflectors: {e}")
 
+            # ---- MAPA TÁCTICO (FRENTE) ----
+            self._draw_video_maps(painter, inv_z, "TACTICO")
+
             # ---- 6. CARTEL DE SENSOR ACTIVO ----
             if self._active_sensor_label:
                 try:
@@ -3422,111 +3123,109 @@ class RadarWidget(QWidget):
                         painter.drawRoundedRect(frame_rect, 3.0, 3.0)
                         painter.restore()
 
-                rbl_act = getattr(self, 'rbl_activo', False)
-                rbl_per = getattr(self, 'rbl_persistente', False)
-                if (rbl_act or rbl_per) and self.rbl_origen_anchor and self.rbl_destino_anchor:
-                    olat, olon, orig_lbl = self._resolve_anchor_latlon(self.rbl_origen_anchor)
-                    dlat, dlon, dest_lbl = self._resolve_anchor_latlon(self.rbl_destino_anchor)
-                    
+                from analysis.geo_math import calcular_distancia_nm, calcular_rumbo_magnetico
+
+                def _render_single_rbl(o_anchor, d_anchor, rbl_color, rbl_entry=None):
+                    """Dibuja un único segmento RBL y devuelve (label_hitbox, p_origen, p_destino)."""
+                    olat, olon, orig_lbl = self._resolve_anchor_latlon(o_anchor)
+                    dlat, dlon, dest_lbl = self._resolve_anchor_latlon(d_anchor)
                     ox, oy = self.proy.latlon_to_xy(olat, olon)
                     dx, dy = self.proy.latlon_to_xy(dlat, dlon)
-                    
                     p_origen = self._world_to_screen(ox, oy)
                     p_destino = self._world_to_screen(dx, dy)
-                    
-                    if p_origen and p_destino:
-                        # Guardar coordenadas de pantalla para el hit-testing del clic
-                        self.rbl_p_origen_screen = p_origen
-                        self.rbl_p_destino_screen = p_destino
-                        
-                        painter.save()
-                        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-                        
-                        # Dibujar línea de trazos amarilla brillante
-                        pen = QPen(QColor("#FFD700"), 2, Qt.PenStyle.DashLine)
-                        painter.setPen(pen)
-                        painter.drawLine(p_origen, p_destino)
-                        
-                        # Dibujar círculos en los extremos
-                        painter.setPen(QPen(QColor("#FFD700"), 1.5))
-                        painter.setBrush(QBrush(QColor("#FFD700")))
-                        painter.drawEllipse(p_origen, 4, 4)
-                        painter.drawEllipse(p_destino, 4, 4)
-                        
-                        # Pintar encuadre de etiquetas enfocadas por el RBL (Feedback Visual)
-                        for anchor in [self.rbl_origen_anchor, self.rbl_destino_anchor]:
-                            if anchor and anchor.get("type") == "aircraft":
-                                pid = anchor.get("plot_id")
-                                if pid in self.label_hitboxes:
-                                    hitbox = self.label_hitboxes[pid]
-                                    painter.save()
-                                    # Ajustar un margen de 3px alrededor del bounding box para que no tape el texto
-                                    frame_rect = hitbox.adjusted(-3.0, -3.0, 3.0, 3.0)
-                                    
-                                    # Dibujar borde neon amarillo/oro con esquinas redondeadas
-                                    pen_frame = QPen(QColor("#FFD700"), 1.5, Qt.PenStyle.SolidLine)
-                                    painter.setPen(pen_frame)
-                                    painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                                    painter.drawRoundedRect(frame_rect, 3.0, 3.0)
-                                    
-                                    # Dibujar una pequeña etiqueta "RBL" arriba a la derecha del frame
-                                    tag_rect = QRectF(frame_rect.right() - 25, frame_rect.top() - 10, 25, 10)
-                                    painter.setPen(QColor("#FFD700"))
-                                    painter.setBrush(QBrush(QColor("#FFD700")))
-                                    painter.drawRect(tag_rect)
-                                    
-                                    painter.setPen(QColor("#000000"))
-                                    font_tag = QFont("Monospace", 7, QFont.Weight.Bold)
-                                    painter.setFont(font_tag)
-                                    painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, "RBL")
-                                    
-                                    painter.restore()
-                        
-                        # Calcular rumbo y distancia
-                        from analysis.geo_math import calcular_distancia_nm, calcular_rumbo_magnetico
-                        dist = calcular_distancia_nm(olat, olon, dlat, dlon)
-                        rumbo = calcular_rumbo_magnetico(olat, olon, dlat, dlon, self.declinacion_magnetica)
-                        
-                        # Formatear texto informativo
-                        info_text = f"{rumbo:03.0f}° M | {dist:.1f} NM"
-                        if orig_lbl and dest_lbl:
-                            label_text = f"{orig_lbl} -> {dest_lbl}\n{info_text}"
-                        elif orig_lbl:
-                            label_text = f"{orig_lbl} -> {info_text}"
-                        elif dest_lbl:
-                            label_text = f"{info_text} -> {dest_lbl}"
-                        else:
-                            label_text = info_text
-                        
-                        # Posición en punto medio
-                        mid_x = (p_origen.x() + p_destino.x()) / 2.0
-                        mid_y = (p_origen.y() + p_destino.y()) / 2.0
-                        
-                        # Pintar cartel
-                        font = QFont("Consolas", 9, QFont.Weight.Bold)
-                        painter.setFont(font)
-                        
-                        lines = label_text.split('\n')
-                        fm = painter.fontMetrics()
-                        rect_w = max(fm.horizontalAdvance(line) for line in lines) + 16
-                        rect_h = fm.height() * len(lines) + 8
-                        
-                        text_rect = QRectF(mid_x - rect_w / 2.0, mid_y - rect_h / 2.0, rect_w, rect_h)
-                        self.rbl_label_hitbox = text_rect  # Guardar para poder hacer clic sobre la etiqueta
-                        
-                        painter.setPen(QPen(QColor("#00E5FF"), 1.5))  # Borde neon cian
-                        painter.setBrush(QBrush(QColor("#000000")))  # Fondo negro
-                        painter.drawRoundedRect(text_rect, 4, 4)
-                        
-                        # Dibujar texto
-                        painter.setPen(QColor("#FFFFFF"))
-                        for i, line in enumerate(lines):
-                            line_y = text_rect.top() + fm.ascent() + 4 + i * fm.height()
-                            line_w = fm.horizontalAdvance(line)
-                            line_x = text_rect.left() + (rect_w - line_w) / 2.0
-                            painter.drawText(QPointF(line_x, line_y), line)
-                            
-                        painter.restore()
+                    if not p_origen or not p_destino:
+                        return None, None, None
+
+                    painter.save()
+                    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+                    # Línea de trazos con el color del RBL
+                    pen = QPen(rbl_color, 2, Qt.PenStyle.DashLine)
+                    painter.setPen(pen)
+                    painter.drawLine(p_origen, p_destino)
+
+                    # Círculos en los extremos
+                    painter.setPen(QPen(rbl_color, 1.5))
+                    painter.setBrush(QBrush(rbl_color))
+                    painter.drawEllipse(p_origen, 4, 4)
+                    painter.drawEllipse(p_destino, 4, 4)
+
+                    # Encuadre de etiquetas de aeronave vinculadas
+                    for anchor in [o_anchor, d_anchor]:
+                        if anchor and anchor.get("type") == "aircraft":
+                            pid = anchor.get("plot_id")
+                            if pid in self.label_hitboxes:
+                                hitbox = self.label_hitboxes[pid]
+                                painter.save()
+                                frame_rect = hitbox.adjusted(-3.0, -3.0, 3.0, 3.0)
+                                pen_frame = QPen(rbl_color, 1.5, Qt.PenStyle.SolidLine)
+                                painter.setPen(pen_frame)
+                                painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                                painter.drawRoundedRect(frame_rect, 3.0, 3.0)
+                                tag_rect = QRectF(frame_rect.right() - 25, frame_rect.top() - 10, 25, 10)
+                                painter.setPen(rbl_color)
+                                painter.setBrush(QBrush(rbl_color))
+                                painter.drawRect(tag_rect)
+                                painter.setPen(QColor("#000000"))
+                                font_tag = QFont("Monospace", 7, QFont.Weight.Bold)
+                                painter.setFont(font_tag)
+                                painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, "RBL")
+                                painter.restore()
+
+                    # Calcular métricas
+                    dist = calcular_distancia_nm(olat, olon, dlat, dlon)
+                    rumbo = calcular_rumbo_magnetico(olat, olon, dlat, dlon, self.declinacion_magnetica)
+                    info_text = f"{rumbo:03.0f}\u00b0 M | {dist:.1f} NM"
+                    if orig_lbl and dest_lbl:
+                        label_text = f"{orig_lbl} -> {dest_lbl}\n{info_text}"
+                    elif orig_lbl:
+                        label_text = f"{orig_lbl} -> {info_text}"
+                    elif dest_lbl:
+                        label_text = f"{info_text} -> {dest_lbl}"
+                    else:
+                        label_text = info_text
+
+                    mid_x = (p_origen.x() + p_destino.x()) / 2.0
+                    mid_y = (p_origen.y() + p_destino.y()) / 2.0
+
+                    font = QFont("Consolas", 9, QFont.Weight.Bold)
+                    painter.setFont(font)
+                    lines_t = label_text.split('\n')
+                    fm = painter.fontMetrics()
+                    rect_w = max(fm.horizontalAdvance(line) for line in lines_t) + 16
+                    rect_h = fm.height() * len(lines_t) + 8
+                    text_rect = QRectF(mid_x - rect_w / 2.0, mid_y - rect_h / 2.0, rect_w, rect_h)
+
+                    # Borde del color del RBL, fondo negro
+                    painter.setPen(QPen(rbl_color, 1.5))
+                    painter.setBrush(QBrush(QColor("#000000")))
+                    painter.drawRoundedRect(text_rect, 4, 4)
+
+                    painter.setPen(QColor("#FFFFFF"))
+                    for i, line in enumerate(lines_t):
+                        line_y = text_rect.top() + fm.ascent() + 4 + i * fm.height()
+                        line_w = fm.horizontalAdvance(line)
+                        line_x = text_rect.left() + (rect_w - line_w) / 2.0
+                        painter.drawText(QPointF(line_x, line_y), line)
+
+                    painter.restore()
+                    return text_rect, p_origen, p_destino
+
+                # --- Renderizar RBL persistentes ---
+                for rbl_entry in self.rbl_lines:
+                    lhb, po, pd = _render_single_rbl(
+                        rbl_entry['origen'], rbl_entry['destino'], rbl_entry['color'], rbl_entry
+                    )
+                    rbl_entry['label_hitbox'] = lhb
+                    rbl_entry['p_origen'] = po
+                    rbl_entry['p_destino'] = pd
+
+                # --- Renderizar RBL activo (en construcción, semitransparente) ---
+                if getattr(self, 'rbl_activo', False) and self.rbl_origen_anchor and self.rbl_destino_anchor:
+                    active_color = QColor("#FFD700")
+                    active_color.setAlpha(180)
+                    _render_single_rbl(self.rbl_origen_anchor, self.rbl_destino_anchor, active_color)
+
             except Exception as e:
                 print(f"[RadarWidget] Error renderizando RBL: {e}")
 
@@ -3556,47 +3255,35 @@ class RadarWidget(QWidget):
     # MOUSE — DRAG PAN
     # ================================================================
 
+    def _rbl_point_near_segment(self, p, a, b, tol=10.0):
+        """Devuelve True si el punto p está a menos de tol píxeles del segmento a-b."""
+        if a is None or b is None:
+            return False
+        ab = b - a
+        ap = p - a
+        ab_len_sq = ab.x()**2 + ab.y()**2
+        if ab_len_sq > 0:
+            t = (ap.x()*ab.x() + ap.y()*ab.y()) / ab_len_sq
+            t = max(0.0, min(1.0, t))
+            proj = a + t * ab
+            return math.hypot(p.x() - proj.x(), p.y() - proj.y()) < tol
+        return math.hypot(p.x() - a.x(), p.y() - a.y()) < tol
+
     def mousePressEvent(self, event):
         try:
-            # Si hay una línea RBL persistente y se hace clic normal, ver si se hizo clic en ella para borrarla
-            if getattr(self, 'rbl_persistente', False):
-                clic = event.position()
-                eliminar = False
-                
-                # A. Clic en la caja del cartel
-                if getattr(self, 'rbl_label_hitbox', None) and self.rbl_label_hitbox.contains(clic):
-                    eliminar = True
-                
-                # B. Clic cerca del segmento de línea (tolerancia 10 píxeles)
-                elif getattr(self, 'rbl_p_origen_screen', None) and getattr(self, 'rbl_p_destino_screen', None):
-                    p = clic
-                    a = self.rbl_p_origen_screen
-                    b = self.rbl_p_destino_screen
-                    ab = b - a
-                    ap = p - a
-                    ab_len_sq = ab.x()**2 + ab.y()**2
-                    if ab_len_sq > 0:
-                        t = (ap.x()*ab.x() + ap.y()*ab.y()) / ab_len_sq
-                        t = max(0.0, min(1.0, t))
-                        proj = a + t * ab
-                        dist = math.hypot(p.x() - proj.x(), p.y() - proj.y())
-                        if dist < 10.0:
-                            eliminar = True
-                    else:
-                        dist = math.hypot(p.x() - a.x(), p.y() - a.y())
-                        if dist < 10.0:
-                            eliminar = True
-                            
-                if eliminar:
-                    self.rbl_persistente = False
-                    self.rbl_activo = False
-                    self.rbl_origen_anchor = None
-                    self.rbl_destino_anchor = None
-                    self.rbl_label_hitbox = None
-                    self.rbl_p_origen_screen = None
-                    self.rbl_p_destino_screen = None
-                    self.update()
-                    return
+            # ── Comprobar si el clic elimina algún RBL persistente ──
+            clic = event.position()
+            idx_to_remove = None
+            for i, rbl in enumerate(self.rbl_lines):
+                hit_label = rbl.get('label_hitbox') and rbl['label_hitbox'].contains(clic)
+                hit_line  = self._rbl_point_near_segment(clic, rbl.get('p_origen'), rbl.get('p_destino'))
+                if hit_label or hit_line:
+                    idx_to_remove = i
+                    break
+            if idx_to_remove is not None:
+                self.rbl_lines.pop(idx_to_remove)
+                self.update()
+                return
 
             # Activación de herramienta RBL: Shift + Clic Izquierdo O Clic Central (Middle Button)
             is_shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
@@ -3605,11 +3292,9 @@ class RadarWidget(QWidget):
             
             if (is_left and is_shift) or is_middle:
                 self.rbl_activo = True
-                self.rbl_persistente = False
                 lat, lon, label, anchor = self._snap_to_target(event.position())
-                
-                # Si tenemos un blanco ya enfocado, lo usamos como origen para el RBL,
-                # e imantamos el destino al punto/blanco clicado!
+
+                # Si tenemos un blanco enfocado, úsalo como origen
                 if getattr(self, 'focused_target_id', None):
                     focused_plot = self.tracks.get(self.focused_target_id)
                     if focused_plot and focused_plot.is_alive():
@@ -3641,9 +3326,9 @@ class RadarWidget(QWidget):
                 
                 # 0. PRIORIDAD MÁXIMA: Si el hover ya detectó un blanco, usarlo directamente
                 hovered_id = getattr(self, 'hovered_target_id', None)
-                if hovered_id and hovered_id in self.tracks:
-                    plot = self.tracks[hovered_id]
-                    if plot.is_alive():
+                if hovered_id:
+                    plot = self.tracks.get(hovered_id) or self.pending_tracks.get(hovered_id)
+                    if plot and plot.is_alive():
                         target_plot = plot
                         plat, plon = self.proy.xy_to_latlon(plot.x, plot.y)
                         target_anchor = {
@@ -3657,10 +3342,8 @@ class RadarWidget(QWidget):
                 # 1. Búsqueda: bounding box del texto (label hitbox) de plots activos para foco
                 if target_plot is None:
                     for pid, hitbox in list(self.label_hitboxes.items()):
-                        if pid not in self.tracks:
-                            continue
-                        plot = self.tracks[pid]
-                        if not plot.is_alive():
+                        plot = self.tracks.get(pid) or self.pending_tracks.get(pid)
+                        if not plot or not plot.is_alive():
                             continue
                         buffered_hitbox = hitbox.adjusted(-15.0, -15.0, 15.0, 15.0)
                         if buffered_hitbox.contains(click_pos):
@@ -3678,7 +3361,8 @@ class RadarWidget(QWidget):
                 # 2. Si no dio en etiqueta, buscar por distancia al símbolo físico de la aeronave
                 if target_plot is None:
                     best_dist = 25.0  # 25px de tolerancia
-                    for pid, plot in list(self.tracks.items()):
+                    all_plots = list(self.tracks.items()) + list(self.pending_tracks.items())
+                    for pid, plot in all_plots:
                         if not plot.is_alive():
                             continue
                         plat, plon = self.proy.xy_to_latlon(plot.x, plot.y)
@@ -3699,23 +3383,29 @@ class RadarWidget(QWidget):
                                     }
                                     
                 if target_plot is not None:
-                    # Si ya teníamos un blanco seleccionado y es diferente de este,
-                    # creamos la regla RBL de forma persistente entre ambos directamente!
+                    # Si ya teníamos un blanco seleccionado y es diferente, crear RBL persistente entre ambos
                     if self.focused_target_id and self.focused_target_id != target_plot.id:
-                        focused_plot = self.tracks.get(self.focused_target_id)
+                        focused_plot = self.tracks.get(self.focused_target_id) or self.pending_tracks.get(self.focused_target_id)
                         if focused_plot and focused_plot.is_alive():
                             f_lat = focused_plot.lat
                             f_lon = focused_plot.lon
                             f_lbl = getattr(focused_plot, 'callsign', None) or getattr(focused_plot, 'mode3a', None) or f"Trk {getattr(focused_plot, 'track_number', '')}"
-                            self.rbl_origen_anchor = {
+                            o_anchor = {
                                 "type": "aircraft",
                                 "plot_id": self.focused_target_id,
                                 "last_lat": f_lat,
                                 "last_lon": f_lon,
                                 "last_label": f_lbl
                             }
-                            self.rbl_destino_anchor = target_anchor
-                            self.rbl_persistente = True
+                            rbl_color = self._rbl_color
+                            self.rbl_lines.append({
+                                'origen': o_anchor,
+                                'destino': target_anchor,
+                                'color': rbl_color,
+                                'label_hitbox': None,
+                                'p_origen': None,
+                                'p_destino': None,
+                            })
                             self.rbl_activo = False
                             self.update()
                             return
@@ -3769,7 +3459,6 @@ class RadarWidget(QWidget):
                     dist = math.hypot(event.position().x() - press_pos.x(), event.position().y() - press_pos.y())
                     if dist > 5.0:  # Umbral de 5 píxeles
                         self.rbl_activo = True
-                        self.rbl_persistente = False
                         self.rbl_origen_anchor = self.rbl_drag_origin_anchor
                         self.rbl_drag_origin_anchor = None  # Limpiar para no reentrar
                         
@@ -3809,10 +3498,8 @@ class RadarWidget(QWidget):
             
             # A. Buscar en las hitboxes de las etiquetas
             for pid, hitbox in list(self.label_hitboxes.items()):
-                if pid not in self.tracks:
-                    continue
-                plot = self.tracks[pid]
-                if not plot.is_alive():
+                plot = self.tracks.get(pid) or self.pending_tracks.get(pid)
+                if not plot or not plot.is_alive():
                     continue
                 buffered_hitbox = hitbox.adjusted(-15.0, -15.0, 15.0, 15.0)
                 if buffered_hitbox.contains(hover_pos):
@@ -3822,7 +3509,8 @@ class RadarWidget(QWidget):
             # B. Si no dio en etiqueta, buscar cerca del símbolo físico
             if hover_target is None:
                 best_dist = 25.0  # 25px de tolerancia para hover
-                for pid, plot in list(self.tracks.items()):
+                all_plots = list(self.tracks.items()) + list(self.pending_tracks.items())
+                for pid, plot in all_plots:
                     if not plot.is_alive():
                         continue
                     plat, plon = self.proy.xy_to_latlon(plot.x, plot.y)
@@ -3847,10 +3535,21 @@ class RadarWidget(QWidget):
 
     def mouseReleaseEvent(self, event):
         try:
-            # Desactivar RBL al soltar el clic (Izquierdo o Central)
+            # Finalizar RBL activo → guardarlo en la lista de persistentes
             if getattr(self, 'rbl_activo', False):
                 self.rbl_activo = False
-                self.rbl_persistente = True
+                if self.rbl_origen_anchor and self.rbl_destino_anchor:
+                    rbl_color = self._rbl_color
+                    self.rbl_lines.append({
+                        'origen': self.rbl_origen_anchor,
+                        'destino': self.rbl_destino_anchor,
+                        'color': rbl_color,
+                        'label_hitbox': None,
+                        'p_origen': None,
+                        'p_destino': None,
+                    })
+                self.rbl_origen_anchor = None
+                self.rbl_destino_anchor = None
                 self.update()
                 return
 
@@ -3918,118 +3617,201 @@ class RadarWidget(QWidget):
     # ================================================================
 
     def _build_plot_label_lines(self, plot: 'RadarPlot') -> List[str]:
-        cfg = getattr(self, 'label_filter_config', None)
-        if cfg is None:
-            cfg = {
-                "codigo_a": True, "codigo_c": True, "direccion_aeronave": True,
-                "velocidad": True, "identific_aeronave": True, "numero_pista": True,
-                "hora_utc": False, "numero_mensaje": False, "altitud_adsb": True
-            }
-
-        lines = []
+        cfg = getattr(self, 'label_filter_config', {})
         
-        # 1. Identificador de llamada (Callsign)
-        if cfg.get("identific_aeronave", True):
-            if plot.callsign and plot.callsign.strip() and plot.callsign != '----':
-                lines.append(f"CS: {plot.callsign.strip()}")
+        # 1. Line 1: Identity
+        show_id = cfg.get("identific_aeronave", True)
+        show_squawk = cfg.get("codigo_a", True)
+        
+        line1_parts = []
+        
+        # Callsign
+        callsign_str = ""
+        if show_id and plot.callsign and plot.callsign.strip() and plot.callsign != '----':
+            callsign_str = plot.callsign.strip()
             
-        # 2. Código SSR (Mode 3/A - Squawk)
-        if cfg.get("codigo_a", True):
-            if plot.mode3a and plot.mode3a != '----' and plot.mode3a != '0000':
-                lbl_ssr = f"SSR: {plot.mode3a}"
-                if getattr(plot, 'is_reflection', False):
-                    lbl_ssr += " (GHOST)"
-                lines.append(lbl_ssr)
+        # Squawk
+        squawk_str = ""
+        if show_squawk:
+            ssr_code = "----"
+            if plot.mode3a is not None:
+                if isinstance(plot.mode3a, int):
+                    ssr_code = f"{plot.mode3a:04o}"
+                else:
+                    ssr_code = str(plot.mode3a).strip()
+            if ssr_code not in ("----", "0000"):
+                squawk_str = ssr_code
                 
-        # Si es una reflexión o blanco real duplicado, insertar etiqueta de advertencia al inicio del bloque de datos
-        if getattr(plot, 'is_reflection', False):
-            lines.insert(0, "⚠️ REFLEXIÓN")
-        elif getattr(plot, 'has_reflection', False):
-            lines.insert(0, "⚠️ DUPLICADO")
+        if callsign_str and squawk_str:
+            line1_parts.append(f"{callsign_str}/{squawk_str}")
+        elif callsign_str:
+            line1_parts.append(callsign_str)
+        elif squawk_str:
+            line1_parts.append(squawk_str)
             
-        # 3. Nivel de Vuelo (FL) o Altitud
-        if cfg.get("codigo_c", True) or cfg.get("altitud_adsb", True):
-            # Calcular tendencia de nivel (ascenso / descenso) dinámicamente
-            trend_arrow = ""
-            if plot.id in self.history:
-                hist = list(self.history[plot.id])
-                if len(hist) >= 3:
-                    past_pt = hist[-3]
-                    if plot.flight_level is not None and past_pt.fl:
-                        try:
-                            if past_pt.fl.startswith("FL"):
-                                past_fl = float(past_pt.fl[2:])
-                                diff = plot.flight_level - past_fl
-                                if diff >= 1.5:
-                                    trend_arrow = " ↑"
-                                elif diff <= -1.5:
-                                    trend_arrow = " ↓"
-                        except Exception:
-                            pass
-            
+        line1 = " ".join(line1_parts) if line1_parts else ""
+
+        # 2. Line 2: Altitude & Speed
+        show_altitude = cfg.get("codigo_c", True) or cfg.get("altitud_adsb", True)
+        show_speed = cfg.get("velocidad", True)
+        
+        alt_str = ""
+        if show_altitude:
             if plot.flight_level is not None:
-                lines.append(f"FL{int(plot.flight_level)}{trend_arrow}")
+                alt_val = int(plot.flight_level)
+                alt_str = f"F{alt_val:03d}"
             elif plot.altitude_ft is not None:
-                lines.append(f"ALT: {int(plot.altitude_ft)}ft{trend_arrow}")
+                alt_val = int(plot.altitude_ft / 100.0)
+                alt_str = f"F{alt_val:03d}"
+            else:
+                alt_str = "F---"
+
+        trend_arrow = " "
+        if show_altitude:
+            rate_of_climb = None
+            if plot.raw_dict:
+                rate_of_climb = plot.raw_dict.get('vertical_rate_ftmin')
+                if rate_of_climb is None and 'extra_data' in plot.raw_dict:
+                    rate_of_climb = plot.raw_dict['extra_data'].get('vertical_rate_ftmin')
+            if rate_of_climb is None:
+                rate_of_climb = 0.0
+                if plot.id in self.history:
+                    hist = list(self.history[plot.id])
+                    curr_fl = plot.flight_level
+                    curr_time = plot.timestamp
+                    if curr_fl is not None:
+                        past_pt = None
+                        for pt in reversed(hist):
+                            if pt.timestamp > 0 and pt.fl and pt.timestamp < curr_time - 2.0:
+                                past_pt = pt
+                                if pt.timestamp < curr_time - 5.0:
+                                    break
+                        if past_pt is not None:
+                            try:
+                                if past_pt.fl.startswith("FL"):
+                                    past_fl = float(past_pt.fl[2:])
+                                    fl_diff = curr_fl - past_fl
+                                    time_diff = curr_time - past_pt.timestamp
+                                    if time_diff > 0:
+                                        rate_of_climb = (fl_diff * 100.0 / time_diff) * 60.0
+                            except Exception:
+                                pass
+
+            if rate_of_climb > 300.0:
+                trend_arrow = "▲"
+            elif rate_of_climb < -300.0:
+                trend_arrow = "▼"
+
+        speed_str = ""
+        if show_speed:
+            gs_val = plot.ground_speed
+            if gs_val is None:
+                if plot.id in self.history:
+                    hist = list(self.history[plot.id])
+                    curr_time = plot.timestamp
+                    if len(hist) >= 2 and curr_time is not None:
+                        # Recopilar todas las estimaciones de velocidad dentro de la ventana 6s–30s
+                        # y promediarlas para reducir el jitter causado por ruido de posición del radar
+                        speed_samples = []
+                        for pt in reversed(hist):
+                            if pt.timestamp <= 0:
+                                continue
+                            dt = curr_time - pt.timestamp
+                            if dt < 6.0:
+                                continue          # demasiado corto: muy ruidoso
+                            if dt > 30.0:
+                                break             # demasiado antiguo: puede ser de otra maniobra
+                            try:
+                                dx_m = plot.x - pt.x
+                                dy_m = plot.y - pt.y
+                                dist_m = math.sqrt(dx_m**2 + dy_m**2)
+                                if dt > 0:
+                                    speed_mps = dist_m / dt
+                                    speed_samples.append(speed_mps * 3600.0 / 1852.0)
+                            except Exception:
+                                pass
+                        if speed_samples:
+                            gs_val = sum(speed_samples) / len(speed_samples)
+
+            if gs_val is not None:
+                speed_str = f"N{int(gs_val):03d}"
+            else:
+                speed_str = "N---"
+
+        line2 = ""
+        if alt_str and speed_str:
+            line2 = f"{alt_str}{trend_arrow}{speed_str}"
+        elif alt_str:
+            line2 = alt_str
+        elif speed_str:
+            line2 = speed_str
+
+        # Build list of lines
+        lines = []
+        if line1:
+            lines.append(line1)
+        if line2:
+            lines.append(line2)
             
-        # 4. Dirección Mode S / ICAO Address
-        if cfg.get("direccion_aeronave", True):
-            if plot.mode_s and plot.mode_s != '----':
-                lines.append(f"ICAO: {plot.mode_s.upper()}")
+        # 3. Extra fields/lines
+        # Track Number
+        if cfg.get("numero_pista", False):
+            trk_no = plot.track_number
+            if trk_no is None:
+                # Fallback to last digits of ID or similar
+                parts = plot.id.split('_')
+                trk_no = parts[-1] if len(parts) > 1 else plot.id
+            lines.append(f"TRK:{trk_no}")
+            
+        # Mode S Address
+        if cfg.get("direccion_aeronave", False) and plot.mode_s:
+            lines.append(f"ADR:{plot.mode_s.strip().upper()}")
+            
+        # UTC Time (TOD)
+        if cfg.get("hora_utc", False) and plot.timestamp is not None:
+            tod = plot.timestamp
+            hours = int(tod // 3600) % 24
+            minutes = int((tod % 3600) // 60)
+            seconds = int(tod % 60)
+            lines.append(f"UTC:{hours:02d}:{minutes:02d}:{seconds:02d}")
+            
+        # Vertical Rate
+        if cfg.get("veloc_vertic_adsb", False):
+            rate_val = None
+            if plot.raw_dict:
+                rate_val = plot.raw_dict.get('vertical_rate_ftmin')
+                if rate_val is None and 'extra_data' in plot.raw_dict:
+                    rate_val = plot.raw_dict['extra_data'].get('vertical_rate_ftmin')
+            if rate_val is not None:
+                sign = "+" if rate_val >= 0 else ""
+                lines.append(f"V/S:{sign}{int(rate_val)}")
                 
-        # 5. Número de Pista
-        if cfg.get("numero_pista", True):
-            if plot.track_number is not None:
-                lines.append(f"TRK: {plot.track_number}")
+        # Emitter Category
+        if cfg.get("cat_emisor_adsb", False):
+            ecat = None
+            if plot.raw_dict:
+                ecat = plot.raw_dict.get('emitter_category')
+                if ecat is None and 'extra_data' in plot.raw_dict:
+                    ecat = plot.raw_dict['extra_data'].get('emitter_category')
+            if ecat is not None:
+                lines.append(f"ECAT:{ecat}")
+                
+        # Message Number
+        if cfg.get("numero_mensaje", False):
+            msg_no = None
+            if plot.raw_dict:
+                msg_no = plot.raw_dict.get('message_number') or plot.raw_dict.get('msg_number')
+            if msg_no is not None:
+                lines.append(f"MSG:{msg_no}")
+                
+        # Number of Replies
+        if cfg.get("numero_respuestas", False):
+            replies = None
+            if plot.raw_dict:
+                replies = plot.raw_dict.get('num_replies') or plot.raw_dict.get('number_of_replies')
+            if replies is not None:
+                lines.append(f"REP:{replies}")
 
-        # 6. Hora UTC / ToD
-        if cfg.get("hora_utc", False):
-            if plot.timestamp is not None:
-                try:
-                    h = int(plot.timestamp // 3600) % 24
-                    m = int((plot.timestamp % 3600) // 60)
-                    s = int(plot.timestamp % 60)
-                    lines.append(f"UTC: {h:02d}:{m:02d}:{s:02d}")
-                except Exception:
-                    pass
-            
-        # 7. Coordenadas polares (Rho & Theta)
-        rho = plot.raw_range
-        theta = plot.raw_azimuth
-        if plot.category in (1, 48, 21, 62):
-            if (rho is None or theta is None) and plot.x is not None and plot.y is not None:
-                try:
-                    if rho is None:
-                        rho = math.sqrt(plot.x**2 + plot.y**2) / 1852.0
-                    if theta is None:
-                        if not (abs(plot.x) < 1e-6 and abs(plot.y) < 1e-6):
-                            angle = math.degrees(math.atan2(plot.x, plot.y))
-                            if angle < 0:
-                                angle += 360.0
-                            theta = angle
-                except Exception:
-                    pass
-
-        if rho is not None and theta is not None:
-            # Mostramos coordenadas polares si no están desactivadas (por defecto siempre visibles)
-            lines.append(f"R/A: {rho:.1f}NM {theta:.1f}°")
-            
-        # 8. Información complementaria (Velocidad y Rumbo)
-        if cfg.get("velocidad", True):
-            comp = []
-            if plot.ground_speed is not None:
-                comp.append(f"{int(plot.ground_speed)}kt")
-            if plot.track_angle is not None:
-                comp.append(f"{plot.track_angle:.1f}°")
-            if comp:
-                lines.append(" ".join(comp))
-            
-        # Anteponer la categoría al principio
-        if not lines:
-            lines.append(f"CAT {plot.category:02d}")
-        else:
-            lines[0] = f"[{plot.category:02d}] {lines[0]}"
-            
         return lines
 
     def _get_label_rect(self, plot: 'RadarPlot', z: float, inv_z: float,
@@ -4086,16 +3868,16 @@ class RadarWidget(QWidget):
           - Solo se activa si el clic cae DENTRO del área de texto del label.
         """
         try:
-            if not self.projection_set or not self.tracks:
+            if not self.projection_set or (not self.tracks and not self.pending_tracks):
                 return
 
             click_pos = event.position()
 
             # Única búsqueda: bounding box del texto (label hitbox)
             for pid, hitbox in self.label_hitboxes.items():
-                if pid not in self.tracks:
+                plot = self.tracks.get(pid) or self.pending_tracks.get(pid)
+                if not plot:
                     continue
-                plot = self.tracks[pid]
                 if not plot.is_alive():
                     continue
 
@@ -4305,75 +4087,181 @@ class RadarWidget(QWidget):
 
         return None
 
-    def _draw_cat62_plot(self, painter: QPainter, plot: 'RadarPlot', z: float, inv_z: float):
-        """
-        FASE 2/3: Dibuja un plot de CAT 62 de forma completamente aislada.
-        
-        Pipeline de renderizado para CAT 62 (System Track):
-          1. Símbolo: cuadrado sólido CYAN (#00FFFF) con alta visibilidad
-          2. Data Block: texto BLANCO (callsign / FL / GS)
-          3. Vector de tendencia: línea proporcional a ground_speed segun track_angle
-        
-        CLAVES ACOPLADAS al esquema del decodificador:
-          - plot.callsign     → Identificador de vuelo (I062/380)
-          - plot.flight_level → Nivel de vuelo FL (I062/210)
-          - plot.ground_speed → Velocidad en nudos GS (I062/185)
-          - plot.track_angle  → Rumbo en grados (I062/202)
-        
-        REGLA ABSOLUTA:
-          - Usar EXCLUSIVAMENTE plot.x / plot.y (ya proyectadas en _process_plot_data)
-          - NO re-proyectar desde raw_dict
-        """
+    def _draw_oaci_track(self, painter: QPainter, plot: 'RadarPlot', z: float, inv_z: float, alertas_dict: dict):
         try:
-            # ================================================================
-            # 1. COORDENADAS (FASE 3: Filtros de validez desactivados para depuración)
-            # ================================================================
+            # 1. Check emergency (FASE 4)
+            ssr_code = ""
+            if plot.mode3a is not None:
+                if isinstance(plot.mode3a, int):
+                    ssr_code = f"{plot.mode3a:04o}"
+                else:
+                    ssr_code = str(plot.mode3a).strip()
+            
+            is_emergency = ssr_code in ("7500", "7600", "7700")
+            
+            # Blink logic for emergency (FASE 4)
+            if is_emergency and not self.blink_flag:
+                return  # Skip rendering in this frame to create a blinking effect
+                
             x, y = plot.x, plot.y
-
-            # Coordenadas en pantalla para depuración
-            w, h = self.width(), self.height()
-            vp_cx, vp_cy = w / 2.0, h / 2.0
-            cx = vp_cx + self.pan_x
-            cy = vp_cy + self.pan_y
-            screen_x = cx + x * self.zoom_factor
-            screen_y = cy - y * self.zoom_factor
-
+            if not is_valid_coord(x, y):
+                return
+                
             alpha = plot.alpha
+            if alpha <= 0:
+                return
+                
+            # Determine base color
+            sensor_info = self.sensor_info.get((plot.sac, plot.sic))
+            sensor_type = str(sensor_info.get('type', '')).upper() if sensor_info else ''
+            
+            is_psr = False
+            is_ssr = False
+            is_combined = False
+            is_adsb = False
+            is_mlat = False
+            is_fused = (plot.category == 62) or (len(getattr(plot, 'reporting_sensors', [])) > 1)
 
-            # Creación de alertas_dict local en _draw_cat62_plot para coloreado
-            alertas_dict = {}
-            for t1, t2, estado, tiempo in getattr(self, 'conflictos_activos', []):
-                alertas_dict[t1] = (estado, tiempo, t2)
-                alertas_dict[t2] = (estado, tiempo, t1)
-
-            # Símbolo: coloreado según conflicto STCA (Amarillo/Rojo) o Blanco por defecto
-            if plot.id in alertas_dict:
-                estado, tiempo, _ = alertas_dict[plot.id]
-                symbol_color = QColor("#FF0000") if estado == 'VIOLATION' else QColor("#FFFF00")
+            if plot.category == 21:
+                is_adsb = True
+            elif sensor_type == 'MLAT':
+                is_mlat = True
+            elif plot.category == 1:
+                has_ssr_info = bool(plot.mode3a and plot.mode3a != "----")
+                if has_ssr_info:
+                    is_ssr = True
+                else:
+                    is_psr = True
+            elif plot.category == 48:
+                has_ssr_info = bool(plot.mode3a or plot.mode_s)
+                if sensor_type == 'SSR/PSR' and has_ssr_info:
+                    is_combined = True
+                elif not has_ssr_info:
+                    is_psr = True
+                else:
+                    is_ssr = True
             else:
-                symbol_color = QColor("#FFFFFF")  # Blanco puro para pistas fusionadas multi-sensor (MRT)
+                if 'PSR' in sensor_type and 'SSR' in sensor_type:
+                    is_combined = True
+                elif 'PSR' in sensor_type:
+                    is_psr = True
+                elif 'SSR' in sensor_type:
+                    is_ssr = True
+                elif 'ADS-B' in sensor_type:
+                    is_adsb = True
+                else:
+                    if plot.mode3a or plot.mode_s:
+                        is_ssr = True
+                    else:
+                        is_psr = True
+                        
+            # Determine color
+            if is_emergency:
+                plot_color = QColor(Qt.GlobalColor.red)
+            elif getattr(plot, 'degradada', False) and not getattr(self, 'modo_crudo', False):
+                _dqf_r = getattr(plot, 'dqf_razon', '')
+                if _dqf_r == 'GARBLING':
+                    plot_color = QColor("#FF00FF")
+                elif _dqf_r == 'FRUIT':
+                    plot_color = QColor("#FFA500")
+                elif _dqf_r == 'PISTA INMADURA':
+                    plot_color = QColor("#FFD700")
+                else:
+                    plot_color = QColor("#FFA500")
+            elif plot.id in alertas_dict:
+                estado, tiempo, _ = alertas_dict[plot.id]
+                plot_color = QColor("#FF0000") if estado == 'VIOLATION' else QColor("#FFFF00")
+            elif getattr(plot, 'is_reflection', False) and not getattr(self, 'modo_crudo', False):
+                plot_color = QColor(255, 51, 102)
+            elif getattr(plot, 'has_reflection', False) and not getattr(self, 'modo_crudo', False):
+                plot_color = QColor(255, 128, 0)
+            elif is_fused:
+                plot_color = QColor("#FFFFFF")
+            elif is_psr:
+                plot_color = QColor(204, 85, 0)
+            elif is_ssr:
+                plot_color = COLOR_GREEN_NEON
+            elif is_combined:
+                plot_color = COLOR_GREEN_NEON
+            elif is_adsb:
+                plot_color = QColor("#FFFF00")
+            elif is_mlat:
+                plot_color = QColor(255, 0, 255)
+            else:
+                plot_color = self._get_sensor_color(plot.sac, plot.sic)
                 
             if plot.highlighted:
-                symbol_color = QColor(255, 255, 0, alpha)
+                base_color = QColor(255, 255, 0, alpha)
             else:
-                # FASE 3: Asegurar que alpha no sea negativo si la validación se desactiva
-                symbol_color.setAlpha(max(0, alpha))
-
-            # ================================================================
-            # 3. SÍMBOLO: CUADRADO SÓLIDO CYAN
-            # ================================================================
+                base_color = QColor(plot_color)
+                base_color.setAlpha(alpha)
+                
+            is_coasting = plot.age > 6.0
+            
+            # 2. Draw Symbol (FASE 2)
             painter.save()
             try:
                 painter.translate(x, y)
-                painter.setPen(QPen(symbol_color, max(0.0, safe_divide(2.0, z, 0.5))))
-                painter.setBrush(QBrush(symbol_color, Qt.BrushStyle.SolidPattern))
-                sym_size = max(0.0, safe_divide(8.0, z, 1.0))
-
-                painter.drawRect(QRectF(-sym_size / 2, -sym_size / 2, sym_size, sym_size))
+                if is_adsb and plot.track_angle is not None:
+                    painter.rotate(plot.track_angle)
+                    
+                sym_size = safe_divide(8.0, z, 1.0)
+                
+                # Active vs Coasting line style (FASE 2)
+                if is_coasting:
+                    pen_symbol = QPen(QColor(128, 128, 128), safe_divide(2.0, z, 0.5), Qt.PenStyle.DashLine)
+                    brush_symbol = QBrush(Qt.BrushStyle.NoBrush)
+                else:
+                    pen_symbol = QPen(base_color, safe_divide(2.0, z, 0.5), Qt.PenStyle.SolidLine)
+                    brush_symbol = QBrush(Qt.BrushStyle.NoBrush)
+                    
+                painter.setPen(pen_symbol)
+                painter.setBrush(brush_symbol)
+                
+                if is_adsb:
+                    t = QPainterPath()
+                    t.moveTo(0, -sym_size * 0.66)
+                    t.lineTo(-sym_size * 0.5, sym_size * 0.33)
+                    t.lineTo(sym_size * 0.5, sym_size * 0.33)
+                    t.closeSubpath()
+                    painter.drawPath(t)
+                elif is_psr:
+                    s_r = sym_size * 0.5
+                    painter.drawLine(QPointF(-s_r, 0), QPointF(s_r, 0))
+                    painter.drawLine(QPointF(0, -s_r), QPointF(0, s_r))
+                else:
+                    painter.drawRect(QRectF(-sym_size / 2, -sym_size / 2, sym_size, sym_size))
             finally:
                 painter.restore()
+                
+            # 3. Dibujar encuadre concéntrico de selección o hover en el símbolo
+            is_focused = self.focused_target_id and plot.id == self.focused_target_id
+            is_hovered = getattr(self, 'hovered_target_id', None) and plot.id == self.hovered_target_id
+            if is_focused or is_hovered:
+                try:
+                    painter.save()
+                    painter.translate(x, y)
+                    color_val = QColor("#FFD700") if is_focused else QColor("#00FFFF")
+                    pen_focused = QPen(color_val, safe_divide(1.5, z, 0.3), Qt.PenStyle.DashLine)
+                    painter.setPen(pen_focused)
+                    painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                    r_val = safe_divide(12.0, z, 2.0)
+                    painter.drawEllipse(QPointF(0, 0), r_val, r_val)
+                    d_val = safe_divide(10.0, z, 2.0)
+                    l_val = safe_divide(4.0, z, 1.0)
+                    painter.drawLine(QPointF(-d_val, d_val), QPointF(-d_val + l_val, d_val))
+                    painter.drawLine(QPointF(-d_val, d_val), QPointF(-d_val, d_val - l_val))
+                    painter.drawLine(QPointF(d_val, d_val), QPointF(d_val - l_val, d_val))
+                    painter.drawLine(QPointF(d_val, d_val), QPointF(d_val, d_val - l_val))
+                    painter.drawLine(QPointF(-d_val, -d_val), QPointF(-d_val + l_val, -d_val))
+                    painter.drawLine(QPointF(-d_val, -d_val), QPointF(-d_val, -d_val + l_val))
+                    painter.drawLine(QPointF(d_val, -d_val), QPointF(d_val - l_val, -d_val))
+                    painter.drawLine(QPointF(d_val, -d_val), QPointF(d_val, -d_val + l_val))
+                    painter.restore()
+                except Exception:
+                    pass
 
-            # Dibuja la bounding box si está en conflicto (CAT 62)
+            # 4. Dibuja la bounding box si está en conflicto
             if plot.id in alertas_dict:
                 try:
                     estado, tiempo, _ = alertas_dict[plot.id]
@@ -4390,131 +4278,153 @@ class RadarWidget(QWidget):
                 except Exception:
                     pass
 
-            # RESET DEFENSIVO: Limpiar brush sólido de CAT 62 para evitar leak
-            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-
-            # ================================================================
-            # 4. VECTOR DE TENDENCIA (track_angle + ground_speed)
-            # ================================================================
-            hdg = plot.track_angle     # I062/202: Track Angle (grados, 0=Norte)
-            gs = plot.ground_speed     # I062/185: Ground Speed (nudos)
-            if (plot.is_track and gs is not None and hdg is not None and gs > 10):
+            # 5. Vector de tendencia
+            es_pista = plot.is_track or is_fused
+            if (es_pista and plot.ground_speed is not None and
+                    plot.track_angle is not None and plot.ground_speed > 10):
                 try:
-                    # Velocidad en metros/segundo (1 NM = 1852 m, 1 h = 3600 s)
-                    speed_mps = gs * (METERS_PER_NM / 3600.0)
-                    # Vector de 60 segundos (1 minuto de trayectoria proyectada)
+                    speed_mps = plot.ground_speed * (METERS_PER_NM / 3600.0)
                     v_len = speed_mps * 60.0
-                    # track_angle: 0° = Norte, crece en sentido horario
-                    a_rad = math.radians(hdg)
+                    a_rad = math.radians(plot.track_angle)
                     ex = x + v_len * math.sin(a_rad)
                     ey = y + v_len * math.cos(a_rad)
                     if is_valid_coord(ex, ey):
-                        pen_v = QPen(symbol_color)
-                        pen_v.setWidthF(max(0.0, safe_divide(1.0, z, 0.3)))
+                        pen_v = QPen(base_color)
+                        pen_v.setWidthF(safe_divide(1.0, z, 0.3))
                         painter.setPen(pen_v)
                         painter.drawLine(QPointF(x, y), QPointF(ex, ey))
                 except Exception:
                     pass
 
-            # ================================================================
-            # 5. DATA BLOCK (Etiqueta BLANCA)
-            # ================================================================
+            # 6. Dibujar línea de enlace si es una reflexión y el blanco real está visible
+            if getattr(plot, 'is_reflection', False) and getattr(plot, 'linked_real_id', None) and not getattr(self, 'modo_crudo', False):
+                real_plot = self.tracks.get(plot.linked_real_id) or self.pending_tracks.get(plot.linked_real_id)
+                if real_plot and real_plot.is_alive():
+                    try:
+                        pen_link = QPen(QColor(150, 150, 150, min(alpha, 80)))
+                        pen_link.setStyle(Qt.PenStyle.DotLine)
+                        pen_link.setWidthF(safe_divide(1.2, z, 0.3))
+                        painter.setPen(pen_link)
+                        painter.drawLine(QPointF(x, y), QPointF(real_plot.x, real_plot.y))
+                    except Exception:
+                        pass
+
             lines = self._build_plot_label_lines(plot)
-            if not lines:
-                return
-
-            # REGLA DE RENDERIZADO VISUAL (FASE 2)
-            # Etiqueta en BLANCO puro (#FFFFFF) para máximo contraste
-            label_color = QColor("#FFFFFF")
-            label_color.setAlpha(alpha if alpha > 0 else 255)
-
-            painter.save()
-            try:
-                painter.translate(x, y)
-                painter.scale(inv_z, -inv_z)
-
-                font_sq = QFont("Monospace", 9)
-                painter.setFont(font_sq)
-                painter.setPen(label_color)
-
-                fm = QFontMetrics(font_sq)
-                total_hitbox = None
-                
-                cfg_or = self.label_filter_config.get("orientacion", "NE")
-                
-                # Calcular el ancho máximo de la etiqueta para alineaciones
-                max_w = 0
-                for line in lines:
-                    w = fm.horizontalAdvance(str(line))
-                    if w > max_w:
-                        max_w = w
-                        
-                # Offsets base X e Y según la orientación
-                if cfg_or == "NE":
-                    base_x = 10
-                    base_y = -10
-                elif cfg_or == "NO":
-                    base_x = -10 - max_w
-                    base_y = -10
-                elif cfg_or == "SE":
-                    base_x = 10
-                    base_y = 10
-                elif cfg_or == "SO":
-                    base_x = -10 - max_w
-                    base_y = 10
-                else:
-                    base_x = 10
-                    base_y = -10
-
-                # Dibujar la línea guía (Leader Line)
-                pen_leader = QPen(symbol_color)
-                pen_leader.setWidthF(0.6)  # Ancho fijo en píxeles (ya estamos en coord. de pantalla)
-                # Línea delgada y translúcida
-                leader_alpha = min(alpha, 80)
-                pen_leader.setColor(QColor(symbol_color.red(), symbol_color.green(), symbol_color.blue(), leader_alpha))
-                
-                # Destino de la línea guía según orientación
-                if cfg_or == "NE":
-                    leader_target = QPointF(base_x, base_y)
-                elif cfg_or == "NO":
-                    leader_target = QPointF(base_x + max_w, base_y)
-                elif cfg_or == "SE":
-                    leader_target = QPointF(base_x, base_y)
-                elif cfg_or == "SO":
-                    leader_target = QPointF(base_x + max_w, base_y)
-                else:
-                    leader_target = QPointF(base_x, base_y)
+            if lines:
+                painter.save()
+                try:
+                    painter.translate(x, y)
+                    painter.scale(inv_z, -inv_z)
                     
-                painter.setPen(pen_leader)
-                painter.drawLine(QPointF(0, 0), leader_target)
-
-                # Restaurar color de etiqueta
-                painter.setPen(label_color)
-
-                for i, line in enumerate(lines):
-                    yo = base_y + (i * 14)
-                    w = fm.horizontalAdvance(str(line))
+                    font_oaci = QFont("Consolas", 9)
+                    painter.setFont(font_oaci)
                     
-                    # Alinear a la derecha si es cuadrante izquierdo (NO, SO), de lo contrario a la izquierda
-                    if cfg_or in ("NO", "SO"):
-                        x_line = base_x + (max_w - w)
+                    if is_coasting:
+                        label_pen_color = QColor(128, 128, 128)
+                    elif is_emergency:
+                        label_pen_color = QColor(Qt.GlobalColor.red)
                     else:
-                        x_line = base_x
+                        label_pen_color = QColor(plot_color)
+                        label_pen_color.setAlpha(alpha)
                         
-                    text_pos = QPointF(x_line, yo)
-                    br = fm.boundingRect(int(text_pos.x()), int(text_pos.y()), int(1e6), int(1e6),
-                                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, str(line))
-                    mapped_rect = painter.transform().mapRect(br)
-                    if total_hitbox is None:
-                        total_hitbox = QRectF(mapped_rect)
+                    painter.setPen(label_pen_color)
+                    fm = QFontMetrics(font_oaci)
+                    
+                    max_w = max(fm.horizontalAdvance(line) for line in lines)
+                    
+                    # Target orientation
+                    cfg_or = self.label_filter_config.get("orientacion", "NE")
+                    shift_x, shift_y = getattr(self, '_label_shifts_cache', {}).get(plot.id, [0.0, 0.0])
+                    
+                    # Compute base dx/dy offset based on orientation
+                    if cfg_or == "NE":
+                        dx = 30.0 + shift_x
+                        dy = -30.0 - shift_y
+                    elif cfg_or == "NO":
+                        dx = -30.0 - max_w + shift_x
+                        dy = -30.0 - shift_y
+                    elif cfg_or == "SE":
+                        dx = 30.0 + shift_x
+                        dy = 30.0 - shift_y
+                    elif cfg_or == "SO":
+                        dx = -30.0 - max_w + shift_x
+                        dy = 30.0 - shift_y
                     else:
-                        total_hitbox = total_hitbox.united(QRectF(mapped_rect))
-                    painter.drawText(text_pos, str(line))
-            finally:
-                painter.restore()
-
-            if total_hitbox is not None:
-                self.label_hitboxes[plot.id] = total_hitbox
-
+                        dx = 30.0 + shift_x
+                        dy = -30.0 - shift_y
+                    
+                    # Draw Leader Line
+                    if is_coasting:
+                        pen_leader = QPen(QColor(128, 128, 128), 1.0, Qt.PenStyle.DashLine)
+                    else:
+                        pen_leader = QPen(base_color, 1.0, Qt.PenStyle.SolidLine)
+                        
+                    leader_alpha = min(alpha, 80)
+                    pen_leader.setColor(QColor(pen_leader.color().red(), pen_leader.color().green(), pen_leader.color().blue(), leader_alpha))
+                    painter.setPen(pen_leader)
+                    
+                    # Connect to closest side of the label bounding box
+                    target_x = dx if dx > 0 else dx + max_w
+                    target_y = dy
+                    painter.drawLine(QPointF(0, 0), QPointF(target_x, target_y))
+                    
+                    # If target is in conflict STCA, draw badge/box
+                    if plot.id in alertas_dict:
+                        try:
+                            estado, tiempo, _ = alertas_dict[plot.id]
+                            color_alerta = QColor("#FF0000") if estado == 'VIOLATION' else QColor("#FFFF00")
+                            pen_box = QPen(color_alerta, 1.2)
+                            painter.setPen(pen_box)
+                            painter.setBrush(QBrush(QColor(11, 14, 20, 180)))
+                            rect_label = QRectF(dx - 5, dy - 2, max_w + 10, len(lines) * 14 + 3)
+                            painter.drawRect(rect_label)
+                            
+                            if estado == 'PREDICTION':
+                                badge_txt = f"T-{tiempo}s"
+                                painter.save()
+                                painter.setFont(QFont("Consolas", 7, QFont.Weight.Bold))
+                                fm_badge = QFontMetrics(painter.font())
+                                badge_w = fm_badge.horizontalAdvance(badge_txt) + 6
+                                badge_h = 11
+                                rect_badge = QRectF(rect_label.right() - badge_w - 4, rect_label.top() - 9, badge_w, badge_h)
+                                painter.setPen(Qt.PenStyle.NoPen)
+                                painter.setBrush(QBrush(QColor("#FFFF00")))
+                                painter.drawRect(rect_badge)
+                                painter.setPen(QColor("#000000"))
+                                painter.drawText(rect_badge, Qt.AlignmentFlag.AlignCenter, badge_txt)
+                                painter.restore()
+                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                        except Exception:
+                            pass
+                            
+                    # Draw text lines
+                    painter.setPen(label_pen_color)
+                    total_hitbox = None
+                    for i, line in enumerate(lines):
+                        y_pos = dy + i * 14
+                        text_pos = QPointF(dx, y_pos)
+                        painter.drawText(text_pos, line)
+                        
+                        br = fm.boundingRect(int(text_pos.x()), int(text_pos.y()), int(1e6), int(1e6),
+                                              Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, line)
+                        mapped_rect = painter.transform().mapRect(br)
+                        if total_hitbox is None:
+                            total_hitbox = QRectF(mapped_rect)
+                        else:
+                            total_hitbox = total_hitbox.united(QRectF(mapped_rect))
+                            
+                finally:
+                    painter.restore()
+                    
+                if total_hitbox is not None:
+                    self.label_hitboxes[plot.id] = total_hitbox
+                    
         except Exception as e:
-            print(f"[RENDER WARNING] Error al dibujar target CAT 62 {plot.id}: {e}")
+            print(f"[RENDER WARNING] Error drawing OACI target: {e}")
+
+    def _draw_cat62_plot(self, painter: QPainter, plot: 'RadarPlot', z: float, inv_z: float):
+        alertas_dict = {}
+        for t1, t2, estado, tiempo in getattr(self, 'conflictos_activos', []):
+            alertas_dict[t1] = (estado, tiempo, t2)
+            alertas_dict[t2] = (estado, tiempo, t1)
+        self._draw_oaci_track(painter, plot, z, inv_z, alertas_dict)

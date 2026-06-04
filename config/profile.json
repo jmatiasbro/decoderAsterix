@@ -1,6 +1,20 @@
 {
-    "name": "Cordoba",
-    "declinacion_magnetica": -7.0,
-    "center_lat": -31.31548,
-    "center_lon": -64.21545
+    "nombre_usuario": "san lius",
+    "aeropuerto_trabajo": "SAOR",
+    "coordenadas_centro": {
+        "lat": -33.725,
+        "lon": -65.37805555555555
+    },
+    "nivel_incumbencia": 195,
+    "frecuencias_sector": [
+        "118.500",
+        "121.900",
+        "119.300"
+    ],
+    "mapas_visibles": [
+        "profiles/mapas_Cordoba/MI_AREA_TACTICA.geojson",
+        "profiles/mapas_mendoza/MI_AREA_TACTICA.geojson",
+        "profiles/mapas_san lius/MI_AREA_TACTICA.geojson"
+    ],
+    "stca_habilitado": true
 }
