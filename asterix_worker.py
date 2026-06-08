@@ -927,7 +927,7 @@ class AsterixWorker(QThread):
                     # squitters sin ningún identificador
                     qlat = round(lat / QUANTIZE_LAT) * QUANTIZE_LAT
                     qlon = round(lon / QUANTIZE_LON) * QUANTIZE_LON
-                    plot_id = f"CAT21_{sac}_{sic}_{qlat:.2f}_{qlon:.2f}"
+                    plot_id = f"CAT{cat}_{sac}_{sic}_{qlat:.2f}_{qlon:.2f}"
 
             # Extraer track_number, raw_range, raw_azimuth
             track_number = rec.get('track_number')

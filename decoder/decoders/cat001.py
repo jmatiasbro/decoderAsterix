@@ -42,13 +42,19 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
         fspec, fspec_offset = read_fspec(payload, offset)
         if not fspec or not any(fspec):
             break
-        
-        # Determinar UAP (Plot vs Track) basado en I001/020
-        # Esta es una simplificación; una implementación completa necesitaría
-        # leer el campo I001/020 primero.
+
+        # Determinar UAP (Plot vs Track) leyendo el campo I001/020 TYP
+        # TYP bits 7-5 del primer byte de I001/020:
+        #   0-3 → plot (no detection / SSR plot / PSR plot / CMB plot)
+        #   4-6 → track (SSR track / PSR track / CMB track)
         is_track = False
-        if len(fspec) >= 3 and fspec[2]: # FRN 3 is Track Number in UAP of tracks
-            is_track = True
+        peek = fspec_offset
+        if len(fspec) > 0 and fspec[0]:  # FRN 1 presente → saltar SAC/SIC (2B)
+            peek += 2
+        if len(fspec) > 1 and fspec[1] and peek < len(payload):  # FRN 2 = I001/020
+            typ = (payload[peek] >> 5) & 0x07
+            is_track = (typ >= 4)
+
         uap_lengths = uap_track if is_track else uap_plot
         plot['type'] = 'track' if is_track else 'plot'
         offset = fspec_offset
@@ -72,18 +78,15 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                     # THETA (Azimuth) - 2 bytes, LSB = 360 / 2^16 degrees
                     theta_raw = struct.unpack('>H', payload[offset + 2:offset + 4])[0]
                     plot['raw_azimuth'] = theta_raw * (360.0 / 65536.0)
-                elif frn == 4 and not is_track: # I001/070 Mode-3/A (Plot)
+                elif frn == 4 and not is_track: # I001/070 Mode-3/A (Plot UAP)
                     mode3a_raw = struct.unpack('>H', payload[offset:offset + 2])[0]
                     plot['mode_3a'] = mode3a_raw & 0x0FFF
-                elif frn == 4 and is_track: # I001/040 Measured Position (Track)
+                elif frn == 4 and is_track: # I001/040 Measured Position (Track UAP)
                     rho_raw = struct.unpack('>H', payload[offset:offset + 2])[0]
                     plot['raw_range'] = rho_raw / 256.0
                     theta_raw = struct.unpack('>H', payload[offset + 2:offset + 4])[0]
                     plot['raw_azimuth'] = theta_raw * (360.0 / 65536.0)
-                elif frn == 7 and is_track: # I001/070 Mode-3/A (Track)
-                    mode3a_raw = struct.unpack('>H', payload[offset:offset + 2])[0]
-                    plot['mode_3a'] = mode3a_raw & 0x0FFF
-                elif frn == 8: # I001/090 Mode-C Code / Altitude
+                elif frn == 5 and not is_track: # I001/090 Mode-C Code / Altitude (Plot UAP FRN 5)
                     fl_raw_unsigned = struct.unpack('>H', payload[offset:offset + 2])[0]
                     fl_garbled = bool(fl_raw_unsigned & 0x4000)
                     if fl_garbled:
@@ -94,6 +97,26 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                     fl_val = fl_14bit * 0.25
                     plot['flight_level'] = fl_val
                     plot['altitude'] = fl_val * 100.0
+                elif frn == 7 and is_track: # I001/070 Mode-3/A (Track UAP FRN 7)
+                    mode3a_raw = struct.unpack('>H', payload[offset:offset + 2])[0]
+                    plot['mode_3a'] = mode3a_raw & 0x0FFF
+                elif frn == 7 and not is_track: # I001/141 Truncated Time of Day (Plot UAP FRN 7)
+                    tod_raw = struct.unpack('>H', payload[offset:offset + 2])[0]
+                    plot['timestamp'] = tod_raw / 128.0
+                elif frn == 8 and is_track: # I001/090 Mode-C Code / Altitude (Track UAP FRN 8)
+                    fl_raw_unsigned = struct.unpack('>H', payload[offset:offset + 2])[0]
+                    fl_garbled = bool(fl_raw_unsigned & 0x4000)
+                    if fl_garbled:
+                        plot['garbled'] = True
+                    fl_14bit = fl_raw_unsigned & 0x3FFF
+                    if fl_14bit & 0x2000:
+                        fl_14bit -= 0x4000
+                    fl_val = fl_14bit * 0.25
+                    plot['flight_level'] = fl_val
+                    plot['altitude'] = fl_val * 100.0
+                elif frn == 9 and is_track: # I001/141 Truncated Time of Day (Track UAP FRN 9)
+                    tod_raw = struct.unpack('>H', payload[offset:offset + 2])[0]
+                    plot['timestamp'] = tod_raw / 128.0
 
                 # Avance del offset
                 length = uap_lengths.get(frn)
@@ -134,7 +157,7 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
         # K2: NORMALIZACIÓN DE CLAVES
         plot['track_id'] = plot.get('track_number', f"CAT01_{plot.get('sac',0)}_{plot.get('sic',0)}_{plot.get('timestamp',0)}")
         plot['mode3a'] = f"{plot.get('mode_3a', 0):04o}" if 'mode_3a' in plot else '----'
-        plot['flight_level'] = plot.get('flight_level', 0.0) # Default to 0.0 if not extracted
+        plot['flight_level'] = plot.get('flight_level')  # None si no está presente
 
         # G3: GEOMETRÍA (RHO/THETA -> LAT/LON)
         if 'raw_range' in plot and 'raw_azimuth' in plot:

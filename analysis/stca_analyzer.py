@@ -47,6 +47,16 @@ class STCA_Engine:
                 fl2_str = str(t2.get('flight_level', ''))
                 if not fl2_str.isdigit() or not (self.fl_min <= int(fl2_str) <= self.fl_max): continue
 
+                # Suprimir conflicto si comparten squawk o Mode S → misma aeronave
+                m3a1 = t1.get('mode3a', '')
+                m3a2 = t2.get('mode3a', '')
+                if m3a1 and m3a2 and m3a1 not in ('----', '0000') and m3a1 == m3a2:
+                    continue
+                ms1 = t1.get('mode_s', '')
+                ms2 = t2.get('mode_s', '')
+                if ms1 and ms2 and ms1 == ms2:
+                    continue
+
                 diff_vertical_ft = abs(int(fl1_str) - int(fl2_str)) * 100
                 if diff_vertical_ft >= self.min_vertical_ft: continue
 

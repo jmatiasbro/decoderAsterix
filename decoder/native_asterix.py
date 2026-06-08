@@ -156,80 +156,59 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
                 offset += 7
             
             # === FRN 11 (fspec[10]): I062/380 Aircraft Derived Data (Compound, 1+) ===
+            # Mapeo corregido según asterix_cat062_1_18.xml (BitsPresence → longitud real)
+            # i=0:ADR 3B  i=1:ID 6B  i=2:MHG 2B  i=3:IAS 2B  i=4:TAS 2B  i=5:SAL 2B
+            # i=6:FSS 2B  i=7:TIS Var  i=8:TID Rep15B  i=9:COM 2B  i=10:SAB 2B
+            # i=11:ACS 7B  i=12:BVR 2B  i=13:GVR 2B  i=14:RAN 2B  i=15:TAR 2B
+            # i=16:TAN 2B  i=17:GSP 2B  i=18:VUN 1B  i=19:MET 8B  i=20:EMC 1B
+            # i=21:POS 6B  i=22:GAL 2B  i=23:PUN 1B  i=24:MB Rep8B  i=25:IAR 2B
+            # i=26:MAC 2B  i=27:BPS 2B
             current_frn = 11
             if len(fspec) > 10 and fspec[10]:
                 if offset >= len(payload): raise IndexError("Buffer too small for I062/380 FSPEC")
                 sub_fspec, offset = read_fspec(payload, offset)
 
-                # Tabla de longitudes de subcampos I062/380 v1.18 (basada en XML)
-                # Soportes: Fixed, Variable (FX loop), Repetitive
+                _380_fixed = {
+                    2: 2, 3: 2, 4: 2, 5: 2, 6: 2,   # MHG IAS TAS SAL FSS
+                    9: 2, 10: 2, 11: 7, 12: 2, 13: 2, # COM SAB ACS BVR GVR
+                    14: 2, 15: 2, 16: 2, 17: 2, 18: 1, # RAN TAR TAN GSP VUN
+                    19: 8, 20: 1, 21: 6, 22: 2, 23: 1, # MET EMC POS GAL PUN
+                    25: 2, 26: 2, 27: 2,                # IAR MAC BPS
+                }
+
                 for i in range(len(sub_fspec)):
                     if not sub_fspec[i]:
                         continue
-                    
-                    if i == 6:  # TIS - Trajectory Intent Status - Variable (FX loop)
-                        # Variable con bit FX en LSB
-                        if offset >= len(payload): raise IndexError("Buffer too small for I062/380 TIS")
-                        while offset < len(payload):
-                            sb = payload[offset]
-                            offset += 1
-                            if (sb & 0x01) == 0: break
-                    elif i == 7:  # TID - Trajectory Intent Data - Repetitive (15B c/u)
-                        if offset + 1 > len(payload): raise IndexError("Buffer too small for I062/380 TID rep")
-                        rep = payload[offset]
-                        offset += 1
-                        if offset + rep * 15 > len(payload): raise IndexError(f"Buffer too small for I062/380 TID ({rep}x15B)")
-                        offset += rep * 15
+                    if i == 0:  # ADR - Target Address (3B)
+                        if offset + 3 > len(payload): raise IndexError("I062/380 ADR")
+                        adr_int = (payload[offset] << 16) | (payload[offset+1] << 8) | payload[offset+2]
+                        record['mode_s'] = f"{adr_int:06X}"
+                        offset += 3
                     elif i == 1:  # ID - Target Identification (6B)
-                        if offset + 6 > len(payload): raise IndexError("Buffer too small for I062/380 Target ID")
+                        if offset + 6 > len(payload): raise IndexError("I062/380 ID")
                         callsign_val = _decode_callsign(payload[offset:offset+6])
                         if callsign_val:
                             record['callsign'] = callsign_val
                             record['extra_data']['callsign_src'] = 'I062/380'
                         offset += 6
-                    elif i == 23:  # MB - Mode S MB Data - Repetitive (BDS, 8B c/u)
-                        if offset + 1 > len(payload): raise IndexError("Buffer too small for I062/380 MB rep")
-                        rep = payload[offset]
-                        offset += 1
-                        if offset + rep * 8 > len(payload): raise IndexError(f"Buffer too small for I062/380 MB ({rep}x8B)")
+                    elif i == 7:  # TIS - Trajectory Intent Status (Variable FX)
+                        while offset < len(payload):
+                            sb = payload[offset]; offset += 1
+                            if (sb & 0x01) == 0: break
+                    elif i == 8:  # TID - Trajectory Intent Data (Repetitive 15B)
+                        if offset + 1 > len(payload): raise IndexError("I062/380 TID rep")
+                        rep = payload[offset]; offset += 1
+                        if offset + rep * 15 > len(payload): raise IndexError(f"I062/380 TID ({rep}x15B)")
+                        offset += rep * 15
+                    elif i == 24:  # MB - Mode S MB Data (Repetitive 8B)
+                        if offset + 1 > len(payload): raise IndexError("I062/380 MB rep")
+                        rep = payload[offset]; offset += 1
+                        if offset + rep * 8 > len(payload): raise IndexError(f"I062/380 MB ({rep}x8B)")
                         offset += rep * 8
                     else:
-                        # Fixed subfields - tabla completa v1.18
-                        fixed_lengths = {
-                            0: 3,   # ADR - Target Address (3B)
-                            1: 6,   # ID - Target Identification (6B)
-                            2: 2,   # MHG - Magnetic Heading (2B)
-                            3: 2,   # IAS/Mach (2B)
-                            4: 2,   # TAS - True Airspeed (2B)
-                            5: 2,   # SAL - Selected Altitude (2B)
-                            6: 0,   # FSS - handled as Variable above
-                            7: 0,   # TID - handled as Repetitive above
-                            8: 2,   # COM - Communications (2B)
-                            9: 2,  # SAB - Status ADS-B (2B)
-                            10: 2,  # ACS - ACAS RA Report (2B)
-                            11: 2,  # BVR - Baro Vertical Rate (2B)
-                            12: 2,  # GVR - Geo Vertical Rate (2B)
-                            13: 2,  # RAN - Roll Angle (2B)
-                            14: 1,  # TAR - Track Angle Rate (1B)
-                            15: 1,  # TAN - Track Angle (1B? No, 2B per XML)
-                            16: 1,  # GSP - Ground Speed (1B? No, 2B per XML)
-                            17: 2,  # VUN - Velocity Uncertainty (2B)
-                            18: 1,  # MET - Met Data (1B? No, 8B per XML)
-                            19: 1,  # EMC - Emitter Cat (1B)
-                            20: 8,  # POS - Position (6B per XML, 8 in old code)
-                            21: 1,  # GAL - Geo Alt (2B per XML, 1 in old code)
-                            22: 1,  # PUN - Pos Uncertainty (1B)
-                            # 23: handled as Repetitive above
-                            24: 2,  # IAR - Indicated Airspeed (2B)
-                            25: 2,  # MAC - Mach Number (2B)
-                            26: 2,  # BPS - Baro Pressure Setting (2B)
-                        }
-                        skip_len = fixed_lengths.get(i)
-                        if skip_len is None or skip_len == 0:
-                            # Unknown subfield - skip 1 byte to avoid infinite loop
-                            skip_len = 1
+                        skip_len = _380_fixed.get(i, 1)
                         if offset + skip_len > len(payload):
-                            raise IndexError(f"Buffer too small for I062/380 subfield {i+1} ({skip_len}B)")
+                            raise IndexError(f"I062/380 subfield {i+1} ({skip_len}B)")
                         offset += skip_len
             
             # === FRN 12 (fspec[11]): I062/040 Track Number (2B) ===
@@ -517,10 +496,9 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
                 offset += sp_len
             
             records.append(record)
-            break
 
         except (struct.error, IndexError) as e:
-            print(f"⚠️ [CAT 62] Offset Drift detectado en FRN {current_frn}. Error: {e}")
+            print(f"⚠️ [CAT 62] Offset Drift FRN {current_frn}: {e}")
             records.append(record)
             break
 

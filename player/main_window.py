@@ -671,6 +671,7 @@ class MainWindow(QMainWindow):
             "direccion_aeronave": True, "numero_respuestas": False, "velocidad": True,
             "hora_utc": False, "numero_pista": True, "identific_aeronave": True,
             "altitud_adsb": True, "cat_emisor_adsb": False, "veloc_vertic_adsb": False,
+            "rho_theta": False,
             "orientacion": "NE", "sel_por_codigo_a": True, "sel_por_posicion": False
         }
         
@@ -723,6 +724,14 @@ class MainWindow(QMainWindow):
         self.radar.plot_filter_fn = self._plot_passes_filters
         self.radar.sensores_visibles = self.sensores_activos.copy()
         self.radar.setStyleSheet("background-color: #0B0E14;")
+        # Inyectar perfil activo al gestor de altimetría (TA + estación)
+        self.radar.altimetry.apply_profile(self.profile_manager.profile)
+        # Pre-poblar RPMs conocidos desde default-site-params (antes de que lleguen mensajes CAT34)
+        for (sac, sic), info in self.sensores.items():
+            rpm = info.get('rpm')
+            if rpm is not None and rpm > 0:
+                self.radar.sensor_rpms[(sac, sic)] = rpm
+                self._sensor_rpms[(sac, sic)] = rpm
         self.setCentralWidget(self.radar)
 
         # 2. Panel Lateral Acoplable (QDockWidget)
@@ -1203,7 +1212,42 @@ class MainWindow(QMainWindow):
             }
         """)
 
+        self.chk_ocultar_parrot = QCheckBox("Ocultar Parrot (Sqwk 0000)")
+        self.chk_ocultar_parrot.setChecked(False)
+        self.chk_ocultar_parrot.setStyleSheet("""
+            QCheckBox {
+                color: #E0E6ED;
+                font-size: 8pt;
+                font-weight: bold;
+            }
+            QCheckBox::indicator {
+                width: 12px;
+                height: 12px;
+                border: 1px solid #FFA500;
+                background-color: #2D313C;
+                border-radius: 2px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #FFA500;
+            }
+        """)
+
+        # Control QNH manual (hPa) — recalcula TL y etiquetas A/F en caliente
+        l_qnh = QHBoxLayout()
+        lbl_qnh = QLabel("QNH:")
+        lbl_qnh.setStyleSheet("color: #E0E6ED; font-size: 8pt;")
+        self.sb_qnh = QSpinBox()
+        self.sb_qnh.setRange(940, 1050)
+        self.sb_qnh.setValue(1013)
+        self.sb_qnh.setSuffix(" hPa")
+        self.sb_qnh.setFixedHeight(22)
+        self.sb_qnh.setStyleSheet("background-color: #2D313C; color: white; border: 1px solid #4B5263; border-radius: 4px;")
+        self.sb_qnh.valueChanged.connect(self._on_qnh_changed)
+        l_qnh.addWidget(lbl_qnh)
+        l_qnh.addWidget(self.sb_qnh)
+
         l_hist.addWidget(self.chk_show_history)
+        l_hist.addLayout(l_qnh)
         l_hist.addLayout(l_modo)
         l_hist.addLayout(l_cant)
         l_hist.addWidget(self.btn_clear_hist)
@@ -1212,6 +1256,7 @@ class MainWindow(QMainWindow):
         l_hist.addWidget(self.chk_modo_integrado)
         l_hist.addWidget(self.chk_modo_crudo)
         l_hist.addWidget(self.chk_show_mtr)
+        l_hist.addWidget(self.chk_ocultar_parrot)
         grupo_hist.setLayout(l_hist)
         v_layout.addWidget(grupo_hist)
 
@@ -1471,7 +1516,8 @@ class MainWindow(QMainWindow):
         self.worker = PlaybackWorker(
             pcap_file=self.pcap_path,
             sensores=self.sensores,
-            cache_dir=self.cache_dir
+            cache_dir=self.cache_dir,
+            profile_config=self.profile_manager.profile
         )
         self.worker.new_plot_batch.connect(self._on_new_plot_batch)
         self.worker.progress_updated.connect(self._on_decoding_progress)
@@ -1488,6 +1534,9 @@ class MainWindow(QMainWindow):
             if not self.playing:
                 # Si el worker ya terminó la fase de scan, lo arrancamos para reproducción
                 if not self.worker.isRunning():
+                    self.worker.engine.tracks.clear()
+                    self.worker.engine.relojes_sensores.clear()
+                    self.worker.engine.is_playing = True
                     self._cambiar_velocidad()
                     self.worker.start() # Arrancará en _playback_loop
                     self.playing = True
@@ -1495,14 +1544,18 @@ class MainWindow(QMainWindow):
                     self.btn_play.setText("❚❚ Pausa")
                 else:
                     # Si ya estaba corriendo en playback_loop pero pausado, reanudar
+                    self.worker.engine.is_playing = True
                     self.worker.set_paused(False)
                     self.playing = True
                     self.radar.play()
                     self.btn_play.setText("❚❚ Pausa")
             else:
                 # Si está reproduciendo, pausar
+                self.worker.engine.is_playing = False
                 self.worker.set_paused(True)
                 self.playing = False
+                if hasattr(self, 'radar') and self.radar is not None:
+                    self.radar.pause()
                 self.btn_play.setText("▶ Reproducir")
 
     def _stop(self):
@@ -1510,6 +1563,9 @@ class MainWindow(QMainWindow):
         if self.worker:
             self.worker.set_paused(True)
             self.worker.seek_to_percent(0)
+        if hasattr(self, 'radar') and self.radar is not None:
+            self.radar.pause()
+            self.radar.reset_sweep_angle()
             
         self.btn_play.setEnabled(True)
         self.btn_play.setText("▶ Reproducir")
@@ -1529,9 +1585,13 @@ class MainWindow(QMainWindow):
             self.worker.seek_to_percent(pct)
 
     def _cambiar_velocidad(self):
+        vel = float(self.combo_vel.currentText().replace('x', ''))
         if self.worker:
-            vel = float(self.combo_vel.currentText().replace('x', ''))
             self.worker.set_speed(vel)
+        if hasattr(self, 'radar') and self.radar is not None:
+            self.radar.playback_speed = vel
+            from player.radar_widget import SimulationTime
+            SimulationTime.instance().set_speed(vel)
 
     def _limpiar_worker(self):
         if self.worker:
@@ -1563,6 +1623,7 @@ class MainWindow(QMainWindow):
             # Sincronizar el estado inicial de la simulación al primer plot cargado (evita desincronización de tiempo)
             if self.worker:
                 self.worker.seek_to_percent(0)
+                self._cambiar_velocidad()
             
             # Habilitar opciones de exportación y análisis en el menú principal
             self.act_pass.setEnabled(True)
@@ -1875,6 +1936,12 @@ class MainWindow(QMainWindow):
     def _on_new_plot_batch(self, batch: List[Dict]):
         # Registrar las categorías vistas para cada sensor en tiempo real
         for plot in batch:
+            # Sincronizar el reloj de simulación con cada plot procesado en el lote (usar TOD del mensaje ASTERIX)
+            plot_time = plot.get('time')
+            if plot_time is not None:
+                from player.radar_widget import SimulationTime
+                SimulationTime.instance().set_time(plot_time)
+                
             sid = plot.get('sac_sic')
             cat = plot.get('category')
             if sid and cat:
@@ -1925,29 +1992,49 @@ class MainWindow(QMainWindow):
                 else:
                     mode3a_str = str(mode3a).strip()
             
-            # DEDUPLICACIÓN DE CORRELACIÓN MULTI-SENSOR:
-            # Si hay una pista de sistema (CAT 62) o ADS-B (CAT 21) activa para este mismo 
-            # código Squawk o dirección Mode S (ICAO), ocultamos el plot monoradar (CAT 48/01)
-            # para evitar la duplicación de blancos en pantalla (priorizando CAT 62 y CAT 21).
+            # Filtro parrot: squawk 0000 = transpondedor en standby
+            if mode3a_str == "0000" and getattr(self, 'chk_ocultar_parrot', None) and self.chk_ocultar_parrot.isChecked():
+                continue
+
+            # DEDUPLICACIÓN MULTI-SENSOR (prioridad: Mode-S → callsign → squawk → proximidad < 1 NM)
             mode_s_addr = (plot.get('mode_s') or "").strip().upper()
             if cat in (1, 48) and getattr(self.radar, 'modo_integrado', True):
                 has_higher_priority_track = False
                 if hasattr(self, 'radar') and self.radar is not None:
                     all_tracks = list(self.radar.tracks.values()) + list(self.radar.pending_tracks.values())
+                    plot_cs = (plot.get('callsign') or "").strip().upper()
+                    px = plot.get('x')
+                    py = plot.get('y')
                     for track in all_tracks:
-                        if track.category in (21, 62) and track.is_alive():
-                            # Comprobar por dirección Mode S (ICAO)
-                            t_mode_s = (track.mode_s or "").strip().upper()
-                            if mode_s_addr and t_mode_s and t_mode_s == mode_s_addr:
+                        if not (track.category in (21, 62) and track.is_alive()):
+                            continue
+                        # 1. Aircraft address (Mode-S / ICAO)
+                        if mode_s_addr:
+                            t_ms = (track.mode_s or "").strip().upper()
+                            if t_ms and t_ms == mode_s_addr:
                                 has_higher_priority_track = True
                                 break
-                            # Comprobar por Squawk
+                        # 2. Callsign
+                        if plot_cs:
+                            t_cs = (track.callsign or "").strip().upper()
+                            if t_cs and t_cs == plot_cs:
+                                has_higher_priority_track = True
+                                break
+                        # 3. Squawk (Mode 3/A)
+                        if mode3a_str and mode3a_str not in ("----", "0000"):
                             t_sq = track.mode3a
-                            if t_sq and mode3a_str and mode3a_str != "----":
+                            if t_sq is not None:
                                 t_sq_str = f"{t_sq:04o}" if isinstance(t_sq, int) else str(t_sq).strip()
                                 if t_sq_str == mode3a_str:
                                     has_higher_priority_track = True
                                     break
+                        # 4. Proximidad < 1 NM
+                        if px is not None and py is not None:
+                            dx = track.x - px
+                            dy = track.y - py
+                            if (dx*dx + dy*dy) < (1852.0 * 1852.0):
+                                has_higher_priority_track = True
+                                break
                 if has_higher_priority_track:
                     continue
 
@@ -2124,7 +2211,8 @@ class MainWindow(QMainWindow):
             return {
                 "codigo_a", "numero_mensaje", "codigo_c", "direccion_aeronave",
                 "numero_respuestas", "velocidad", "hora_utc", "numero_pista",
-                "identific_aeronave", "altitud_adsb", "cat_emisor_adsb", "veloc_vertic_adsb"
+                "identific_aeronave", "altitud_adsb", "cat_emisor_adsb", "veloc_vertic_adsb",
+                "rho_theta"
             }
             
         fields = set()
@@ -2172,6 +2260,10 @@ class MainWindow(QMainWindow):
             fields.add("cat_emisor_adsb")
             fields.add("veloc_vertic_adsb")
             
+        # 11. RHO / THETA (Distancia/Acimut)
+        if any(getattr(p, 'raw_range', None) is not None or getattr(p, 'raw_azimuth', None) is not None for p in plots):
+            fields.add("rho_theta")
+            
         return fields
 
     def _abrir_filtro_etiquetas(self):
@@ -2212,8 +2304,11 @@ class MainWindow(QMainWindow):
             # 4. Lógica de Propiedad (Jurisdicción)
             self.techo_incumbencia = perfil_data.get("nivel_incumbencia", 95)
             self.radar.techo_incumbencia = self.techo_incumbencia
+            self.radar.radio_incumbencia = float(perfil_data.get("radio_incumbencia", 50))
             self.radar.aeropuerto_lat = lat
             self.radar.aeropuerto_lon = lon
+            # Reconfigurar altimetría con la TA del nuevo perfil
+            self.radar.altimetry.apply_profile(perfil_data)
             
             # 5. Seguridad Operativa
             self.radar.stca_habilitado = bool(perfil_data.get("stca_habilitado", True))
@@ -2239,6 +2334,11 @@ class MainWindow(QMainWindow):
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Error de Carga", f"No se pudo cargar el perfil '{profile_name}': {e}")
 
+    def _on_qnh_changed(self, value: int):
+        """Refresca el QNH del gestor de altimetría y repinta etiquetas (TL / A-F)."""
+        self.radar.altimetry.qnh_local = float(value)
+        self.radar.update()
+
     def _aplicar_perfil(self, perfil_data: dict):
         """Aplica el perfil operativo guardado: actualiza jurisdicción, recentra mapa."""
         # 1. Persistir al disco
@@ -2246,9 +2346,12 @@ class MainWindow(QMainWindow):
 
         # 2. Actualizar techo de incumbencia operativa
         self.techo_incumbencia = perfil_data.get("nivel_incumbencia", 95)
+        # 2.b Reconfigurar altimetría con la TA del perfil
+        self.radar.altimetry.apply_profile(perfil_data)
 
-        # 3. Exportar el techo al RadarWidget para que la máquina de estados lo use
+        # 3. Exportar el techo y radio al RadarWidget (volumen de incumbencia)
         self.radar.techo_incumbencia = self.techo_incumbencia
+        self.radar.radio_incumbencia = float(perfil_data.get("radio_incumbencia", 50))
         self.radar.aeropuerto_lat = perfil_data.get("center_lat", -31.31548)
         self.radar.aeropuerto_lon = perfil_data.get("center_lon", -64.21545)
         
@@ -2374,6 +2477,8 @@ class MainWindow(QMainWindow):
     def _on_rotation_speed_detected(self, sac: int, sic: int, rpm: float):
         sensor_key = (sac, sic)
         self._sensor_rpms[sensor_key] = rpm
+        if hasattr(self.radar, 'sensor_rpms'):
+            self.radar.sensor_rpms[sensor_key] = rpm
         if self.radar.center_key == sensor_key:
             self.radar.set_sweep_speed(rpm)
         print(f"[REPROYECTOR] Velocidad de rotación detectada para {sac}/{sic} -> {rpm:.2f} RPM")
@@ -2606,7 +2711,8 @@ class MainWindow(QMainWindow):
                 udp_port=puerto_escucha,
                 pcap_record_file=pcap_record_file,
                 sensores=self.sensores,
-                cache_dir=self.cache_dir
+                cache_dir=self.cache_dir,
+                profile_config=self.profile_manager.profile
             )
 
             # Conectar señales

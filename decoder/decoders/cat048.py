@@ -53,7 +53,6 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
         if not fspec or not any(fspec):
             break  # No hay FSPEC, fin de los registros
         offset = fspec_offset
-        offset = fspec_offset # FASE 1: Se actualiza el offset después de leer el FSPEC.
 
         for frn_index, is_present in enumerate(fspec):
             frn = frn_index + 1
@@ -102,6 +101,19 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                     plot['callsign'] = _decode_callsign(payload[offset:offset + 6])
                 elif frn == 11: # I048/161 Track Number
                     plot['track_number'] = struct.unpack('>H', payload[offset:offset+2])[0]
+                elif frn == 12: # I048/042 Calculated Position in Cartesian Coordinates
+                    x_raw, y_raw = struct.unpack('>hh', payload[offset:offset+4])
+                    plot['x'] = x_raw * 1852.0 / 128.0
+                    plot['y'] = y_raw * 1852.0 / 128.0
+                elif frn == 13: # I048/200 Calculated Track Velocity in Polar Coordinates
+                    cgs_raw, chdg_raw = struct.unpack('>HH', payload[offset:offset+4])
+                    if 'extra_data' not in plot:
+                        plot['extra_data'] = {}
+                    # cgs_raw is scale 0.2197265625 knots. ground_speed_nms is in NM/s. 
+                    # 1 knot = 1/3600 NM/s. So ground_speed_nms = (cgs_raw * 0.2197265625) / 3600.0
+                    plot['extra_data']['ground_speed_nms'] = (cgs_raw * 0.2197265625) / 3600.0
+                    plot['extra_data']['track_angle'] = chdg_raw * 360.0 / 65536.0
+
 
                 # Avance del offset
                 length = uap_lengths.get(frn)

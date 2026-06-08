@@ -12,6 +12,8 @@ class ProfileManager:
         "aeropuerto_trabajo": "SACO",
         "coordenadas_centro": {"lat": -31.31, "lon": -64.21},
         "nivel_incumbencia": 95,
+        "radio_incumbencia": 50,
+        "transition_altitude": 10000,
         "frecuencias_sector": ["118.300", "121.750", "119.850"],
         "mapas_visibles": ["ar_apt.geojson"],
         "stca_habilitado": False
@@ -47,6 +49,16 @@ class ProfileManager:
         if nivel_incumbencia is None:
             nivel_incumbencia = data.get("techo_incumbencia", 95)
         nivel_incumbencia = int(nivel_incumbencia)
+
+        radio_incumbencia = data.get("radio_incumbencia")
+        if radio_incumbencia is None:
+            radio_incumbencia = 50
+        radio_incumbencia = int(radio_incumbencia)
+
+        transition_altitude = data.get("transition_altitude")
+        if transition_altitude is None:
+            transition_altitude = 10000
+        transition_altitude = int(transition_altitude)
         
         frecuencias = data.get("frecuencias_sector")
         if not isinstance(frecuencias, list) or len(frecuencias) < 3:
@@ -71,6 +83,8 @@ class ProfileManager:
             "aeropuerto_trabajo": aeropuerto_trabajo,
             "coordenadas_centro": coordenadas_centro,
             "nivel_incumbencia": nivel_incumbencia,
+            "radio_incumbencia": radio_incumbencia,
+            "transition_altitude": transition_altitude,
             "frecuencias_sector": frecuencias_sector,
             "mapas_visibles": mapas_visibles,
             "stca_habilitado": stca_habilitado

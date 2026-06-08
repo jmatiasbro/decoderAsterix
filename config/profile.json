@@ -1,20 +1,18 @@
 {
-    "nombre_usuario": "san lius",
-    "aeropuerto_trabajo": "SAOR",
+    "nombre_usuario": "juan 2",
+    "aeropuerto_trabajo": "SACO",
     "coordenadas_centro": {
-        "lat": -33.725,
-        "lon": -65.37805555555555
+        "lat": -31.31,
+        "lon": -64.208
     },
-    "nivel_incumbencia": 195,
+    "nivel_incumbencia": 95,
+    "radio_incumbencia": 50,
+    "transition_altitude": 10000,
     "frecuencias_sector": [
-        "118.500",
-        "121.900",
-        "119.300"
+        "118.300",
+        "121.750",
+        ""
     ],
-    "mapas_visibles": [
-        "profiles/mapas_Cordoba/MI_AREA_TACTICA.geojson",
-        "profiles/mapas_mendoza/MI_AREA_TACTICA.geojson",
-        "profiles/mapas_san lius/MI_AREA_TACTICA.geojson"
-    ],
-    "stca_habilitado": true
+    "mapas_visibles": [],
+    "stca_habilitado": false
 }

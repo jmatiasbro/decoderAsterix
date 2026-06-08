@@ -23,6 +23,29 @@ CATEGORIAS_SOPORTADAS = {1, 2, 21, 34, 48, 62}
 QUANTIZE_LAT = 0.01
 QUANTIZE_LON = 0.01
 
+
+class SystemTrack:
+    """Pista ASTERIX con ciclo de vida binario (ACTIVE / borrada)."""
+    def __init__(self, category=None):
+        self.category = category
+        self.sac_sic = ""
+        self.reporting_sensors = set()
+        self.last_asterix_time = 0.0
+        self.is_dropped_by_system = False
+        self.status = "ACTIVE"
+
+    def refrescar_estado(self):
+        self.status = "ACTIVE"
+
+    def actualizar_tiempo(self, asterix_timestamp: float):
+        if self.last_asterix_time == 0.0:
+            self.last_asterix_time = asterix_timestamp
+            return
+        if asterix_timestamp < self.last_asterix_time - 43200:
+            asterix_timestamp += 86400
+        self.last_asterix_time = asterix_timestamp
+
+
 @dataclass
 class AsterixPlot:
     """Estructura de un plot ASTERIX decodificado."""
@@ -46,6 +69,7 @@ class AsterixPlot:
     raw_azimuth: Optional[float] = None
     pcap_time: Optional[float] = None  # PCAP packet arrival timestamp (epoch seconds)
     garbled: bool = False
+    vertical_rate_ftmin: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Retorna el diccionario para la señal new_plot_batch."""
@@ -70,6 +94,7 @@ class AsterixPlot:
             'raw_azimuth': self.raw_azimuth,
             'pcap_time': self.pcap_time,
             'garbled': self.garbled,
+            'vertical_rate_ftmin': self.vertical_rate_ftmin,
         }
 
 class IndraRDCUReader:
@@ -138,9 +163,12 @@ class IndraRDCUReader:
 class DataEngine:
     """Motor de decodificación ASTERIX — SIN dependencias Qt."""
     
-    def __init__(self, sensores: Dict = None, cache_dir: str = None):
+    def __init__(self, sensores: Dict = None, cache_dir: str = None, profile_config: Dict = None):
         self.router = AsterixRouter()
         self.sensores = sensores or {}
+        # Gestor de altimetría impulsado por perfil (TA dinámica, tabla ENR 1.7)
+        from decoder.altimetry import AltimetryManager
+        self.altimetry_manager = AltimetryManager(profile_config=profile_config)
         self.cache_dir = cache_dir or tempfile.gettempdir()
         self.plots: List[AsterixPlot] = []
         self.duration: float = 0.0
@@ -157,6 +185,31 @@ class DataEngine:
         from storage.duckdb_repo import DuckDBRepository
         self.repo_db = DuckDBRepository()
 
+        # Arquitectura dual de ingestión
+        self.ingestion_mode = "LIVE"
+        self.ultimo_tiempo_evaluacion = 0.0
+        self.periodo_antena = 5.0
+
+        # Reloj maestro ASTERIX y gestión de pistas (determinista, sin time.time())
+        self.global_asterix_time = 0.0
+        self.current_simulation_time = 0.0
+        self.tracks: Dict[str, SystemTrack] = {}
+        self.relojes_sensores: Dict[str, float] = {}  # último ToD visto por SAC/SIC
+        self.is_playback_mode = False
+        self.is_playing = False
+        self.on_tracks_changed: Optional[Callable[[], None]] = None
+
+        # QTimer para la recolección de basura del ciclo de vida (solo en LIVE)
+        self.lifecycle_timer = None
+        try:
+            from PyQt6.QtCore import QTimer
+            self.lifecycle_timer = QTimer()
+            self.lifecycle_timer.timeout.connect(self.evaluar_vigencia_pistas)
+            if self.ingestion_mode == "LIVE":
+                self.lifecycle_timer.start(2000)
+        except ImportError:
+            pass
+
     def stop(self):
         self._running = False
 
@@ -167,6 +220,154 @@ class DataEngine:
                 self.repo_db.close()
             except Exception:
                 pass
+
+    def set_playback_mode(self, enabled: bool):
+        """Activa/desactiva el modo de reproducción estática (DRF)."""
+        self.is_playback_mode = enabled
+
+    def set_ingestion_mode(self, mode: str):
+        """Activa/desactiva el origen de datos (LIVE o PLAYBACK) y gestiona el QTimer."""
+        self.ingestion_mode = mode
+        if self.ingestion_mode == "LIVE":
+            if self.lifecycle_timer is not None and not self.lifecycle_timer.isActive():
+                self.lifecycle_timer.start(2000)
+        elif self.ingestion_mode == "PLAYBACK":
+            if self.lifecycle_timer is not None and self.lifecycle_timer.isActive():
+                self.lifecycle_timer.stop()
+
+    def evaluar_vigencia_pistas(self):
+        if not getattr(self, 'is_playing', False):
+            return
+        if not self.tracks:
+            return
+
+        TIMEOUT_MAXIMO = 25.0
+        cambios = False
+
+        for track_id in list(self.tracks.keys()):
+            track = self.tracks[track_id]
+
+            # Cat 62 / .Z: solo mueren por orden explícita del servidor
+            if track.category in (62, 'Z'):
+                if track.is_dropped_by_system:
+                    del self.tracks[track_id]
+                    cambios = True
+                elif track.status != "ACTIVE":
+                    track.status = "ACTIVE"
+                    cambios = True
+                continue
+
+            # Cat 01, 21, 48: reloj aislado por SAC/SIC — lógica binaria
+            reloj_sensor = self.relojes_sensores.get(track.sac_sic, track.last_asterix_time)
+            delta_t = reloj_sensor - track.last_asterix_time
+            if delta_t < -43200:
+                delta_t += 86400
+
+            if delta_t >= TIMEOUT_MAXIMO:
+                print(f"💀 ASESINATO: {track_id} | Reloj Sensor: {reloj_sensor:.1f} | Tiempo Plot: {track.last_asterix_time:.1f} | Delta: {delta_t:.1f} seg")
+                del self.tracks[track_id]
+                cambios = True
+            elif track.status != "ACTIVE":
+                track.status = "ACTIVE"
+                cambios = True
+
+        if cambios:
+            if hasattr(self, 'radar_widget') and self.radar_widget is not None:
+                self.radar_widget.update()
+            if self.on_tracks_changed is not None:
+                self.on_tracks_changed()
+
+    def procesar_paquete(self, payload: Any):
+        """
+        Método de ingestión unificado. Soporta:
+        - payload de tipo bytes (paquete ASTERIX crudo de red/PCAP)
+        - payload de tipo dict (registro ya decodificado)
+        - payload de tipo tuple/list (fila leída de DuckDB)
+        """
+        if isinstance(payload, bytes):
+            records = self.router.procesar_paquete_udp(payload)
+            if records:
+                proy_cache = {}
+                sensores_vistos = set()
+                plots_file = []
+                for rec in records:
+                    self._procesar_registro(rec, proy_cache, sensores_vistos, plots_file)
+        elif isinstance(payload, dict):
+            if 'sac_sic' in payload and ('sac' not in payload or 'sic' not in payload):
+                try:
+                    parts = payload['sac_sic'].split('/')
+                    payload['sac'] = int(parts[0])
+                    payload['sic'] = int(parts[1])
+                except Exception:
+                    pass
+            proy_cache = {}
+            sensores_vistos = set()
+            plots_file = []
+            self._procesar_registro(payload, proy_cache, sensores_vistos, plots_file)
+        elif isinstance(payload, (tuple, list)):
+            try:
+                # Fila: (timestamp, category, sac_sic, track_id, lat, lon, flight_level, raw_azimuth, raw_range)
+                timestamp, category, sac_sic, track_id, lat, lon, flight_level, raw_azimuth, raw_range = payload
+                
+                fl_val = None
+                if flight_level and flight_level != '---':
+                    try:
+                        fl_val = float(flight_level.replace('FL', ''))
+                    except ValueError:
+                        fl_val = flight_level
+                
+                rec = {
+                    'time': timestamp,
+                    'category': category,
+                    'sac_sic': sac_sic,
+                    'lat': lat,
+                    'lon': lon,
+                    'flight_level': fl_val,
+                    'raw_azimuth': raw_azimuth,
+                    'raw_range': raw_range,
+                }
+                
+                if track_id:
+                    if len(track_id) == 4 and track_id.isdigit():
+                        rec['mode3a'] = track_id
+                    elif track_id.startswith('TRK_'):
+                        try:
+                            rec['track_number'] = int(track_id.split('_')[1])
+                        except Exception:
+                            pass
+                    else:
+                        rec['mode_s'] = track_id
+                
+                try:
+                    parts = sac_sic.split('/')
+                    rec['sac'] = int(parts[0])
+                    rec['sic'] = int(parts[1])
+                except Exception:
+                    pass
+                
+                proy_cache = {}
+                sensores_vistos = set()
+                plots_file = []
+                self._procesar_registro(rec, proy_cache, sensores_vistos, plots_file)
+            except Exception as e:
+                print(f"[DataEngine] Error procesando fila DuckDB: {e}")
+
+    def leer_desde_duckdb(self):
+        """
+        Lee los plots guardados en DuckDB de manera cronológica
+        y los procesa emulando una ingesta de PLAYBACK con evaluación manual.
+        """
+        self.set_ingestion_mode("PLAYBACK")
+        self.ultimo_tiempo_evaluacion = 0.0
+        
+        filas = self.repo_db.query(
+            "SELECT timestamp, category, sac_sic, track_id, lat, lon, flight_level, raw_azimuth, raw_range "
+            "FROM asterix_plots ORDER BY timestamp ASC"
+        )
+        print(f"🔥 DUCKDB RESPONDE: Se leyeron {len(filas)} paquetes.")
+
+        for fila in filas:
+            self.procesar_paquete(fila)
 
     def _get_cache_filepath(self, pcap_file: str) -> str:
         pcap_abs_path = os.path.abspath(pcap_file)
@@ -189,7 +390,7 @@ class DataEngine:
             with open(cache_path, 'rb') as f:
                 cache_data = pickle.load(f)
             
-            CACHE_VERSION = 17
+            CACHE_VERSION = 18
             metadata = cache_data.get('metadata', {})
             if (metadata.get('pcap_size') != pcap_size or
                 metadata.get('pcap_mtime') != pcap_mtime or
@@ -216,7 +417,7 @@ class DataEngine:
                     'pcap_size': pcap_size,
                     'pcap_mtime': pcap_mtime,
                     'cache_time': time.time(),
-                    'cache_version': 17
+                    'cache_version': 18
                 },
                 'plots': plots
             }
@@ -253,6 +454,29 @@ class DataEngine:
                 pass
 
             plots_file.append(plot)
+
+            # Actualizar reloj maestro ASTERIX con el ToD del paquete
+            if plot.time > 0.0:
+                self.global_asterix_time = plot.time
+                reloj_actual = self.relojes_sensores.get(plot.sac_sic, 0.0)
+                delta_reloj = plot.time - reloj_actual
+                if delta_reloj < -43200:
+                    delta_reloj += 86400
+                if delta_reloj >= 0 or reloj_actual == 0.0:
+                    self.relojes_sensores[plot.sac_sic] = plot.time
+            self.current_simulation_time = plot.time
+
+            plot_id = plot.id
+            if plot_id:
+                track = self.tracks.get(plot_id)
+                if not track:
+                    track = SystemTrack(category=plot.category)
+                    track.sac_sic = plot.sac_sic
+                    self.tracks[plot_id] = track
+                else:
+                    track.refrescar_estado()
+                track.reporting_sensors.add(plot.sac_sic)
+                track.actualizar_tiempo(plot.time)
         except Exception:
             pass
 
@@ -395,6 +619,7 @@ class DataEngine:
         Escanea y decodifica uno o múltiples archivos PCAP, PCAPNG o ASTERIX Binarios Crudos.
         Retorna (plots, duración total, sensores_detectados).
         """
+        self.set_playback_mode(True)
         if isinstance(pcap_files, str):
             pcap_files = [pcap_files]
             
@@ -417,6 +642,21 @@ class DataEngine:
                         parts = plot.sac_sic.split('/')
                         sk = (int(parts[0]), int(parts[1]))
                         sensores_vistos.add(sk)
+                    except Exception:
+                        pass
+                    # Populate tracks for cached plots to ensure state parity
+                    try:
+                        if plot.time > 0.0:
+                            self.global_asterix_time = plot.time
+                        self.current_simulation_time = plot.time
+                        plot_id = plot.id
+                        if plot_id:
+                            track = self.tracks.get(plot_id)
+                            if not track:
+                                track = SystemTrack(category=plot.category)
+                                self.tracks[plot_id] = track
+                            track.reporting_sensors.add(plot.sac_sic)
+                            track.actualizar_tiempo(plot.time)
                     except Exception:
                         pass
                 continue
@@ -562,6 +802,9 @@ class DataEngine:
         # Ordenar todos los plots de forma unificada y cronológica
         all_plots.sort(key=lambda p: p.time)
 
+        # Deduplicar: mismo sensor + mismo rho/theta → misma detección física → fusionar
+        all_plots = self._dedup_by_polar(all_plots)
+
         # Wraparound global
         if len(all_plots) > 1 and all_plots[-1].time < all_plots[0].time:
             max_gap = 0
@@ -581,6 +824,59 @@ class DataEngine:
 
         self.plots = all_plots
         return all_plots, self.duration, sensores_vistos
+
+    @staticmethod
+    def _dedup_by_polar(plots: List['AsterixPlot']) -> List['AsterixPlot']:
+        """
+        Fusiona registros con mismo sensor + posición polar cuantizada dentro de una
+        ventana de 3 segundos (mismo barrido de radar). Evita que un plot SSR y su
+        system track correspondiente generen dos blancos separados en pantalla.
+        """
+        TIME_WIN = 3.0   # segundos — menos que el período mínimo de rotación (~4 s)
+
+        seen: Dict[tuple, 'AsterixPlot'] = {}
+        result: List['AsterixPlot'] = []
+
+        for p in plots:
+            if p.raw_range is None or p.raw_azimuth is None:
+                result.append(p)
+                continue
+
+            qrho   = round(p.raw_range * 4)        # unidades de 0.25 NM
+            qtheta = round(p.raw_azimuth) % 360    # unidades de 1°
+            key = (p.sac_sic, qrho, qtheta)
+
+            prev = seen.get(key)
+            if prev is not None and abs(p.time - prev.time) < TIME_WIN:
+                # Mismo barrido → fusionar campos faltantes en prev (ya está en result)
+                if prev.mode_s is None and p.mode_s:
+                    prev.mode_s = p.mode_s
+                if prev.mode3a in ("----", "") and p.mode3a not in ("----", ""):
+                    prev.mode3a = p.mode3a
+                if prev.flight_level is None and p.flight_level is not None:
+                    prev.flight_level = p.flight_level
+                if prev.altitude_ft is None and p.altitude_ft is not None:
+                    prev.altitude_ft = p.altitude_ft
+                if not prev.callsign and p.callsign:
+                    prev.callsign = p.callsign
+                if prev.track_number is None and p.track_number is not None:
+                    prev.track_number = p.track_number
+                if not prev.is_track and p.is_track:
+                    prev.is_track = p.is_track
+                if not prev.bds_data and p.bds_data:
+                    prev.bds_data = p.bds_data
+                if prev.track_angle is None and p.track_angle is not None:
+                    prev.track_angle = p.track_angle
+                if prev.ground_speed is None and p.ground_speed is not None:
+                    prev.ground_speed = p.ground_speed
+                if prev.garbled and not p.garbled:
+                    prev.garbled = False
+                # No agregar p al resultado — ya está fusionado en prev
+            else:
+                seen[key] = p
+                result.append(p)
+
+        return result
 
     def _get_oar_sensor(self, sac, sic, proy_cache):
         if sac is None or sic is None:
@@ -619,6 +915,20 @@ class DataEngine:
             if tod is None or tod == 0.0:
                 pcap_time = rec.get('pcap_time')
                 tod = (pcap_time % 86400.0) if pcap_time is not None else 0.0
+
+            # I001/141 es ToD truncado (mod 512 s). Expandir a rango 24 h usando pcap_time
+            # para que sea compatible con el ToD completo de CAT48/21/62.
+            if cat == 1 and tod is not None and 0.0 < tod <= 512.0:
+                pcap_time_cat1 = rec.get('pcap_time')
+                if pcap_time_cat1 is not None:
+                    pcap_tod = pcap_time_cat1 % 86400.0
+                    base = pcap_tod - (pcap_tod % 512.0)
+                    expanded = base + tod
+                    if expanded - pcap_tod > 256.0:
+                        expanded -= 512.0
+                    elif pcap_tod - expanded > 256.0:
+                        expanded += 512.0
+                    tod = expanded
 
             if rec.get('valid_position') is False and cat != 62:
                 return None
@@ -660,15 +970,28 @@ class DataEngine:
 
             callsign = rec.get('callsign', "")
             altitude_ft = rec.get('altitude')
-            
+
             flight_level = rec.get('flight_level')
             if flight_level is None and altitude_ft is not None:
                 flight_level = altitude_ft / 100.0
             mode_s = rec.get('mode_s')
+
+            # CAT48: descartar detecciones sin ningún identificador.
+            # En radar secundario (SSR-only) no hay retornos PSR, así que un
+            # registro sin squawk, sin Mode-S, sin callsign y sin track_number
+            # es ruido o garbling — no tiene utilidad y genera pistas fantasma.
+            if cat == 48:
+                has_id = (squawk != "----" or mode_s is not None or
+                          (callsign and callsign.strip()) or track_number is not None)
+                if not has_id:
+                    return None
+                if rec.get('detection_type') == 1:   # PSR-only en radar secundario
+                    return None
             bds_data = rec.get('bds_data', {})
             track_angle = None
             ground_speed = None
 
+            vertical_rate_ftmin = None
             if cat in (21, 62) and rec.get('latitude') is not None and rec.get('longitude') is not None:
                 lat = rec.get('latitude')
                 lon = rec.get('longitude')
@@ -679,6 +1002,8 @@ class DataEngine:
                     if gs_kts is not None: ground_speed = gs_kts
                     gs_nms = extra.get('ground_speed_nms')
                     if gs_nms is not None: ground_speed = gs_nms * 3600.0
+                    vr = extra.get('vertical_rate_ftmin')
+                    if vr is not None: vertical_rate_ftmin = vr
 
             elif cat in (48, 1, 34, 2):
                 if sensor_lat is not None and sensor_lon is not None:
@@ -729,9 +1054,17 @@ class DataEngine:
                 elif callsign and callsign.strip(): plot_id = f"{sac}_{sic}_{callsign.strip()}"
                 elif squawk != "----": plot_id = f"{sac}_{sic}_{squawk}"
                 else:
-                    qlat = round(lat / QUANTIZE_LAT) * QUANTIZE_LAT
-                    qlon = round(lon / QUANTIZE_LON) * QUANTIZE_LON
-                    plot_id = f"CAT21_{sac}_{sic}_{qlat:.2f}_{qlon:.2f}"
+                    # PSR-only: usar coordenadas polares cuantizadas (más estables que WGS84)
+                    rho_raw = rec.get('raw_range')
+                    theta_raw = rec.get('raw_azimuth')
+                    if rho_raw is not None and theta_raw is not None:
+                        qrho = round(float(rho_raw) * 4) / 4      # cuantizar a 0.25 NM
+                        qtheta = int(round(float(theta_raw))) % 360  # cuantizar a 1°
+                        plot_id = f"PSR_{sac}_{sic}_{qrho:.2f}_{qtheta:03d}"
+                    else:
+                        qlat = round(lat / QUANTIZE_LAT) * QUANTIZE_LAT
+                        qlon = round(lon / QUANTIZE_LON) * QUANTIZE_LON
+                        plot_id = f"PSR_{sac}_{sic}_{qlat:.2f}_{qlon:.2f}"
 
             return AsterixPlot(
                 id=plot_id, sac_sic=f"{sac}/{sic}", category=cat,
@@ -743,7 +1076,8 @@ class DataEngine:
                 ground_speed=ground_speed, track_number=track_number,
                 raw_range=rec.get('raw_range'), raw_azimuth=rec.get('raw_azimuth'),
                 pcap_time=rec.get('pcap_time'),
-                garbled=rec.get('garbled', False)
+                garbled=rec.get('garbled', False),
+                vertical_rate_ftmin=vertical_rate_ftmin,
             )
         except Exception as e:
             return None
