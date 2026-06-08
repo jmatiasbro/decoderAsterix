@@ -1,0 +1,19 @@
+{
+    "nombre_usuario": "juan",
+    "aeropuerto_trabajo": "SABE",
+    "coordenadas_centro": {
+        "lat": -34.559,
+        "lon": -58.416
+    },
+    "nivel_incumbencia": 95,
+    "transition_altitude": 10000,
+    "frecuencias_sector": [
+        "118.850",
+        "121.900",
+        "120.600"
+    ],
+    "mapas_visibles": [
+        "cartografia_base/ar_apt.geojson"
+    ],
+    "stca_habilitado": false
+}

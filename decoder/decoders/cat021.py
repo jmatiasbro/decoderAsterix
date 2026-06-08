@@ -90,6 +90,14 @@ def decode_cat021_v026(payload: bytes, offset: int, block_length: int, category:
                         fl_val = fl_raw * 0.25
                         if fl_val >= 0.0:
                             plot['flight_level'] = fl_val
+                elif frn == 16: # I021/160 Ground Vector
+                    val = struct.unpack('>I', payload[offset:offset+4])[0]
+                    gs_raw = (val >> 16) & 0x7FFF
+                    ta_raw = val & 0xFFFF
+                    if 'extra_data' not in plot:
+                        plot['extra_data'] = {}
+                    plot['extra_data']['ground_speed_nms'] = gs_raw * 0.00006103515625
+                    plot['extra_data']['track_angle'] = ta_raw * 360.0 / 65536.0
                 elif frn == 18: # I021/170 Target Identification
                     plot['callsign'] = _decode_callsign(payload[offset:offset+6])
                 elif frn == 27: # I021/070 Mode-3/A Code
@@ -221,6 +229,14 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                         fl_val = fl_raw * 0.25
                         if fl_val >= 0.0:
                             plot['flight_level'] = fl_val
+                elif frn == 26: # I021/160 Ground Vector
+                    val = struct.unpack('>I', payload[offset:offset+4])[0]
+                    gs_raw = (val >> 16) & 0x7FFF
+                    ta_raw = val & 0xFFFF
+                    if 'extra_data' not in plot:
+                        plot['extra_data'] = {}
+                    plot['extra_data']['ground_speed_nms'] = gs_raw * 0.00006103515625
+                    plot['extra_data']['track_angle'] = ta_raw * 360.0 / 65536.0
                 elif frn == 29: # I021/170 Target Identification
                     plot['callsign'] = _decode_callsign(payload[offset:offset+6])
 

@@ -33,7 +33,8 @@ class PlaybackWorker(QThread):
         sensores: Dict = None,
         playback_speed: float = 1.0,
         batch_size: int = 50,
-        cache_dir: str = None
+        cache_dir: str = None,
+        profile_config: Dict = None
     ):
         super().__init__()
         
@@ -43,9 +44,9 @@ class PlaybackWorker(QThread):
         self.udp_port = udp_port
         self.pcap_record_file = pcap_record_file
         self.sensores = sensores or {}
-        
+
         # Motor de decodificación sin Qt
-        self.engine = DataEngine(sensores=self.sensores, cache_dir=cache_dir)
+        self.engine = DataEngine(sensores=self.sensores, cache_dir=cache_dir, profile_config=profile_config)
         
         # Conectar callbacks del engine a las señales Qt
         self.engine.on_progress = self.progress_updated.emit
@@ -392,6 +393,9 @@ class PlaybackWorker(QThread):
             expected_wall_delta = sim_delta / max(0.01, speed)
 
             if expected_wall_delta > wall_delta:
+                # Emitir tiempo interpolado para que el reloj avance suavemente durante el gap
+                interp_time = last_sim_time + wall_delta * speed
+                self.tod_updated.emit(interp_time)
                 sleep_time = min(0.1, expected_wall_delta - wall_delta)
                 time.sleep(sleep_time)
                 continue

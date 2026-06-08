@@ -118,7 +118,8 @@ class LabelFilterDialog(QDialog):
             ("identific_aeronave", "Identific. Aeronave"),
             ("altitud_adsb", "Altitud ADSB"),
             ("cat_emisor_adsb", "Cat. Emisor ADS-B"),
-            ("veloc_vertic_adsb", "Veloc. Vertic. ADS-B")
+            ("veloc_vertic_adsb", "Veloc. Vertic. ADS-B"),
+            ("rho_theta", "RHO / THETA")
         ]
         
         for i, (key, label) in enumerate(fields):

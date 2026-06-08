@@ -81,13 +81,15 @@ def cargar_sensores(directorio: str = "default-site-params") -> Dict[Tuple[int, 
         if lat is None or lon is None:
             continue
 
+        rpm_val = data.get('antenna_rotation_speed')
         registro[(int(sac), int(sic))] = {
             'lat': float(lat),
             'lon': float(lon),
-            'elev': float(loc.get('elevation', 0)),
+            'elev': float(loc.get('altitude', loc.get('elevation', 0))),
             'name': str(data.get('name', f"Radar {sac}/{sic}")),
             'category': str(data.get('category', '')),
-            'type': str(data.get('type', ''))
+            'type': str(data.get('type', '')),
+            'rpm': float(rpm_val) if rpm_val is not None else None,
         }
 
     return registro

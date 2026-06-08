@@ -48,6 +48,7 @@ from PyQt6.QtWidgets import (
 )
 
 from utils.geo import METERS_PER_NM, StereographicLocal, WGS84_GEOD
+from decoder.altimetry import AltimetryManager
 
 
 # ============================================================
@@ -77,6 +78,8 @@ class SimulationTime:
         self._rwlock = RLock()
         self._origin: float = self._sim_clock
         self._use_pcap_time: bool = False
+        self._playback_speed: float = 1.0
+        self._last_wall_time: float = time_module.time()
 
     @classmethod
     def instance(cls) -> 'SimulationTime':
@@ -93,16 +96,41 @@ class SimulationTime:
         Congela el reloj si _frozen está activo (timer detenido).
         """
         with self._rwlock:
-            if self._use_pcap_time or self._frozen:
+            if self._frozen:
                 return self._sim_clock
-            self._sim_clock = time_module.time()
-            return self._sim_clock
+            
+            if self._use_pcap_time:
+                now_wall = time_module.time()
+                dt_wall = now_wall - self._last_wall_time
+                if dt_wall > 1.0:
+                    dt_wall = 1.0
+                elif dt_wall < 0.0:
+                    dt_wall = 0.0
+                
+                self._sim_clock += dt_wall * self._playback_speed
+                self._last_wall_time = now_wall
+                return self._sim_clock
+            else:
+                self._sim_clock = time_module.time()
+                return self._sim_clock
 
     def set_time(self, t: float):
         """Fuerza el reloj de simulación al tiempo indicado (típicamente del PCAP)."""
         with self._rwlock:
             self._sim_clock = t
+            self._last_wall_time = time_module.time()
             self._use_pcap_time = True
+
+    def set_speed(self, speed: float):
+        """Establece la velocidad de reproducción de la simulación."""
+        with self._rwlock:
+            if not self._frozen and self._use_pcap_time:
+                now_wall = time_module.time()
+                dt_wall = now_wall - self._last_wall_time
+                if 0.0 <= dt_wall <= 1.0:
+                    self._sim_clock += dt_wall * self._playback_speed
+                self._last_wall_time = now_wall
+            self._playback_speed = speed
 
     def reset(self):
         """Restablece el singleton de tiempo al tiempo del sistema y desactiva el modo PCAP."""
@@ -110,12 +138,19 @@ class SimulationTime:
             self._sim_clock = time_module.time()
             self._frozen = False
             self._use_pcap_time = False
+            self._playback_speed = 1.0
+            self._last_wall_time = time_module.time()
 
     def freeze(self):
         """Congela el tiempo de simulación (no avanza)."""
         with self._rwlock:
             if not self._frozen:
-                if not self._use_pcap_time:
+                if self._use_pcap_time:
+                    now_wall = time_module.time()
+                    dt_wall = now_wall - self._last_wall_time
+                    if 0.0 <= dt_wall <= 1.0:
+                        self._sim_clock += dt_wall * self._playback_speed
+                else:
                     self._sim_clock = time_module.time()
                 self._frozen = True
 
@@ -124,8 +159,7 @@ class SimulationTime:
         with self._rwlock:
             if self._frozen:
                 self._frozen = False
-                if not self._use_pcap_time:
-                    self._sim_clock = time_module.time()
+                self._last_wall_time = time_module.time()
 
     @property
     def is_frozen(self) -> bool:
@@ -238,6 +272,17 @@ def is_valid_coord(x: float, y: float) -> bool:
     return True
 
 
+def is_angle_between(target: float, start: float, end: float) -> bool:
+    """Retorna True si el ángulo target está entre start y end en sentido horario."""
+    target = target % 360.0
+    start = start % 360.0
+    end = end % 360.0
+    if start <= end:
+        return start <= target < end
+    else:
+        return start <= target or target < end
+
+
 class RadarPlot:
     """
     Representa un blanco individual con su historial de trayectoria.
@@ -260,7 +305,9 @@ class RadarPlot:
                  'raw_range', 'bds_data', 'raw_dict', 'reporting_sensors',
                  'is_reflection', 'linked_real_id', 'has_reflection', 'ab_filter',
                  'garbled', 'degradada', 'dqf_razon', '_update_count', '_first_seen',
-                 'en_jurisdiccion')
+                 'en_jurisdiccion', 'label_offset', 'is_dragging', 'label_rect',
+                 'widget_ref',
+                 '_update_period')
 
     def __init__(self, x: float, y: float, sac_sic: str, category: int,
                  timestamp: float, mode3a: str, callsign: str,
@@ -316,6 +363,11 @@ class RadarPlot:
         self._update_count = 0
         self._first_seen = SimulationTime.time()  # Momento de creación (no se resetea)
         self.en_jurisdiccion = False
+        self.label_offset = QPointF(30, -30)
+        self.is_dragging = False
+        self.label_rect = QRectF()
+        self.widget_ref = None
+        self._update_period = 4.0
 
     def set_highlight_filter(self, filtro: str):
         self._highlight_filter = filtro
@@ -328,32 +380,45 @@ class RadarPlot:
                 self._highlight_filter.lower() in self.callsign.lower())
 
     def illuminate(self):
-        """Marca el blanco como iluminado por el barrido y resetea su alpha."""
         self.is_illuminated = True
-        # FASE 3: SimulationTime en lugar de time.time()
         self._last_seen = SimulationTime.time()
 
     @property
     def age(self) -> float:
         """
-        Retorna la edad del plot usando el singleton SimulationTime.
-        
-        FASE 3: Esto elimina los saltos erráticos (Time Jumps) causados
-        por timers paralelos consultando time.time() de forma inconsistente.
+        Retorna la edad del plot/track.
+        CAT62: pista consolidada del SDP — sin barrido de antena, sin sensor_time.
+        Se mide contra el reloj de simulación directamente.
+        Otras categorías: contra el reloj del sensor (get_sensor_time) para evitar
+        que relojes desincronizados de otros sensores afecten su vigencia.
         """
+        if self.category == 62:
+            return SimulationTime.time() - self._last_seen
+        # Pistas multi-sensor (modo integrado): usar SimulationTime directamente
+        # para evitar que el reloj de un solo sensor afecte la vigencia de una pista
+        # que puede seguir siendo actualizada por otro sensor.
+        if len(getattr(self, 'reporting_sensors', [])) > 1:
+            return SimulationTime.time() - self._last_seen
+        if getattr(self, 'widget_ref', None) is not None:
+            return self.widget_ref.get_sensor_time(self.sac, self.sic) - self._last_seen
         return SimulationTime.time() - self._last_seen
 
     @property
     def alpha(self) -> int:
-        max_age = MAX_AGE_TRACK if self.is_track else MAX_AGE_PLOT
+        return self.get_alpha(None)
+
+    def get_alpha(self, max_age: Optional[float] = None) -> int:
+        if max_age is None:
+            max_age = MAX_AGE_TRACK if self.is_track else MAX_AGE_PLOT
         age = self.age
         if age >= max_age:
             return 0
         ratio = age / max_age
         return max(30, int(255 * (1.0 - ratio * ratio)))
 
-    def is_alive(self) -> bool:
-        max_age = MAX_AGE_TRACK if self.is_track else MAX_AGE_PLOT
+    def is_alive(self, max_age: Optional[float] = None) -> bool:
+        if max_age is None:
+            max_age = MAX_AGE_TRACK if self.is_track else MAX_AGE_PLOT
         return self.age < max_age
 
     @property
@@ -649,8 +714,11 @@ class RadarWidget(QWidget):
         self.centro_lat = -31.31
         self.centro_lon = -64.21
 
-        # Jurisdicción operativa y nivel de incumbencia
+        # Jurisdicción operativa: volumen = radio (NM) x techo (FL)
         self.techo_incumbencia = 95
+        self.radio_incumbencia = 50.0
+        # Gestor de altimetría (impulsado por perfil; QNH manual desde HMI)
+        self.altimetry = AltimetryManager()
         self.aeropuerto_lat = -31.31548
         self.aeropuerto_lon = -64.21545
 
@@ -694,6 +762,7 @@ class RadarWidget(QWidget):
             "direccion_aeronave": True, "numero_respuestas": False, "velocidad": True,
             "hora_utc": False, "numero_pista": True, "identific_aeronave": True,
             "altitud_adsb": True, "cat_emisor_adsb": False, "veloc_vertic_adsb": False,
+            "rho_theta": False,
             "orientacion": "NE", "sel_por_codigo_a": True, "sel_por_posicion": False
         }
 
@@ -701,6 +770,7 @@ class RadarWidget(QWidget):
         self.zoom_factor = 1.0
         self.pan_x = 0.0
         self.pan_y = 0.0
+        self.vector_tiempo_minutos = 3
 
         # Colores
         self.sensor_colors: Dict[Tuple[int, int], QColor] = {}
@@ -711,6 +781,9 @@ class RadarWidget(QWidget):
         self.sweep_angle = 0.0
         self.target_sweep_angle = 0.0
         self.sweep_rpm = 12.0
+        self.playback_speed = 1.0
+        self.sensor_rpms: Dict[Tuple[int, int], float] = {}
+        self.sensor_times: Dict[Tuple[int, int], float] = {}
         self.sweep_visible = True
         self.sweep_enabled = False
         self.show_silence_cone = False
@@ -804,6 +877,9 @@ class RadarWidget(QWidget):
         if rpm > 0:
             self.sweep_rpm = rpm
 
+    def get_sensor_time(self, sac: int, sic: int) -> float:
+        return self.sensor_times.get((sac, sic), SimulationTime.time())
+
     def reset_sweep_angle(self):
         self.sweep_angle = 0.0
 
@@ -849,6 +925,19 @@ class RadarWidget(QWidget):
         finally:
             self._command_lock.release()
 
+    @pyqtSlot()
+    def pause(self):
+        acquired = self._command_lock.acquire(blocking=False)
+        if not acquired:
+            return
+        try:
+            sim_time = SimulationTime.instance()
+            sim_time.freeze()
+            self._is_playing = False
+            self._last_sweep_tick_time = None
+        finally:
+            self._command_lock.release()
+
     def stop_sweep(self):
         acquired = self._command_lock.acquire(blocking=False)
         if not acquired:
@@ -885,6 +974,11 @@ class RadarWidget(QWidget):
 
     def limpiar_pantalla(self):
         """Vacía las estructuras de datos y fuerza un repintado en blanco."""
+        try:
+            SimulationTime.instance().reset()
+        except Exception:
+            pass
+
         if hasattr(self, 'plots'):
             self.plots = []
         if hasattr(self, 'plots_raw'):
@@ -895,6 +989,10 @@ class RadarWidget(QWidget):
             self.pending_tracks = {}
         if hasattr(self, 'history'):
             self.history.clear()
+        if hasattr(self, 'sensor_rpms'):
+            self.sensor_rpms.clear()
+        if hasattr(self, 'sensor_times'):
+            self.sensor_times.clear()
             
         self.sweep_angle = 0.0
         self.target_sweep_angle = 0.0
@@ -1218,6 +1316,11 @@ class RadarWidget(QWidget):
 
     def _process_plot_data(self, data: Dict[str, Any]) -> Optional[str]:
         try:
+            # Sincronizar el reloj de simulación con el timestamp del plot procesado (usar TOD del mensaje ASTERIX)
+            plot_time = data.get('time')
+            if plot_time is not None:
+                SimulationTime.instance().set_time(plot_time)
+
             # Filtrar pistas de prueba genéricas (ADSB1, ADSB2, 0AD5B1, etc.)
             mode_s_upper = (data.get('mode_s') or "").strip().upper()
             callsign_upper = (data.get('callsign') or "").strip().upper()
@@ -1278,18 +1381,59 @@ class RadarWidget(QWidget):
             if raw_az is None:
                 raw_az = self._compute_azimuth(x, y)
 
-            # Determinar si debemos omitir el búfer de pendientes para una promoción instantánea (siempre False para promoción por barrido clásica)
-            bypass_pending = False
+            # Determinar si debemos omitir el búfer de pendientes para una promoción instantánea (ADS-B, MLAT y System Tracks se muestran inmediatamente)
+            plot_sac, plot_sic = 0, 0
+            try:
+                parts = sensor_id.split('/')
+                plot_sac, plot_sic = int(parts[0]), int(parts[1])
+            except (ValueError, IndexError):
+                pass
+            
+            # Registrar el tiempo de actualización de este sensor
+            if plot_time is not None:
+                self.sensor_times[(plot_sac, plot_sic)] = plot_time
+            sensor_info = self.sensor_info.get((plot_sac, plot_sic)) if hasattr(self, 'sensor_info') else None
+            sensor_type = str(sensor_info.get('type', '')).upper() if sensor_info else ''
+            is_async = (data.get('category') in (21, 62)) or (sensor_type == 'MLAT') or data.get('is_track', False)
+            bypass_pending = is_async
 
             # 2. Correlación inteligente multi-sensor para evitar duplicados
             # Buscar si ya existe una pista activa para esta misma aeronave
             matched_track_id = None
             mode_s_addr = (data.get('mode_s') or "").strip().upper()
-            
+
+            # CAT62: System Track consolidado — omitir correlación A-E.
+            # El track_number asignado por el SDP es la clave definitiva; no hay nada que correlacionar.
+            _is_cat62 = data.get('category') == 62
+            if _is_cat62:
+                tn62 = data.get('track_number')
+                if tn62 is None:
+                    return None
+                _cat62_id = f"TRK_{tn62}_{sensor_id}"
+                if _cat62_id in self.tracks or _cat62_id in self.pending_tracks:
+                    matched_track_id = _cat62_id
+                else:
+                    # El SDP reasigna TN para la misma aeronave (renumeración frecuente).
+                    # Buscar por squawk+sensor+proximidad: si existe → actualizar esa pista
+                    # en lugar de crear una nueva (garantiza 1 pista por aeronave por sensor).
+                    sq62 = str(data.get('mode3a') or '----').strip()
+                    if sq62 not in ('----', '0000'):
+                        for _eid, _etrack in list(self.tracks.items()) + list(self.pending_tracks.items()):
+                            if _etrack.category == 62 and _etrack.sac_sic == sensor_id:
+                                _esq = str(_etrack.mode3a or '----').strip()
+                                if _esq == sq62:
+                                    _edx = _etrack.x - x
+                                    _edy = _etrack.y - y
+                                    if math.sqrt(_edx*_edx + _edy*_edy) < 9260.0:
+                                        matched_track_id = _eid
+                                        break
+                    if not matched_track_id:
+                        target_id = _cat62_id
+
             # A. Búsqueda por dirección Mode S (ICAO) - Máxima prioridad
             # Detectar si es una dirección Mode S de receptor genérico / mock (ej: 0AD5B1 o callsign ADSB)
             is_mock_mode_s = mode_s_addr.startswith("0AD5B") or (data.get('callsign') or "").strip().upper().startswith("ADSB")
-            if mode_s_addr and mode_s_addr != '----' and not is_mock_mode_s:
+            if not _is_cat62 and mode_s_addr and mode_s_addr != '----' and not is_mock_mode_s:
                 for tid, track in list(self.tracks.items()) + list(self.pending_tracks.items()):
                     if not getattr(self, 'modo_integrado', True) and track.sac_sic != sensor_id:
                         continue
@@ -1299,7 +1443,7 @@ class RadarWidget(QWidget):
                         break
 
             # B. Búsqueda por código Squawk (Mode 3/A) con ventana de distancia
-            if not matched_track_id:
+            if not _is_cat62 and not matched_track_id:
                 mode3a = data.get('mode3a')
                 mode3a_str = ""
                 if mode3a is not None:
@@ -1327,10 +1471,11 @@ class RadarWidget(QWidget):
                                     matched_track_id = tid
                                     break
 
-            # C. Búsqueda por número de pista
-            if not matched_track_id:
+            # C. Búsqueda por número de pista (prefiere track con identidad SSR/Mode-S sobre TRK_)
+            if not _is_cat62 and not matched_track_id:
                 track_num = data.get('track_number')
                 if track_num is not None:
+                    trk_fallback = None
                     for tid, track in list(self.tracks.items()) + list(self.pending_tracks.items()):
                         if not getattr(self, 'modo_integrado', True) and track.sac_sic != sensor_id:
                             continue
@@ -1339,58 +1484,82 @@ class RadarWidget(QWidget):
                             dy = track.y - y
                             dist_m = math.sqrt(dx*dx + dy*dy)
                             if dist_m < 55560.0:  # 30 NM
-                                matched_track_id = tid
-                                break
+                                if tid.startswith('TRK_'):
+                                    if trk_fallback is None:
+                                        trk_fallback = tid
+                                else:
+                                    matched_track_id = tid
+                                    break
+                    if not matched_track_id and trk_fallback:
+                        matched_track_id = trk_fallback
 
-            # D. Búsqueda por proximidad geográfica 3D (para integrar CAT 21 y CAT 48 sin identificadores comunes)
-            if not matched_track_id and getattr(self, 'modo_integrado', True):
+            # D. Mismo sensor + mismas coordenadas polares → mismo eco físico (sin gate modo_integrado)
+            if not _is_cat62 and not matched_track_id:
+                curr_rho = data.get('rho_render') or data.get('raw_range')
+                curr_theta = data.get('theta_render') or data.get('raw_azimuth')
+                if curr_rho is not None and curr_theta is not None:
+                    for tid, track in list(self.tracks.items()) + list(self.pending_tracks.items()):
+                        if track.sac_sic != sensor_id:
+                            continue
+                        t_rho = track.raw_range
+                        t_theta = track.raw_azimuth
+                        if t_rho is None or t_theta is None:
+                            continue
+                        # Tolerancia: 0.15 NM en rango y 0.5° en azimut
+                        if abs(curr_rho - t_rho) < 0.15 and abs(curr_theta - t_theta) < 0.5:
+                            matched_track_id = tid
+                            break
+
+            # E. Búsqueda por proximidad cartesiana 3D (siempre disponible, no requiere lat/lon)
+            if not _is_cat62 and not matched_track_id and getattr(self, 'modo_integrado', True):
                 fl_curr = data.get('flight_level')
                 alt_curr = data.get('altitude_ft')
                 alt_curr_val = fl_curr * 100.0 if fl_curr is not None else alt_curr
-                
-                lat_curr = data.get('lat') or data.get('lat_render')
-                lon_curr = data.get('lon') or data.get('lon_render')
-                
-                if lat_curr is not None and lon_curr is not None and alt_curr_val is not None:
-                    best_dist_m = float('inf')
-                    best_tid = None
-                    for tid, track in list(self.tracks.items()) + list(self.pending_tracks.items()):
-                        fl_t = track.flight_level
-                        alt_t = track.altitude_ft
-                        alt_t_val = fl_t * 100.0 if fl_t is not None else alt_t
-                        
-                        if alt_t_val is None:
-                            continue
-                        
+                has_alt = alt_curr_val is not None
+                # Sin altitud: 1 NM (estricto); con altitud: 3 NM + verificación vertical
+                max_dist_m = (3.0 if has_alt else 1.0) * 1852.0
+                best_dist_m = float('inf')
+                best_tid = None
+                for tid, track in list(self.tracks.items()) + list(self.pending_tracks.items()):
+                    fl_t = track.flight_level
+                    alt_t = track.altitude_ft
+                    alt_t_val = fl_t * 100.0 if fl_t is not None else alt_t
+                    if has_alt and alt_t_val is not None:
                         if abs(alt_curr_val - alt_t_val) >= 1500.0:
                             continue
-                            
-                        lat_t = track.raw_dict.get('lat') or track.raw_dict.get('lat_render') if track.raw_dict else None
-                        lon_t = track.raw_dict.get('lon') or track.raw_dict.get('lon_render') if track.raw_dict else None
-                        
-                        if lat_t is None or lon_t is None:
-                            continue
-                            
-                        from analysis.stca_analyzer import STCA_Engine
-                        dist_nm = STCA_Engine.haversine_nm(lat_curr, lon_curr, lat_t, lon_t)
-                        
-                        if dist_nm < 3.0:
-                            dist_m = dist_nm * 1852.0
-                            if dist_m < best_dist_m:
-                                best_dist_m = dist_m
-                                best_tid = tid
-                                
-                    if best_tid:
-                        matched_track_id = best_tid
+                    dx = track.x - x
+                    dy = track.y - y
+                    dist_m = math.sqrt(dx*dx + dy*dy)
+                    if dist_m < max_dist_m and dist_m < best_dist_m:
+                        best_dist_m = dist_m
+                        best_tid = tid
+                if best_tid:
+                    matched_track_id = best_tid
 
             # 3. Establecer target_id final
             if matched_track_id:
                 target_id = matched_track_id
+                matched_track = self.tracks.get(target_id) or self.pending_tracks.get(target_id)
+                if matched_track:
+                    if sensor_id not in matched_track.reporting_sensors or len(matched_track.reporting_sensors) > 1:
+                        is_async = True
+                        bypass_pending = True
+                    # Limpiar TRK_ huérfana del mismo sensor si es la misma aeronave (< 5 NM)
+                    tn = data.get('track_number')
+                    if tn is not None and not target_id.startswith('TRK_'):
+                        trk_orphan = f"TRK_{tn}_{sensor_id}"
+                        orphan = self.tracks.get(trk_orphan) or self.pending_tracks.get(trk_orphan)
+                        if orphan is not None:
+                            dx = orphan.x - x
+                            dy = orphan.y - y
+                            if math.sqrt(dx*dx + dy*dy) < 9260.0:  # 5 NM
+                                self.tracks.pop(trk_orphan, None)
+                                self.pending_tracks.pop(trk_orphan, None)
+            elif data.get('category') == 62:
+                # target_id ya fue asignado en el bloque CAT62 de arriba; solo forzar bypass
+                is_async = True
+                bypass_pending = True
             else:
-                # Si es una pista nueva, generar un ID estable.
-                # Mode S es globalmente único por aeronave y no necesita sufijo en modo integrado.
-                # Squawk (mode3a) y track_number son locales de cada sensor y requieren sufijo para evitar colisiones.
-                # Los Mode S genéricos de receptor (ej: 0AD5B1 o callsign ADSB) se tratan con sufijo del sensor para evitar sobrescribirse.
                 is_mock_mode_s = mode_s_addr.startswith("0AD5B") or (data.get('callsign') or "").strip().upper().startswith("ADSB")
                 suffix = f"_{sensor_id}"
                 if mode_s_addr and mode_s_addr != '----' and not is_mock_mode_s:
@@ -1403,11 +1572,16 @@ class RadarWidget(QWidget):
                     target_id = f"{tgt}{suffix}"
                 elif data.get('track_number') is not None:
                     target_id = f"TRK_{data['track_number']}{suffix}"
+                elif (data.get('id') or '').startswith('PSR_'):
+                    target_id = data['id']
                 else:
                     return None
 
             # 4. Correlación / Actualización del Diccionario de Pistas
             def update_track(track: RadarPlot):
+                track.widget_ref = self
+                prev_last_seen = track._last_seen  # guardar para EMA de _update_period
+                track._last_seen = SimulationTime.time()  # resetear edad en cada actualización
                 # 0. Actualizar el timestamp del track primero para que los filtros y el historial usen el tiempo correcto
                 track.timestamp = data.get('time', track.timestamp)
 
@@ -1453,7 +1627,12 @@ class RadarWidget(QWidget):
                 # el nuevo para conservar únicamente la coordenada consolidada final y evitar estelas con grupos de puntos.
                 # (A menos que estemos en modo crudo, en cuyo caso guardamos todo)
                 hist_queue = self.history[target_id]
-                if hist_queue and (track.timestamp - hist_queue[-1].timestamp < 1.5) and not getattr(self, 'modo_crudo', False):
+                
+                # Si el tiempo retrocedió (ej. seek hacia atrás), podamos los puntos del "futuro"
+                while hist_queue and hist_queue[-1].timestamp > track.timestamp:
+                    hist_queue.pop()
+                    
+                if hist_queue and (0 <= track.timestamp - hist_queue[-1].timestamp < 1.5) and not getattr(self, 'modo_crudo', False):
                     hist_queue[-1] = hp
                 else:
                     hist_queue.append(hp)
@@ -1476,10 +1655,13 @@ class RadarWidget(QWidget):
                 
                 # Actualizar campos individuales del track para mantener coherencia en las estelas e inspecciones
                 track.raw_azimuth = raw_az
-                track.raw_range = data.get('raw_range', track.raw_range)
+                track.raw_range = data.get('raw_range') or data.get('rho_render') or track.raw_range
                 track.altitude_ft = data.get('altitude_ft', track.altitude_ft)
                 track.bds_data = data.get('bds_data') or track.bds_data
-                
+                # CAT62: actualizar track_number si el SDP renumeró la pista
+                if data.get('category') == 62 and data.get('track_number') is not None:
+                    track.track_number = data.get('track_number')
+
                 # Matriz de Detección: Si hay Garbling activo, ignorar cambios en Squawk (mode3a) y Flight Level,
                 # manteniendo los del paquete anterior (Coast/extrapolación).
                 if not track.garbled:
@@ -1488,60 +1670,79 @@ class RadarWidget(QWidget):
                     m3a_str = f"{m3a:04o}" if isinstance(m3a, int) else str(m3a).strip()
                     if m3a is not None and m3a not in ('', '----') and m3a_str != '0000':
                         track.mode3a = m3a
-                    if data.get('flight_level') is not None:
-                        new_fl = data.get('flight_level')
-                        # Filtro de plausibilidad: rechazar saltos de FL físicamente imposibles.
-                        # Tasa de ascenso/descenso máxima real: ~6000 ft/min ≈ 100 FL/min.
-                        # En un barrido de 10s: máximo cambio admisible = 100/60 * 10 ≈ 17 FL.
-                        if track.flight_level is not None:
-                            dt_fl = track.timestamp - getattr(track, '_last_fl_time', track.timestamp)
-                            max_fl_change = max(3.0, (6000.0 / 60.0 / 100.0) * max(dt_fl, 1.0))  # FL por segundo
-                            fl_diff = abs(new_fl - track.flight_level)
-                            if fl_diff <= max_fl_change:
-                                track.flight_level = new_fl
+                    
+                    try:
+                        if data.get('flight_level') is not None:
+                            new_fl = data.get('flight_level')
+                            # Filtro de plausibilidad: rechazar saltos de FL físicamente imposibles.
+                            if track.flight_level is not None:
+                                dt_fl = track.timestamp - getattr(track, '_last_fl_time', track.timestamp)
+                                max_fl_change = max(3.0, (6000.0 / 60.0 / 100.0) * max(dt_fl, 1.0))  # FL por segundo
+                                fl_diff = abs(float(new_fl) - float(track.flight_level))
+                                if fl_diff <= max_fl_change:
+                                    track.flight_level = float(new_fl)
+                                    track._last_fl_time = track.timestamp
+                            else:
+                                track.flight_level = float(new_fl)
                                 track._last_fl_time = track.timestamp
-                            # else: descartamos el FL ruidoso y conservamos el anterior
-                        else:
-                            track.flight_level = new_fl
-                            track._last_fl_time = track.timestamp
+                    except (ValueError, TypeError):
+                        pass
                 
                 if data.get('callsign'):
                     track.callsign = data.get('callsign')
-                if data.get('ground_speed') is not None:
-                    new_gs = data.get('ground_speed')
-                    # Filtro de plausibilidad: rechazar saltos de velocidad físicamente imposibles.
-                    # Aceleración máxima comercial realista: ~2 kt/s (120 kt/min).
-                    # Usamos 3 kt/s como límite para cubrir también aviación militar / emergencias.
-                    # Ejemplo: salto de 50 kt en 10 s requiere 5 kt/s → rechazado (ruido de sensor).
-                    if track.ground_speed is not None:
-                        dt_gs = track.timestamp - getattr(track, '_last_gs_time', track.timestamp)
-                        max_gs_change = max(5.0, 3.0 * max(dt_gs, 1.0))  # kt
-                        gs_diff = abs(new_gs - track.ground_speed)
-                        if gs_diff <= max_gs_change:
-                            track.ground_speed = new_gs
+                
+                try:
+                    if data.get('ground_speed') is not None:
+                        new_gs = data.get('ground_speed')
+                        # Filtro de plausibilidad: rechazar saltos de velocidad físicamente imposibles.
+                        if track.ground_speed is not None:
+                            dt_gs = track.timestamp - getattr(track, '_last_gs_time', track.timestamp)
+                            max_gs_change = max(5.0, 3.0 * max(dt_gs, 1.0))  # kt
+                            gs_diff = abs(float(new_gs) - float(track.ground_speed))
+                            if gs_diff <= max_gs_change:
+                                track.ground_speed = float(new_gs)
+                                track._last_gs_time = track.timestamp
+                        else:
+                            track.ground_speed = float(new_gs)
                             track._last_gs_time = track.timestamp
-                        # else: descartamos la velocidad ruidosa y conservamos la anterior
-                    else:
-                        track.ground_speed = new_gs
-                        track._last_gs_time = track.timestamp
+                except (ValueError, TypeError):
+                    pass
+
                 if data.get('track_angle') is not None:
-                    track.track_angle = data.get('track_angle')
+                    try:
+                        track.track_angle = float(data.get('track_angle'))
+                    except (ValueError, TypeError):
+                        pass
                 if data.get('mode_s'):
                     track.mode_s = data.get('mode_s')
-                
+                if data.get('track_number') is not None:
+                    track.track_number = data.get('track_number')
+
                 track.garbled = data.get('garbled', False)
                 track._update_count += 1  # Contador monotónico independiente del historial
                 
-                # Evaluar DQF (Data Quality Filter)
-                track_age = SimulationTime.time() - track._first_seen
-                degradada, razon = self.quality_manager.evaluar_pista(
-                    track.id,
-                    {'garbled': track.garbled, 'update_count': track._update_count, 'age': track_age}
-                )
-                track.degradada = degradada
-                track.dqf_razon = razon
+                try:
+                    # Evaluar DQF (Data Quality Filter)
+                    track_age = SimulationTime.time() - track._first_seen
+                    degradada, razon = self.quality_manager.evaluar_pista(
+                        track.id,
+                        {'garbled': track.garbled, 'update_count': track._update_count, 'age': track_age}
+                    )
+                    track.degradada = degradada
+                    track.dqf_razon = razon
+                except Exception:
+                    pass
                 
                 track.reporting_sensors.add(sensor_id)
+
+                # Actualizar período de actualización estimado (EMA) para CAT21 y CAT62
+                if track.category in (21, 62) and plot_time is not None and prev_last_seen > 0:
+                    tod_delta = plot_time - prev_last_seen
+                    if tod_delta < 0:
+                        tod_delta += 86400  # rollover medianoche
+                    if 0.3 < tod_delta < 120.0:
+                        track._update_period = track._update_period * 0.7 + tod_delta * 0.3
+
                 track.illuminate()
                 
                 # --- JURISDICTION CHECK ---
@@ -1559,7 +1760,8 @@ class RadarWidget(QWidget):
                     dist_nm = math.sqrt(track.x**2 + track.y**2) / 1852.0
                 
                 fl_val = track.flight_level if track.flight_level is not None else 0.0
-                track.en_jurisdiccion = (dist_nm <= 50.0) and (fl_val <= getattr(self, 'techo_incumbencia', 95))
+                radio = getattr(self, 'radio_incumbencia', 50.0)
+                track.en_jurisdiccion = (dist_nm <= radio) and (fl_val <= getattr(self, 'techo_incumbencia', 95))
                 data['en_jurisdiccion'] = track.en_jurisdiccion
 
             if bypass_pending:
@@ -1594,11 +1796,12 @@ class RadarWidget(QWidget):
                     raw_azimuth=raw_az,
                     plot_id=target_id,
                     track_number=data.get('track_number'),
-                    raw_range=data.get('raw_range'),
+                    raw_range=data.get('raw_range') or data.get('rho_render'),
                     bds_data=data.get('bds_data', {}),
                     raw_dict=data,
                     reporting_sensors={sensor_id}
                 )
+                plot.widget_ref = self
                 plot.set_highlight_filter(self.squawk_filter)
                 if bypass_pending:
                     self.tracks[target_id] = plot
@@ -1765,6 +1968,9 @@ class RadarWidget(QWidget):
                 # DQF / Multipath: Excluir pistas degradadas o reflejos fantasmas de la evaluación STCA
                 if getattr(track, 'degradada', False) or getattr(track, 'is_reflection', False):
                     continue
+                # PSR-only: sin identidad confiable → excluir del STCA
+                if tid.startswith('PSR_'):
+                    continue
                 
                 # Obtener coordenadas
                 lat = track.raw_dict.get('lat_render') or track.raw_dict.get('lat') if track.raw_dict else None
@@ -1827,6 +2033,8 @@ class RadarWidget(QWidget):
                     # Convertir m/s a nudos (1 m/s = 1.94384 knots)
                     speed_kt = math.sqrt(vx**2 + vy**2) * 1.94384
 
+                m3a = track.mode3a
+                m3a_str = f"{m3a:04o}" if isinstance(m3a, int) else str(m3a).strip()
                 tracks_for_stca[tid] = {
                     'flight_level': fl_str,
                     'lat_render': lat,
@@ -1836,7 +2044,9 @@ class RadarWidget(QWidget):
                     'y': track.y,
                     'vx': vx,
                     'vy': vy,
-                    'speed_kt': speed_kt
+                    'speed_kt': speed_kt,
+                    'mode3a': m3a_str,
+                    'mode_s': (track.mode_s or '').strip().upper(),
                 }
             
             try:
@@ -2072,31 +2282,43 @@ class RadarWidget(QWidget):
             sim_time = SimulationTime.instance()
             if sim_time.is_frozen and self._is_playing:
                 sim_time.unfreeze()
-            sweep_active = self.sweep_visible and self.sweep_enabled
+            sweep_active = self.sweep_visible and self.sweep_enabled and self._is_playing
             if sweep_active:
-                now = time_module.time()
-                if not hasattr(self, '_last_sweep_tick_time') or self._last_sweep_tick_time is None:
-                    self._last_sweep_tick_time = now
-                dt = now - self._last_sweep_tick_time
-                self._last_sweep_tick_time = now
+                sim_clock = sim_time.now()
+                target_angle = (sim_clock * 6.0 * self.sweep_rpm) % 360.0
                 
-                # Limitar dt para evitar saltos gigantescos si el hilo UI se congela
-                dt = min(0.5, max(0.0, dt))
+                # En caso de un salto grande (seek, pausa larga, etc.), sincronizar de inmediato
+                playback_speed = getattr(self, 'playback_speed', 1.0)
+                is_jump = False
+                if not hasattr(self, '_last_sim_time') or self._last_sim_time is None:
+                    is_jump = True
+                else:
+                    dt_sim = sim_clock - self._last_sim_time
+                    if dt_sim < 0.0 or dt_sim > 5.0 * max(1.0, playback_speed):
+                        is_jump = True
+                self._last_sim_time = sim_clock
                 
                 prev_sweep = self.sweep_angle
-                
-                # Rotación continua y fluida de la antena a velocidad constante (usando la RPM estimada en Modo Monoradar o Fusión)
-                # 1 RPM = 6 grados por segundo
-                increment = self.sweep_rpm * 6.0 * dt
-                self.sweep_angle = (self.sweep_angle + increment) % 360.0
-                
+                if is_jump:
+                    self.sweep_angle = target_angle
+                    prev_sweep = target_angle
+                else:
+                    self.sweep_angle = target_angle
                 curr_sweep = self.sweep_angle
             else:
-                self._last_sweep_tick_time = None
+                self._last_sim_time = None
 
             if sweep_active:
                 to_promote = []
                 for pid, plot in self.pending_tracks.items():
+                    sensor_info = self.sensor_info.get((plot.sac, plot.sic)) if hasattr(self, 'sensor_info') else None
+                    sensor_type = str(sensor_info.get('type', '')).upper() if sensor_info else ''
+                    is_async = (plot.category in (21, 62)) or (sensor_type == 'MLAT') or plot.is_track or (len(getattr(plot, 'reporting_sensors', [])) > 1)
+                    
+                    if is_async:
+                        to_promote.append(pid)
+                        continue
+                        
                     if plot.raw_azimuth is not None:
                         az = plot.raw_azimuth
                         
@@ -2128,14 +2350,6 @@ class RadarWidget(QWidget):
             self._timer_tick_count = getattr(self, '_timer_tick_count', 0) + 1
             if self._timer_tick_count >= 20:
                 self._timer_tick_count = 0
-
-                # 1. Poda de blancos muertos
-                for d in (self.tracks, self.pending_tracks):
-                    muertos = [pid for pid, plot in d.items() if not plot.is_alive()]
-                    for pid in muertos:
-                        if pid in self.history:
-                            del self.history[pid]
-                        del d[pid]
 
                 # 2. Control de exceso de capacidad
                 total_plots = len(self.tracks) + len(self.pending_tracks)
@@ -2625,7 +2839,10 @@ class RadarWidget(QWidget):
                             continue
 
                     try:
-                        alpha = plot.alpha
+                        rpm = self.sensor_rpms.get((plot.sac, plot.sic), self.sweep_rpm)
+                        scan_time = 60.0 / rpm if rpm > 0 else 5.0
+                        max_age = 3.2 * scan_time
+                        alpha = plot.get_alpha(max_age)
                         if alpha <= 0:
                             continue
 
@@ -2642,20 +2859,8 @@ class RadarWidget(QWidget):
                                 trail_base = QColor("#FFD700")
                             else:
                                 trail_base = QColor("#FFA500")
-                        elif plot.category == 21:
-                            trail_base = QColor("#FFFF00")  # ADS-B amarillo
-                        elif plot.category == 1:
-                            has_ssr_info = bool(plot.mode3a and plot.mode3a != "----")
-                            if has_ssr_info:
-                                trail_base = QColor(COLOR_GREEN_NEON)
-                            else:
-                                trail_base = QColor(204, 85, 0)  # PSR naranja
-                        elif plot.category == 48 and not (plot.mode3a or plot.mode_s):
-                            trail_base = QColor(204, 85, 0)  # PSR naranja
-                        elif 'MLAT' in sensor_type_h:
-                            trail_base = QColor(255, 0, 255)  # MLAT magenta
                         else:
-                            trail_base = QColor(COLOR_GREEN_NEON)  # SSR/combinado verde neón
+                            trail_base = COLOR_GREEN_NEON
 
                         limit = self.history_limit
                         points_to_draw = list(history_points)[-limit:]
@@ -2687,8 +2892,6 @@ class RadarWidget(QWidget):
                                             segment_color = QColor("#FFD700")
                                         else:
                                             segment_color = QColor("#FFA500")
-                                    elif pt2.sac is not None and pt2.sic is not None:
-                                        segment_color = self._get_sensor_color(pt2.sac, pt2.sic)
                                     else:
                                         segment_color = trail_base
                                     
@@ -2726,8 +2929,6 @@ class RadarWidget(QWidget):
                                         pt_color = QColor("#FFD700")
                                     else:
                                         pt_color = QColor("#FFA500")
-                                elif h_point.sac is not None and h_point.sic is not None:
-                                    pt_color = self._get_sensor_color(h_point.sac, h_point.sic)
                                 else:
                                     pt_color = trail_base
                                 
@@ -3271,6 +3472,24 @@ class RadarWidget(QWidget):
 
     def mousePressEvent(self, event):
         try:
+            # Hit-Testing for dragging labels (FASE 2)
+            is_shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+            if event.button() == Qt.MouseButton.LeftButton and not is_shift:
+                click_pos_f = event.position()
+                click_pos = event.pos()
+                label_dragged = False
+                all_plots = list(self.tracks.values()) + list(self.pending_tracks.values())
+                for target in all_plots:
+                    if target.is_alive() and target.label_rect.contains(click_pos_f):
+                        target.is_dragging = True
+                        self.mouse_press_pos = click_pos_f
+                        self.last_mouse_pos = click_pos
+                        label_dragged = True
+                        break
+                if label_dragged:
+                    self.update()
+                    return
+
             # ── Comprobar si el clic elimina algún RBL persistente ──
             clic = event.position()
             idx_to_remove = None
@@ -3444,6 +3663,24 @@ class RadarWidget(QWidget):
 
     def mouseMoveEvent(self, event):
         try:
+            # Dragging label logic (FASE 2)
+            all_plots = list(self.tracks.values()) + list(self.pending_tracks.values())
+            dragging_plot = None
+            for target in all_plots:
+                if getattr(target, 'is_dragging', False):
+                    dragging_plot = target
+                    break
+            
+            if dragging_plot is not None:
+                curr_pos = event.position()
+                last_pos = getattr(self, 'mouse_press_pos', curr_pos)
+                dx = curr_pos.x() - last_pos.x()
+                dy = curr_pos.y() - last_pos.y()
+                dragging_plot.label_offset += QPointF(dx, dy)
+                self.mouse_press_pos = curr_pos
+                self.update()
+                return
+
             # Si el RBL está activo, actualizar destino (con snap) y retornar
             if getattr(self, 'rbl_activo', False):
                 lat, lon, label, anchor = self._snap_to_target(event.position())
@@ -3535,6 +3772,17 @@ class RadarWidget(QWidget):
 
     def mouseReleaseEvent(self, event):
         try:
+            # Release label drag state (FASE 2)
+            all_plots = list(self.tracks.values()) + list(self.pending_tracks.values())
+            released_any = False
+            for target in all_plots:
+                if getattr(target, 'is_dragging', False):
+                    target.is_dragging = False
+                    released_any = True
+            if released_any:
+                self.update()
+                return
+
             # Finalizar RBL activo → guardarlo en la lista de persistentes
             if getattr(self, 'rbl_activo', False):
                 self.rbl_activo = False
@@ -3657,14 +3905,11 @@ class RadarWidget(QWidget):
         
         alt_str = ""
         if show_altitude:
-            if plot.flight_level is not None:
-                alt_val = int(plot.flight_level)
-                alt_str = f"F{alt_val:03d}"
-            elif plot.altitude_ft is not None:
-                alt_val = int(plot.altitude_ft / 100.0)
-                alt_str = f"F{alt_val:03d}"
-            else:
-                alt_str = "F---"
+            fl_for_label = plot.flight_level
+            if fl_for_label is None and plot.altitude_ft is not None:
+                fl_for_label = plot.altitude_ft / 100.0
+            # Toggle A/F dinámico segun TA del perfil y QNH manual (ENR 1.7)
+            alt_str = self.altimetry.formatear_altitud(fl_for_label)
 
         trend_arrow = " "
         if show_altitude:
@@ -3755,13 +4000,8 @@ class RadarWidget(QWidget):
             
         # 3. Extra fields/lines
         # Track Number
-        if cfg.get("numero_pista", False):
-            trk_no = plot.track_number
-            if trk_no is None:
-                # Fallback to last digits of ID or similar
-                parts = plot.id.split('_')
-                trk_no = parts[-1] if len(parts) > 1 else plot.id
-            lines.append(f"TRK:{trk_no}")
+        if cfg.get("numero_pista", False) and plot.track_number is not None:
+            lines.append(f"TRK:{plot.track_number}")
             
         # Mode S Address
         if cfg.get("direccion_aeronave", False) and plot.mode_s:
@@ -3811,6 +4051,12 @@ class RadarWidget(QWidget):
                 replies = plot.raw_dict.get('num_replies') or plot.raw_dict.get('number_of_replies')
             if replies is not None:
                 lines.append(f"REP:{replies}")
+
+        # RHO / THETA
+        if plot.category in (1, 48) and plot.raw_range is not None and plot.raw_azimuth is not None:
+            lines.append(f"R:{plot.raw_range:.1f}NM A:{plot.raw_azimuth:.1f}°")
+        elif cfg.get("rho_theta", False) and plot.raw_range is not None and plot.raw_azimuth is not None:
+            lines.append(f"R:{plot.raw_range:.1f}NM A:{plot.raw_azimuth:.1f}°")
 
         return lines
 
@@ -3901,6 +4147,14 @@ class RadarWidget(QWidget):
     # ================================================================
     # MOUSE MOVE — TOOLTIP SOBRE HISTORIAL
     # ================================================================
+    @property
+    def pixeles_por_milla(self) -> float:
+        return self.zoom_factor * 1852.0
+
+    @property
+    def píxeles_por_milla(self) -> float:
+        return self.zoom_factor * 1852.0
+
     def _world_to_screen(self, x: float, y: float) -> Optional[QPointF]:
         w, h = self.width(), self.height()
         z = self.zoom_factor
@@ -4107,13 +4361,19 @@ class RadarWidget(QWidget):
             if not is_valid_coord(x, y):
                 return
                 
-            alpha = plot.alpha
-            if alpha <= 0:
-                return
-                
-            # Determine base color
-            sensor_info = self.sensor_info.get((plot.sac, plot.sic))
+            sensor_info = self.sensor_info.get((plot.sac, plot.sic)) if hasattr(self, 'sensor_info') else None
             sensor_type = str(sensor_info.get('type', '')).upper() if sensor_info else ''
+            is_async = (plot.category in (21, 62)) or (sensor_type == 'MLAT') or (plot.is_track and plot.category not in (1, 48)) or (len(getattr(plot, 'reporting_sensors', [])) > 1)
+
+            rpm = self.sensor_rpms.get((plot.sac, plot.sic), self.sweep_rpm)
+            scan_time = 60.0 / rpm if rpm > 0 else 5.0
+
+            is_coasting = False
+            alpha = 255
+            is_alive = plot.age < 25.0
+                
+            if not is_alive or alpha <= 0:
+                return
             
             is_psr = False
             is_ssr = False
@@ -4175,28 +4435,31 @@ class RadarWidget(QWidget):
                 plot_color = QColor(255, 51, 102)
             elif getattr(plot, 'has_reflection', False) and not getattr(self, 'modo_crudo', False):
                 plot_color = QColor(255, 128, 0)
-            elif is_fused:
-                plot_color = QColor("#FFFFFF")
-            elif is_psr:
-                plot_color = QColor(204, 85, 0)
-            elif is_ssr:
-                plot_color = COLOR_GREEN_NEON
-            elif is_combined:
-                plot_color = COLOR_GREEN_NEON
-            elif is_adsb:
-                plot_color = QColor("#FFFF00")
-            elif is_mlat:
-                plot_color = QColor(255, 0, 255)
             else:
-                plot_color = self._get_sensor_color(plot.sac, plot.sic)
+                if is_fused:
+                    plot_color = QColor("#FFFFFF")  # Blanco para fusionado/CAT62
+                elif is_adsb:
+                    plot_color = QColor("#FFFF00")  # Amarillo para ADS-B/CAT21
+                elif is_mlat:
+                    plot_color = QColor(255, 0, 255)  # Magenta para MLAT
+                elif is_psr:
+                    plot_color = QColor(204, 85, 0)  # Naranja oscuro para PSR
+                elif is_ssr or is_combined:
+                    # CAT48/01 sin SSR (squawk) o sin FL → celeste claro (plot inválido/incompleto)
+                    has_valid_ssr = ssr_code and ssr_code not in ("----", "0000", "")
+                    has_fl = plot.flight_level is not None
+                    if plot.category in (1, 48) and (not has_valid_ssr or not has_fl):
+                        plot_color = QColor(100, 200, 255)  # Celeste claro = inválido
+                    else:
+                        plot_color = COLOR_GREEN_NEON  # Verde neón para SSR / combinado
+                else:
+                    plot_color = self._get_sensor_color(plot.sac, plot.sic)
                 
             if plot.highlighted:
                 base_color = QColor(255, 255, 0, alpha)
             else:
                 base_color = QColor(plot_color)
                 base_color.setAlpha(alpha)
-                
-            is_coasting = plot.age > 6.0
             
             # 2. Draw Symbol (FASE 2)
             painter.save()
@@ -4278,21 +4541,31 @@ class RadarWidget(QWidget):
                 except Exception:
                     pass
 
-            # 5. Vector de tendencia
+            # 5. Vector de tendencia (Predictive speed vector in screen pixels - FASE 1)
             es_pista = plot.is_track or is_fused
             if (es_pista and plot.ground_speed is not None and
                     plot.track_angle is not None and plot.ground_speed > 10):
                 try:
-                    speed_mps = plot.ground_speed * (METERS_PER_NM / 3600.0)
-                    v_len = speed_mps * 60.0
-                    a_rad = math.radians(plot.track_angle)
-                    ex = x + v_len * math.sin(a_rad)
-                    ey = y + v_len * math.cos(a_rad)
-                    if is_valid_coord(ex, ey):
-                        pen_v = QPen(base_color)
-                        pen_v.setWidthF(safe_divide(1.0, z, 0.3))
-                        painter.setPen(pen_v)
-                        painter.drawLine(QPointF(x, y), QPointF(ex, ey))
+                    painter.save()
+                    painter.translate(x, y)
+                    painter.scale(inv_z, -inv_z)
+                    
+                    target_gs = plot.ground_speed
+                    target_heading = plot.track_angle
+                    
+                    # Rumbo y velocidad geodésica predictiva a X minutos
+                    distancia_vector_nm = (target_gs / 60.0) * self.vector_tiempo_minutos
+                    longitud_pixeles = distancia_vector_nm * self.píxeles_por_milla
+                    
+                    # 0° apunta al Norte
+                    dx_vector = longitud_pixeles * math.sin(math.radians(target_heading))
+                    dy_vector = -longitud_pixeles * math.cos(math.radians(target_heading))
+                    
+                    pen_v = QPen(base_color, 1.0, Qt.PenStyle.SolidLine)
+                    painter.setPen(pen_v)
+                    painter.drawLine(QPointF(0, 0), QPointF(dx_vector, dy_vector))
+                    
+                    painter.restore()
                 except Exception:
                     pass
 
@@ -4332,28 +4605,11 @@ class RadarWidget(QWidget):
                     
                     max_w = max(fm.horizontalAdvance(line) for line in lines)
                     
-                    # Target orientation
-                    cfg_or = self.label_filter_config.get("orientacion", "NE")
-                    shift_x, shift_y = getattr(self, '_label_shifts_cache', {}).get(plot.id, [0.0, 0.0])
+                    # Position label based on offset (FASE 3)
+                    dx = plot.label_offset.x()
+                    dy = plot.label_offset.y()
                     
-                    # Compute base dx/dy offset based on orientation
-                    if cfg_or == "NE":
-                        dx = 30.0 + shift_x
-                        dy = -30.0 - shift_y
-                    elif cfg_or == "NO":
-                        dx = -30.0 - max_w + shift_x
-                        dy = -30.0 - shift_y
-                    elif cfg_or == "SE":
-                        dx = 30.0 + shift_x
-                        dy = 30.0 - shift_y
-                    elif cfg_or == "SO":
-                        dx = -30.0 - max_w + shift_x
-                        dy = 30.0 - shift_y
-                    else:
-                        dx = 30.0 + shift_x
-                        dy = -30.0 - shift_y
-                    
-                    # Draw Leader Line
+                    # Draw Leader Line (FASE 3)
                     if is_coasting:
                         pen_leader = QPen(QColor(128, 128, 128), 1.0, Qt.PenStyle.DashLine)
                     else:
@@ -4363,10 +4619,8 @@ class RadarWidget(QWidget):
                     pen_leader.setColor(QColor(pen_leader.color().red(), pen_leader.color().green(), pen_leader.color().blue(), leader_alpha))
                     painter.setPen(pen_leader)
                     
-                    # Connect to closest side of the label bounding box
-                    target_x = dx if dx > 0 else dx + max_w
-                    target_y = dy
-                    painter.drawLine(QPointF(0, 0), QPointF(target_x, target_y))
+                    # Draw Leader Line from aircraft center (0, 0) to label offset
+                    painter.drawLine(QPointF(0, 0), plot.label_offset)
                     
                     # If target is in conflict STCA, draw badge/box
                     if plot.id in alertas_dict:
@@ -4418,6 +4672,7 @@ class RadarWidget(QWidget):
                     
                 if total_hitbox is not None:
                     self.label_hitboxes[plot.id] = total_hitbox
+                    plot.label_rect = total_hitbox
                     
         except Exception as e:
             print(f"[RENDER WARNING] Error drawing OACI target: {e}")
