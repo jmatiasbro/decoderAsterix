@@ -950,21 +950,22 @@ class MainWindow(QMainWindow):
         self.chk_grabar_pcap = self._make_toggle_button("Grabar Captura", "#00E5FF")
 
         self.btn_conectar_udp = QPushButton("Conectar UDP")
-        self.btn_conectar_udp.setFixedHeight(22)
+        self.btn_conectar_udp.setFixedHeight(26)
         self.btn_conectar_udp.clicked.connect(self._toggle_udp)
         self.btn_conectar_udp.setStyleSheet("""
             QPushButton {
-                background-color: rgba(0, 229, 255, 30);
+                background-color: #0E2A30;
                 border: 1px solid #00E5FF;
                 border-radius: 4px;
                 color: #00E5FF;
                 font-size: 8pt;
                 font-weight: bold;
+                padding: 4px;
             }
             QPushButton:hover {
                 border: 1px solid #39FF14;
                 color: #39FF14;
-                background-color: rgba(57, 255, 20, 15);
+                background-color: #14323A;
             }
         """)
 
@@ -1323,9 +1324,18 @@ class MainWindow(QMainWindow):
             self.radar.update()
 
     def _abrir_map_editor(self):
+        # Toggle: si ya está abierto, cerrarlo desde el mismo botón
+        dlg = getattr(self, 'map_editor_dialog', None)
+        if dlg is not None and dlg.isVisible():
+            dlg.close()
+            return
         from player.map_dialog import MapEditorDialog
         dialog = MapEditorDialog(self.radar.map_manager, self)
+        self.map_editor_dialog = dialog
+        dialog.finished.connect(lambda _r: setattr(self, 'map_editor_dialog', None))
         dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _cargar_pcap(self):
         file_paths, _ = QFileDialog.getOpenFileNames(
@@ -2040,6 +2050,11 @@ class MainWindow(QMainWindow):
                 pass
 
     def _abrir_filtro_datos(self):
+        # Toggle: si ya está abierto, cerrarlo desde el mismo botón
+        dlg = getattr(self, 'data_filter_dialog', None)
+        if dlg is not None and dlg.isVisible():
+            dlg.close()
+            return
         from player.dialogs import RadarDataFilterDialog
         # Construir lista de sensores disponibles para el diálogo
         sensors_list = []
@@ -2062,8 +2077,10 @@ class MainWindow(QMainWindow):
         )
         self.data_filter_dialog = dialog
         dialog.filter_applied.connect(self._aplicar_filtro_datos)
-        dialog.exec()
-        self.data_filter_dialog = None
+        dialog.finished.connect(lambda _r: setattr(self, 'data_filter_dialog', None))
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _aplicar_filtro_datos(self, config):
         self.data_filter_config = config
@@ -2140,10 +2157,19 @@ class MainWindow(QMainWindow):
         return fields
 
     def _abrir_filtro_etiquetas(self):
+        # Toggle: si ya está abierto, cerrarlo desde el mismo botón
+        dlg = getattr(self, 'label_filter_dialog', None)
+        if dlg is not None and dlg.isVisible():
+            dlg.close()
+            return
         from player.dialogs import LabelFilterDialog
         dialog = LabelFilterDialog(self.label_filter_config, None, self)
+        self.label_filter_dialog = dialog
         dialog.config_changed.connect(self._aplicar_filtro_etiquetas)
-        dialog.exec()
+        dialog.finished.connect(lambda _r: setattr(self, 'label_filter_dialog', None))
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _aplicar_filtro_etiquetas(self, config):
         self.label_filter_config = config
@@ -2355,21 +2381,32 @@ class MainWindow(QMainWindow):
         self.radar.update()
 
     def _abrir_filtro_calidad(self):
-        from PyQt6.QtWidgets import QDialog
+        # Toggle: si ya está abierto, cerrarlo desde el mismo botón
+        dlg = getattr(self, 'quality_filter_dialog', None)
+        if dlg is not None and dlg.isVisible():
+            dlg.close()
+            return
         dialog = QualityFilterDialog(self.radar.quality_manager, self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            # Forzar reevaluación al instante para todos los tracks con las nuevas reglas
-            for tid, track in self.radar.tracks.items():
-                from player.radar_widget import SimulationTime
-                track_age = SimulationTime.time() - getattr(track, '_first_seen', SimulationTime.time())
-                degradada, razon = self.radar.quality_manager.evaluar_pista(
-                    track.id,
-                    {'garbled': getattr(track, 'garbled', False), 'update_count': getattr(track, '_update_count', 1), 'age': track_age}
-                )
-                track.degradada = degradada
-                track.dqf_razon = razon
-            self.radar.evaluar_stca()
-            self.radar.update()
+        self.quality_filter_dialog = dialog
+        dialog.accepted.connect(self._reevaluar_calidad)
+        dialog.finished.connect(lambda _r: setattr(self, 'quality_filter_dialog', None))
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    def _reevaluar_calidad(self):
+        # Forzar reevaluación al instante para todos los tracks con las nuevas reglas
+        for tid, track in self.radar.tracks.items():
+            from player.radar_widget import SimulationTime
+            track_age = SimulationTime.time() - getattr(track, '_first_seen', SimulationTime.time())
+            degradada, razon = self.radar.quality_manager.evaluar_pista(
+                track.id,
+                {'garbled': getattr(track, 'garbled', False), 'update_count': getattr(track, '_update_count', 1), 'age': track_age}
+            )
+            track.degradada = degradada
+            track.dqf_razon = razon
+        self.radar.evaluar_stca()
+        self.radar.update()
 
     def _on_progress(self, current: int, total: int):
         if total > 0:
@@ -2663,19 +2700,19 @@ class MainWindow(QMainWindow):
             self.btn_conectar_udp.setText("❚❚ Desconectar")
             self.btn_conectar_udp.setStyleSheet("""
                 QPushButton {
-                    background-color: rgba(244, 67, 54, 30);
+                    background-color: #2A1416;
                     border: 1px solid #F44336;
                     border-radius: 4px;
-                    color: #F44336;
+                    color: #FF6B6B;
                     font-family: 'Segoe UI', sans-serif;
                     font-size: 8pt;
                     font-weight: bold;
-                    padding: 2px 6px;
+                    padding: 4px 6px;
                 }
                 QPushButton:hover {
                     border: 1px solid #FF5252;
-                    color: #FF5252;
-                    background-color: rgba(255, 82, 82, 15);
+                    color: #FFFFFF;
+                    background-color: #F44336;
                 }
                 QPushButton:pressed {
                     background-color: #FF5252;
@@ -2720,19 +2757,19 @@ class MainWindow(QMainWindow):
         self.btn_conectar_udp.setText("Conectar UDP")
         self.btn_conectar_udp.setStyleSheet("""
             QPushButton {
-                background-color: rgba(0, 229, 255, 30);
+                background-color: #0E2A30;
                 border: 1px solid #00E5FF;
                 border-radius: 4px;
                 color: #00E5FF;
                 font-family: 'Segoe UI', sans-serif;
                 font-size: 8pt;
                 font-weight: bold;
-                padding: 2px 6px;
+                padding: 4px 6px;
             }
             QPushButton:hover {
                 border: 1px solid #39FF14;
                 color: #39FF14;
-                background-color: rgba(57, 255, 20, 15);
+                background-color: #14323A;
             }
             QPushButton:pressed {
                 background-color: #39FF14;
