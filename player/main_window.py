@@ -892,6 +892,9 @@ class MainWindow(QMainWindow):
         # Submenú dinámico para cambiar de perfil activo en caliente
         self.menu_perfiles = menu_config.addMenu("Cambiar Perfil")
         self.menu_perfiles.aboutToShow.connect(self._rebuild_profiles_menu)
+        # Submenú para cambiar el rol operativo rápido (controlador ↔ técnico)
+        self.menu_rol = menu_config.addMenu("Rol Operativo")
+        self.menu_rol.aboutToShow.connect(self._rebuild_rol_menu)
 
         # Menú Mapas
         self.menu_mapas = menu_bar.addMenu("Mapas")
@@ -2497,6 +2500,31 @@ class MainWindow(QMainWindow):
         """Cambia el perfil activo en caliente desde el menú."""
         if nombre and nombre != str(self.profile_manager.profile.get("nombre_usuario", "")).strip():
             self.hot_load_profile(nombre)
+
+    def _rebuild_rol_menu(self):
+        """Reconstruye el submenú 'Rol Operativo' marcando el rol activo."""
+        from PyQt6.QtGui import QActionGroup
+        self.menu_rol.clear()
+        activo = str(self.profile_manager.profile.get("rol", "tecnico")).strip().lower()
+        grupo = QActionGroup(self.menu_rol)
+        grupo.setExclusive(True)
+        for clave, etiqueta in (("controlador", "Controlador"), ("tecnico", "Técnico")):
+            accion = self.menu_rol.addAction(etiqueta)
+            accion.setCheckable(True)
+            accion.setChecked(clave == activo)
+            accion.triggered.connect(lambda _checked=False, r=clave: self._cambiar_rol(r))
+            grupo.addAction(accion)
+
+    def _cambiar_rol(self, rol: str):
+        """Cambia el rol operativo en caliente, lo persiste y re-aplica la vista."""
+        actual = str(self.profile_manager.profile.get("rol", "tecnico")).strip().lower()
+        if rol == actual:
+            return
+        # Persistir el nuevo rol en el perfil activo y re-aplicar
+        self.profile_manager.update_profile({"rol": rol})
+        self._aplicar_rol(self.profile_manager.profile)
+        self.radar.update()
+        print(f"[ROL] Cambiado en caliente a: {rol}")
 
     def hot_load_profile(self, profile_name: str):
         """
