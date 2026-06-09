@@ -777,6 +777,7 @@ class MainWindow(QMainWindow):
         menu_archivo = menu_bar.addMenu("Archivo")
         self.act_cargar = menu_archivo.addAction("Cargar PCAP...", self._cargar_pcap)
         self.act_ver_logs = menu_archivo.addAction("Ver Log de Alertas STCA...", self._abrir_log_stca)
+        self.act_ver_logs_calidad = menu_archivo.addAction("Ver Log de Eventos de Calidad (FRUIT/GARBLING/REFLEXIÓN)...", self._abrir_log_calidad)
         menu_archivo.addSeparator()
         self.act_salir = menu_archivo.addAction("Salir", self.close)
 
@@ -1450,6 +1451,22 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self, "Información", 
                 "El archivo de log de STCA no existe o aún no se han registrado alertas en esta sesión."
+            )
+
+    def _abrir_log_calidad(self):
+        import os
+        log_path = "c:/documentos/decode_asterix/quality_events.log"
+        if os.path.exists(log_path):
+            try:
+                os.startfile(os.path.normpath(log_path))
+            except Exception:
+                import webbrowser
+                webbrowser.open(log_path)
+        else:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self, "Información",
+                "El archivo de eventos de calidad no existe o aún no se han registrado eventos (FRUIT/GARBLING/REFLEXIÓN) en esta sesión."
             )
 
     def _abrir_map_editor(self):
@@ -2320,8 +2337,12 @@ class MainWindow(QMainWindow):
                 
             # 7. Re-dibujar los mapas y re-anclar el boundary
             self._rebuild_and_draw_maps()
+
+            # 7.b Aplicar rol operativo (vista limpia + bloqueo playback si es controlador)
+            self._aplicar_rol(perfil_data)
+
             self.radar.update()
-            
+
             # 8. Actualizar título de la ventana
             apt = perfil_data.get("aeropuerto", "")
             nombre = perfil_data.get("name", "")
@@ -2338,6 +2359,37 @@ class MainWindow(QMainWindow):
         """Refresca el QNH del gestor de altimetría y repinta etiquetas (TL / A-F)."""
         self.radar.altimetry.qnh_local = float(value)
         self.radar.update()
+
+    def _aplicar_rol(self, perfil_data: dict):
+        """Aplica el rol operativo: vista limpia + bloqueo de playback para el controlador.
+
+        - Controlador: trabaja online (UDP). Sin playback (PCAP), sin coberturas/símbolo/
+          sweep de radar; vista centrada en el área de control. No puede configurar playback.
+        - Técnico: acceso completo (configura el playback y ve la vista de diagnóstico).
+        """
+        rol = str(perfil_data.get("rol", "tecnico")).strip().lower()
+        es_controlador = (rol == "controlador")
+
+        # Vista del PPI
+        self.radar.vista_controlador = es_controlador
+
+        # Bloqueo de controles de playback (solo técnico configura el playback)
+        self.toolbar.setVisible(not es_controlador)
+        if hasattr(self, 'act_cargar'):
+            self.act_cargar.setEnabled(not es_controlador)
+        if hasattr(self, 'btn_cargar'):
+            self.btn_cargar.setEnabled(not es_controlador)
+            self.btn_cargar.setVisible(not es_controlador)
+
+        # Controlador: enmarcar el área de control en el aeropuerto del perfil
+        if es_controlador:
+            lat = perfil_data.get("center_lat")
+            lon = perfil_data.get("center_lon")
+            if lat is not None and lon is not None:
+                self.radar.configurar_vista_perfil(lat, lon)
+
+        self.radar.update()
+        print(f"[ROL] Aplicado: {rol} (vista_controlador={es_controlador})")
 
     def _aplicar_perfil(self, perfil_data: dict):
         """Aplica el perfil operativo guardado: actualiza jurisdicción, recentra mapa."""
@@ -2381,6 +2433,10 @@ class MainWindow(QMainWindow):
             
         # Re-dibujar los mapas y re-anclar el boundary
         self._rebuild_and_draw_maps()
+
+        # Aplicar rol operativo (vista limpia + bloqueo playback si es controlador)
+        self._aplicar_rol(perfil_data)
+
         self.radar.update()
 
     def _abrir_filtro_calidad(self):
@@ -2433,7 +2489,20 @@ class MainWindow(QMainWindow):
 
 
     def _centrar_mapa(self):
-        """Recentra la vista en el sensor activo (el que fue seleccionado últimamente o el único)."""
+        """Recentra la vista según el rol.
+
+        - Controlador: vuelve a centrar el mapa en el área de incumbencia (aeropuerto del perfil).
+        - Técnico: centra en el radar seleccionado / sensor activo.
+        """
+        # Controlador: re-encuadrar el área de incumbencia
+        if getattr(self.radar, 'vista_controlador', False):
+            lat = getattr(self.radar, 'aeropuerto_lat', None)
+            lon = getattr(self.radar, 'aeropuerto_lon', None)
+            if lat is not None and lon is not None:
+                self.radar.configurar_vista_perfil(lat, lon)
+                print(f"[CENTRAR MAPA] Controlador: recentrado en área de incumbencia ({lat:.5f}, {lon:.5f})")
+                return
+
         # Intentar centrar en el sensor activo actual del widget
         center_key = getattr(self.radar, 'center_key', None)
         if center_key:
