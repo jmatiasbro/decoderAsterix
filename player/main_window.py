@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QThread, pyqtSignal, QEvent
 from PyQt6.QtGui import QFont, QColor, QPainterPath, QPixmap, QIcon, QBrush, QPainter
 
+import qtawesome as qta
+
 from utils.geo import cargar_sensores
 from player.playback_worker import PlaybackWorker
 from player.radar_widget import RadarWidget
@@ -26,6 +28,12 @@ from player.stca_dialog import STCADialog
 from player.filter_dialog import QualityFilterDialog
 
 import math
+
+# Color de acento para iconos vectoriales (QtAwesome), alineado al tema radar
+ICON_COLOR = "#00E5FF"
+
+def _icon(name: str, color: str = ICON_COLOR):
+    return qta.icon(name, color=color)
 
 def parse_coordinate(coord_str: str) -> Optional[Tuple[float, float]]:
     match = re.match(r'^(\d{2})(\d{2})(\d{2}(?:\.\d+)?)([NS])(\d{3})(\d{2})(\d{2}(?:\.\d+)?)([EW])$', coord_str.strip())
@@ -645,7 +653,7 @@ class MainWindow(QMainWindow):
 
         # Menú Configuración
         menu_config = menu_bar.addMenu("Configuración")
-        menu_config.addAction("⚙ Perfil Operativo / Jurisdicción...", self._abrir_perfil_admin)
+        menu_config.addAction(_icon("fa5s.cog"), "Perfil Operativo / Jurisdicción...", self._abrir_perfil_admin)
         # Submenú dinámico para cambiar de perfil activo en caliente
         self.menu_perfiles = menu_config.addMenu("Cambiar Perfil")
         self.menu_perfiles.aboutToShow.connect(self._rebuild_profiles_menu)
@@ -714,13 +722,15 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.toolbar)
 
         # Botón Play / Pause
-        self.btn_play = QPushButton("▶ Reproducir")
+        self.btn_play = QPushButton(" Reproducir")
+        self.btn_play.setIcon(_icon("fa5s.play"))
         self.btn_play.setEnabled(False)
         self.btn_play.clicked.connect(self._toggle_play)
         self.toolbar.addWidget(self.btn_play)
 
         # Botón Stop
-        self.btn_stop = QPushButton("Stop")
+        self.btn_stop = QPushButton(" Stop")
+        self.btn_stop.setIcon(_icon("fa5s.stop"))
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self._stop)
         self.toolbar.addWidget(self.btn_stop)
@@ -889,8 +899,10 @@ class MainWindow(QMainWindow):
         grupo_rep = QGroupBox("Carga Rápida")
         l_rep = QVBoxLayout()
         l_rep.setSpacing(6)
-        self.btn_cargar = QPushButton("Modo Playback")
-        self.btn_centrar = QPushButton("🞺 Centrar Mapa")
+        self.btn_cargar = QPushButton(" Modo Playback")
+        self.btn_cargar.setIcon(_icon("fa5s.folder-open"))
+        self.btn_centrar = QPushButton(" Centrar Mapa")
+        self.btn_centrar.setIcon(_icon("fa5s.crosshairs"))
         self.btn_centrar.setToolTip("Recentrar la vista en el sensor activo")
         self.btn_cargar.clicked.connect(self._cargar_pcap)
         self.btn_centrar.clicked.connect(self._centrar_mapa)
@@ -949,7 +961,8 @@ class MainWindow(QMainWindow):
 
         self.chk_grabar_pcap = self._make_toggle_button("Grabar Captura", "#00E5FF")
 
-        self.btn_conectar_udp = QPushButton("Conectar UDP")
+        self.btn_conectar_udp = QPushButton(" Conectar UDP")
+        self.btn_conectar_udp.setIcon(_icon("fa5s.plug"))
         self.btn_conectar_udp.setFixedHeight(26)
         self.btn_conectar_udp.clicked.connect(self._toggle_udp)
         self.btn_conectar_udp.setStyleSheet("""
@@ -1010,7 +1023,8 @@ class MainWindow(QMainWindow):
         l_cant.addWidget(lbl_cant)
         l_cant.addWidget(self.spin_hist)
 
-        self.btn_clear_hist = QPushButton("Limpiar")
+        self.btn_clear_hist = QPushButton(" Limpiar")
+        self.btn_clear_hist.setIcon(_icon("fa5s.trash-alt", "#F44336"))
         self.btn_clear_hist.setFixedHeight(22)
         self.btn_clear_hist.clicked.connect(self._clear_history)
         self.btn_clear_hist.setStyleSheet("""
@@ -1093,8 +1107,10 @@ class MainWindow(QMainWindow):
         l_filtros = QVBoxLayout()
         l_filtros.setContentsMargins(6, 12, 6, 6)
         l_filtros.setSpacing(4)
-        self.btn_filtro_datos = QPushButton("Filtro Datos")
-        self.btn_filtro_etiquetas = QPushButton("Filtro Etiquetas")
+        self.btn_filtro_datos = QPushButton(" Filtro Datos")
+        self.btn_filtro_datos.setIcon(_icon("fa5s.filter"))
+        self.btn_filtro_etiquetas = QPushButton(" Filtro Etiquetas")
+        self.btn_filtro_etiquetas.setIcon(_icon("fa5s.tags"))
         self.btn_filtro_datos.clicked.connect(self._abrir_filtro_datos)
         self.btn_filtro_etiquetas.clicked.connect(self._abrir_filtro_etiquetas)
         self.btn_filtro_datos.setStyleSheet("""
@@ -1113,7 +1129,8 @@ class MainWindow(QMainWindow):
             }
         """)
         self.btn_filtro_etiquetas.setStyleSheet(self.btn_filtro_datos.styleSheet())
-        self.btn_dqf = QPushButton("Filtros Calidad (DQF)")
+        self.btn_dqf = QPushButton(" Filtros Calidad (DQF)")
+        self.btn_dqf.setIcon(_icon("fa5s.sliders-h"))
         self.btn_dqf.clicked.connect(self._abrir_filtro_calidad)
         self.btn_dqf.setStyleSheet(self.btn_filtro_datos.styleSheet())
         
@@ -1128,7 +1145,8 @@ class MainWindow(QMainWindow):
         l_carto = QVBoxLayout()
         l_carto.setContentsMargins(6, 12, 6, 6)
         l_carto.setSpacing(4)
-        self.btn_dibujo = QPushButton("✏️ Herramienta de Dibujo")
+        self.btn_dibujo = QPushButton(" Herramienta de Dibujo")
+        self.btn_dibujo.setIcon(_icon("fa5s.pencil-alt"))
         self.btn_dibujo.setToolTip("Abre el gestor de capas / herramienta de dibujo de cartografía")
         self.btn_dibujo.clicked.connect(self._abrir_map_editor)
         self.btn_dibujo.setStyleSheet(self.btn_filtro_datos.styleSheet())
@@ -1140,7 +1158,8 @@ class MainWindow(QMainWindow):
         grupo_analisis = QGroupBox("Análisis PASS")
         l_analisis = QVBoxLayout()
         l_analisis.setContentsMargins(6, 12, 6, 6)
-        self.btn_pass = QPushButton("📊 Análisis PASS")
+        self.btn_pass = QPushButton(" Análisis PASS")
+        self.btn_pass.setIcon(_icon("fa5s.chart-bar"))
         self.btn_pass.setEnabled(False)
         self.btn_pass.clicked.connect(self._abrir_analisis_pass)
         self.btn_pass.setStyleSheet("""
@@ -1408,6 +1427,15 @@ class MainWindow(QMainWindow):
         
         self.worker.start()
 
+    def _set_play_state(self, playing: bool):
+        """Actualiza icono y texto del botón play/pausa según el estado."""
+        if playing:
+            self.btn_play.setIcon(_icon("fa5s.pause"))
+            self.btn_play.setText(" Pausa")
+        else:
+            self.btn_play.setIcon(_icon("fa5s.play"))
+            self.btn_play.setText(" Reproducir")
+
     def _toggle_play(self):
         if self.worker is not None:
             if not self.playing:
@@ -1420,14 +1448,14 @@ class MainWindow(QMainWindow):
                     self.worker.start() # Arrancará en _playback_loop
                     self.playing = True
                     self.radar.play()
-                    self.btn_play.setText("❚❚ Pausa")
+                    self._set_play_state(True)
                 else:
                     # Si ya estaba corriendo en playback_loop pero pausado, reanudar
                     self.worker.engine.is_playing = True
                     self.worker.set_paused(False)
                     self.playing = True
                     self.radar.play()
-                    self.btn_play.setText("❚❚ Pausa")
+                    self._set_play_state(True)
             else:
                 # Si está reproduciendo, pausar
                 self.worker.engine.is_playing = False
@@ -1435,7 +1463,7 @@ class MainWindow(QMainWindow):
                 self.playing = False
                 if hasattr(self, 'radar') and self.radar is not None:
                     self.radar.pause()
-                self.btn_play.setText("▶ Reproducir")
+                self._set_play_state(False)
 
     def _stop(self):
         self.playing = False
@@ -1447,7 +1475,7 @@ class MainWindow(QMainWindow):
             self.radar.reset_sweep_angle()
             
         self.btn_play.setEnabled(True)
-        self.btn_play.setText("▶ Reproducir")
+        self._set_play_state(False)
         self.btn_stop.setEnabled(True)
         self.slider_tiempo.setValue(0)
         self.lbl_tiempo.setText("00:00:00")
@@ -1490,7 +1518,7 @@ class MainWindow(QMainWindow):
             self.worker.progress_updated.connect(self._on_progress)
             
             self.btn_play.setEnabled(True)
-            self.btn_play.setText("▶ Reproducir")
+            self._set_play_state(False)
             self.btn_stop.setEnabled(True)
             self.btn_pass.setEnabled(True)
             self.slider_tiempo.setEnabled(True)
@@ -2437,7 +2465,7 @@ class MainWindow(QMainWindow):
 
     def _on_playback_finished(self):
         self.playing = False
-        self.btn_play.setText("▶ Reproducir")
+        self._set_play_state(False)
         self._show_panel()
 
 
@@ -2697,7 +2725,8 @@ class MainWindow(QMainWindow):
             self.chk_grabar_pcap.setEnabled(False)
 
             # 6. Cambiar apariencia del botón Conectar a Desconectar (Rojo Neón)
-            self.btn_conectar_udp.setText("❚❚ Desconectar")
+            self.btn_conectar_udp.setIcon(_icon("fa5s.unlink"))
+            self.btn_conectar_udp.setText(" Desconectar")
             self.btn_conectar_udp.setStyleSheet("""
                 QPushButton {
                     background-color: #2A1416;
@@ -2754,7 +2783,8 @@ class MainWindow(QMainWindow):
         self.chk_grabar_pcap.setEnabled(True)
 
         # 4. Restaurar estilo del botón Conectar UDP
-        self.btn_conectar_udp.setText("Conectar UDP")
+        self.btn_conectar_udp.setIcon(_icon("fa5s.plug"))
+        self.btn_conectar_udp.setText(" Conectar UDP")
         self.btn_conectar_udp.setStyleSheet("""
             QPushButton {
                 background-color: #0E2A30;
@@ -2881,14 +2911,14 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error en Análisis", f"Error iniciando análisis PASS:\n{str(e)}")
             self.btn_pass.setEnabled(True)
-            self.btn_pass.setText("📊 Análisis PASS")
+            self.btn_pass.setText(" Análisis PASS")
 
     def _cancelar_analisis_pass(self):
         if hasattr(self, '_pass_worker') and self._pass_worker.isRunning():
             self._pass_worker.terminate()
             self._pass_worker.wait()
         self.btn_pass.setEnabled(True)
-        self.btn_pass.setText("📊 Análisis PASS")
+        self.btn_pass.setText(" Análisis PASS")
         print("[PASS Analysis] Análisis cancelado por el usuario.")
 
     def _on_pass_analysis_progress(self, msg: str):
@@ -2900,7 +2930,7 @@ class MainWindow(QMainWindow):
             self._pass_progress.close()
             
         self.btn_pass.setEnabled(True)
-        self.btn_pass.setText("📊 Análisis PASS")
+        self.btn_pass.setText(" Análisis PASS")
         
         try:
             from player.pass_dashboard import PassDashboardDialog
@@ -2914,7 +2944,7 @@ class MainWindow(QMainWindow):
             self._pass_progress.close()
             
         self.btn_pass.setEnabled(True)
-        self.btn_pass.setText("📊 Análisis PASS")
+        self.btn_pass.setText(" Análisis PASS")
         QMessageBox.critical(self, "Error en Análisis", f"Error ejecutando análisis PASS:\n{err_msg}")
 
     def exportar_kmz(self):
