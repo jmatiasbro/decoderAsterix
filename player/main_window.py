@@ -1407,7 +1407,8 @@ class MainWindow(QMainWindow):
         self.act_exp_csv.setEnabled(False)
         self.act_exp_parquet.setEnabled(False)
         self.chk_modo_integrado.setEnabled(False)
-        
+        self._modo_manual = False  # permitir default automático por nº de sensores
+
         # Limpiar combo box de proyección
         self.combo_sensor.blockSignals(True)
         self.combo_sensor.clear()
@@ -1568,13 +1569,12 @@ class MainWindow(QMainWindow):
             self.act_exp_csv.setEnabled(True)
             self.act_exp_parquet.setEnabled(True)
 
-            # Habilitar o deshabilitar chk_modo_integrado según la cantidad de radares/sensores detectados
-            if len(self.sensores_conocidos) <= 1:
-                self.chk_modo_integrado.setChecked(False)
-                self.chk_modo_integrado.setEnabled(False)
-            else:
-                self.chk_modo_integrado.setEnabled(True)
-                self.chk_modo_integrado.setChecked(True)
+            # Default por nº de sensores: multisensor -> Integrado, un solo sensor -> Crudo.
+            # Ambos botones quedan habilitados (modos mutuamente excluyentes).
+            self.chk_modo_integrado.setEnabled(True)
+            self.chk_modo_crudo.setEnabled(True)
+            if not getattr(self, '_modo_manual', False):
+                self._set_modo(len(self.sensores_conocidos) > 1)
         else:
             self.btn_play.setText("Error en PCAP")
             self._show_panel()
@@ -1653,10 +1653,12 @@ class MainWindow(QMainWindow):
                 self._update_sweep_state()
             print(f"[SENSOR] Detectado: [{sac}/{sic}] {nombre}")
 
-        # Si se detectan múltiples sensores en vivo (por ejemplo, en streaming UDP), habilitamos el modo integrado
-        if len(self.sensores_conocidos) > 1 and not self.chk_modo_integrado.isEnabled():
-            self.chk_modo_integrado.setEnabled(True)
-            self.chk_modo_integrado.setChecked(True)
+        # Default dinámico en vivo (UDP): mientras el usuario no haya elegido manualmente,
+        # un solo sensor -> Crudo; al aparecer el segundo -> Integrado.
+        self.chk_modo_integrado.setEnabled(True)
+        self.chk_modo_crudo.setEnabled(True)
+        if not getattr(self, '_modo_manual', False):
+            self._set_modo(len(self.sensores_conocidos) > 1)
 
     def _on_sensor_combo_changed(self, index):
         if index <= 0:
@@ -1727,23 +1729,38 @@ class MainWindow(QMainWindow):
         self.radar.show_silence_cone = checked
         self.radar.update()
 
+    def _set_modo(self, integrado: bool):
+        """Modos mutuamente excluyentes: siempre exactamente uno activo.
+        Integrado = fusión de identidad + filtros. Crudo = todos los plots por
+        sensor, sin filtros. El suavizado se aplica en ambos."""
+        if not hasattr(self, 'radar'):
+            return
+        self.radar.modo_integrado = integrado
+        self.radar.modo_crudo = not integrado
+        # Sincronizar ambos botones sin reentrar en los handlers
+        self.chk_modo_integrado.blockSignals(True)
+        self.chk_modo_crudo.blockSignals(True)
+        self.chk_modo_integrado.setChecked(integrado)
+        self.chk_modo_crudo.setChecked(not integrado)
+        self.chk_modo_integrado.blockSignals(False)
+        self.chk_modo_crudo.blockSignals(False)
+        # Reconstruir pistas/estela al cambiar de modo (la fusión cambia)
+        if hasattr(self.radar, 'tracks'):
+            self.radar.tracks.clear()
+        if hasattr(self.radar, 'pending_tracks'):
+            self.radar.pending_tracks.clear()
+        if hasattr(self.radar, 'history'):
+            self.radar.history.clear()
+        self.radar.update()
+
     def _on_modo_integrado_toggled(self, checked: bool):
-        if hasattr(self, 'radar'):
-            self.radar.modo_integrado = checked
+        # Toggle excluyente: integrado on -> crudo off; integrado off -> crudo on
+        self._modo_manual = True
+        self._set_modo(checked)
 
     def _on_modo_crudo_toggled(self, checked: bool):
-        if hasattr(self, 'radar'):
-            self.radar.modo_crudo = checked
-            # Si se activa el modo crudo, forzar el repintado
-            self.radar.update()
-            if hasattr(self.radar, 'tracks'):
-                self.radar.tracks.clear()
-            if hasattr(self.radar, 'pending_tracks'):
-                self.radar.pending_tracks.clear()
-            if hasattr(self.radar, 'history'):
-                self.radar.history.clear()
-            self.radar.evaluar_stca()
-            self.radar.update()
+        self._modo_manual = True
+        self._set_modo(not checked)
 
     def _plot_passes_filters(self, plot) -> bool:
         """
@@ -2847,6 +2864,7 @@ class MainWindow(QMainWindow):
             self.radar.limpiar_pantalla()
             self.sensores_conocidos.clear()
             self.sensores_activos.clear()
+            self._modo_manual = False  # permitir default automático por nº de sensores
             self.autocentered_on_first_sensor = False
             self.data_filter_config.pop("sensores_seleccionados", None)
             self.total_messages_received = 0
