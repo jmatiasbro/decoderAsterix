@@ -205,6 +205,12 @@ class ProfileAdminDialog(QDialog):
         self.txt_nombre = QLineEdit()
         self.txt_nombre.setPlaceholderText("Ej. Matias_TWR")
         form.addRow("Identificador / Usuario:", self.txt_nombre)
+
+        # 1.b Rol operativo (define la vista y permisos)
+        self.cmb_rol = QComboBox()
+        self.cmb_rol.addItem("Técnico", "tecnico")
+        self.cmb_rol.addItem("Controlador", "controlador")
+        form.addRow("Rol Operativo:", self.cmb_rol)
         
         # 2. Aeropuerto ICAO (entrada manual con sugerencias de los disponibles)
         self.cmb_aeropuerto = QComboBox()
@@ -450,6 +456,7 @@ class ProfileAdminDialog(QDialog):
         if name == "[Nuevo Perfil]" or not name:
             self.txt_nombre.clear()
             self.txt_nombre.setEnabled(True)
+            self.cmb_rol.setCurrentIndex(0)
             self.cmb_aeropuerto.setCurrentIndex(-1)
             self.txt_lat.clear()
             self.txt_lon.clear()
@@ -468,6 +475,9 @@ class ProfileAdminDialog(QDialog):
             profile_data = self.profile_manager.leer_perfil(name)
             self.txt_nombre.setText(profile_data.get("nombre_usuario", ""))
             self.txt_nombre.setEnabled(True)
+
+            rol_idx = self.cmb_rol.findData(str(profile_data.get("rol", "tecnico")).strip().lower())
+            self.cmb_rol.setCurrentIndex(rol_idx if rol_idx >= 0 else 0)
             
             apt = profile_data.get("aeropuerto_trabajo", "")
             idx = self.cmb_aeropuerto.findText(apt)
@@ -528,6 +538,7 @@ class ProfileAdminDialog(QDialog):
             
         datos = {
             "nombre_usuario": nombre,
+            "rol": self.cmb_rol.currentData(),
             "aeropuerto_trabajo": self.cmb_aeropuerto.currentText().strip().upper(),
             "coordenadas_centro": {"lat": lat, "lon": lon},
             "nivel_incumbencia": self.sb_fl_incumbencia.value(),
