@@ -16,8 +16,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QThread, pyqtSignal, QEvent
 from PyQt6.QtGui import QFont, QColor, QPainterPath, QPixmap, QIcon, QBrush, QPainter
 
-import ezdxf
-
 from utils.geo import cargar_sensores
 from player.playback_worker import PlaybackWorker
 from player.radar_widget import RadarWidget
@@ -47,7 +45,7 @@ def parse_coordinate(coord_str: str) -> Optional[Tuple[float, float]]:
     return lat, lon
 
 class DxfLoaderThread(QThread):
-    """Carga mapa.dxf o boundary.map en hilo separado. Emite segmentos serializables."""
+    """Carga mapas GeoJSON (.geojson/.json) en hilo separado. Emite segmentos serializables."""
     dxf_data = pyqtSignal(object, float, float, float, float)
     dxf_error = pyqtSignal(str)
 
@@ -120,244 +118,7 @@ class DxfLoaderThread(QThread):
             except Exception as e:
                 self.dxf_error.emit(f"Error cargando GeoJSON: {e}")
             return
-
-        if path.lower().endswith('.map'):
-            try:
-                segments = []
-                min_x = min_y = float('inf')
-                max_x = max_y = float('-inf')
-                
-                def update_ext(x, y):
-                    nonlocal min_x, max_x, min_y, max_y
-                    min_x = min(min_x, x)
-                    max_x = max(max_x, x)
-                    min_y = min(min_y, y)
-                    max_y = max(max_y, y)
-                
-                def parse_coordinate_robust(coord_line: str) -> Optional[Tuple[float, float]]:
-                    tokens = coord_line.strip().split()
-                    if not tokens:
-                        return None
-                    return parse_coordinate(tokens[0])
-
-                def parse_map_recursive(filepath: str):
-                    if not os.path.exists(filepath):
-                        return
-                    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                        lines = f.readlines()
-                    
-                    idx = 0
-                    while idx < len(lines):
-                        line = lines[idx].strip()
-                        if not line or line.startswith('/*') or line.startswith('//'):
-                            idx += 1
-                            continue
-                        
-                        line_lower = line.lower()
-                        
-                        # Si es una referencia a otro mapa (.map)
-                        if '.map' in line_lower and not line_lower.startswith('polyline') and not line_lower.startswith('polilinea'):
-                            parts = line.split()
-                            map_ref = parts[0]
-                            filename = os.path.basename(map_ref)
-                            parent_dir = os.path.dirname(filepath)
-                            
-                            # Resolver ubicaciones posibles
-                            candidate1 = os.path.join(parent_dir, filename)
-                            base_project = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                            candidate2 = os.path.join(base_project, "files", "INFERIOR", filename)
-                            candidate3 = os.path.join(base_project, "files", filename)
-                            
-                            resolved_path = None
-                            for cand in [candidate1, candidate2, candidate3]:
-                                if os.path.exists(cand):
-                                    resolved_path = cand
-                                    break
-                            
-                            if resolved_path:
-                                parse_map_recursive(resolved_path)
-                            idx += 1
-                            continue
-                            
-                        # Si es polilínea / polilinea (aerovía o límites)
-                        if 'polilinea' in line_lower or 'polyline' in line_lower:
-                            parts = line.split()
-                            if len(parts) >= 2:
-                                try:
-                                    count = int(parts[1])
-                                except ValueError:
-                                    count = 0
-                                    
-                                airway_name = ""
-                                match_bracket = re.search(r'\[([^\]]+)\]', line)
-                                if match_bracket:
-                                    airway_name = match_bracket.group(1).strip()
-                                    
-                                coords_parsed = []
-                                idx += 1
-                                parsed_count = 0
-                                while parsed_count < count and idx < len(lines):
-                                    coord_line = lines[idx].strip()
-                                    if not coord_line or coord_line.startswith('/*') or coord_line.startswith('//'):
-                                        idx += 1
-                                        continue
-                                    res = parse_coordinate_robust(coord_line)
-                                    if res:
-                                        lat, lon = res
-                                        coords_parsed.append((lat, lon))
-                                        update_ext(lat, lon)
-                                        parsed_count += 1
-                                    idx += 1
-                                
-                                if coords_parsed:
-                                    layer = "AEROVIAS" if airway_name else "LINEAS_DE_MAPA"
-                                    lat0, lon0 = coords_parsed[0]
-                                    segments.append(('M', layer, lat0, lon0))
-                                    for lat, lon in coords_parsed[1:]:
-                                        segments.append(('L', layer, lat, lon))
-                                continue
-                                
-                        # Si es texto (Waypoint nombres) o FixPointText
-                        elif line_lower.startswith('text\t') or line_lower.startswith('text ') or line_lower.startswith('fixpointtext'):
-                            if line_lower.startswith('fixpointtext'):
-                                parts = line.split()
-                                if len(parts) >= 3:
-                                    coord_str = parts[1].strip()
-                                    label_str = parts[2].strip().replace('"', '')
-                                else:
-                                    idx += 1
-                                    continue
-                            else:
-                                parts = line.split(maxsplit=2)
-                                if len(parts) >= 3:
-                                    coord_str = parts[1].strip()
-                                    label_str = parts[2].strip().replace('"', '')
-                                else:
-                                    idx += 1
-                                    continue
-                            res = parse_coordinate_robust(coord_str)
-                            if res:
-                                lat, lon = res
-                                segments.append(('T', "NOMBRES_WAYPOINTS", lat, lon, label_str))
-                                update_ext(lat, lon)
-                            idx += 1
-                            continue
-                            
-                        # Si es símbolo de punto fix o FixpointRouSimbolo
-                        elif (line_lower.startswith('fixpointsymbol') or 
-                              line_lower.startswith('fixpointsy') or 
-                              line_lower.startswith('fixpointrousimbolo')):
-                            parts = line.split()
-                            if len(parts) >= 2:
-                                coord_str = parts[1].strip()
-                                label_str = ""
-                                if len(parts) >= 4:
-                                    candidate = parts[3].strip().replace('[', '').replace(']', '').strip()
-                                    if not candidate.isdigit() and candidate.upper() not in ('Y', 'N', 'ADAP', 'TRUE', 'FALSE'):
-                                        label_str = candidate
-                                res = parse_coordinate_robust(coord_str)
-                                if res:
-                                    lat, lon = res
-                                    segments.append(('S', "SIMBOLOS_WAYPOINTS", lat, lon, label_str))
-                                    update_ext(lat, lon)
-                            idx += 1
-                            continue
-                            
-                        idx += 1
-                
-                # Ejecutar recursivo inicial
-                parse_map_recursive(path)
-                
-                if min_x == float('inf'):
-                    self.dxf_error.emit("Sin entidades válidas en el archivo .map")
-                    return
-                self.dxf_data.emit(segments, min_x, min_y, max_x, max_y)
-            except Exception as e:
-                self.dxf_error.emit(f"Error cargando archivo .map: {e}")
-            return
-            
-        try:
-            doc = ezdxf.readfile(path)
-            msp = doc.modelspace()
-            segments: list = []
-            min_x = min_y = float('inf')
-            max_x = max_y = float('-inf')
-
-            def update_ext(x, y):
-                nonlocal min_x, max_x, min_y, max_y
-                min_x = min(min_x, x)
-                max_x = max(max_x, x)
-                min_y = min(min_y, y)
-                max_y = max(max_y, y)
-
-            def add_seg(t, layer, *coords):
-                segments.append((t, layer, *coords))
-                for i in range(0, len(coords), 2):
-                    update_ext(coords[i], coords[i+1])
-
-            for entity in msp:
-                try:
-                    dxft = entity.dxftype()
-                    layer = entity.dxf.layer
-                    if dxft == 'LINE':
-                        add_seg('M', layer, entity.dxf.start.x, entity.dxf.start.y)
-                        add_seg('L', layer, entity.dxf.end.x, entity.dxf.end.y)
-                    elif dxft == 'LWPOLYLINE':
-                        pts = list(entity.get_points())
-                        if pts:
-                            add_seg('M', layer, pts[0][0], pts[0][1])
-                            for p in pts[1:]:
-                                add_seg('L', layer, p[0], p[1])
-                            if entity.closed:
-                                segments.append(('C', layer))
-                    elif dxft == 'POLYLINE':
-                        verts = list(entity.vertices)
-                        if verts:
-                            v0 = verts[0].dxf.location
-                            add_seg('M', layer, v0.x, v0.y)
-                            for v in verts[1:]:
-                                loc = v.dxf.location
-                                add_seg('L', layer, loc.x, loc.y)
-                            if entity.is_closed:
-                                segments.append(('C', layer))
-                    elif dxft == 'ARC':
-                        cx, cy = entity.dxf.center.x, entity.dxf.center.y
-                        r = entity.dxf.radius
-                        sa, ea = entity.dxf.start_angle, entity.dxf.end_angle
-                        steps = max(12, int(abs(ea - sa) / 5))
-                        first = True
-                        for i in range(steps + 1):
-                            a = math.radians(sa + (ea - sa) * i / steps)
-                            x = cx + r * math.cos(a)
-                            y = cy + r * math.sin(a)
-                            if first:
-                                add_seg('M', layer, x, y)
-                                first = False
-                            else:
-                                add_seg('L', layer, x, y)
-                    elif dxft == 'CIRCLE':
-                        cx, cy = entity.dxf.center.x, entity.dxf.center.y
-                        r = entity.dxf.radius
-                        first = True
-                        for i in range(37):
-                            a = math.radians(360.0 * i / 36)
-                            x = cx + r * math.cos(a)
-                            y = cy + r * math.sin(a)
-                            if first:
-                                add_seg('M', layer, x, y)
-                                first = False
-                            else:
-                                add_seg('L', layer, x, y)
-                        segments.append(('C', layer))
-                except Exception:
-                    continue
-
-            if min_x == float('inf'):
-                self.dxf_error.emit("Sin entidades válidas en DXF")
-                return
-            self.dxf_data.emit(segments, min_x, min_y, max_x, max_y)
-        except Exception as e:
-            self.dxf_error.emit(f"Error DXF: {e}")
+        self.dxf_error.emit(f"Formato no soportado (solo .geojson/.json): {self.filepath}")
 
 class PASSAnalysisWorker(QThread):
     """Worker QThread para ejecutar el análisis PASS en segundo plano."""
@@ -759,16 +520,13 @@ class MainWindow(QMainWindow):
         self.exporter = PassExporter()
         
         # Mapas interactivos con checkboxes (seleccionar/deseleccionar)
-        self._default_map_segments = []
-        self._default_map_bounds = None
         self._loaded_custom_maps = {}
         self._active_map_paths = set()
         self.map_actions = {}
-        
+
         # Fusión/Sensores STCA se maneja ahora de forma autocontenida en RadarWidget
         self._setup_ui()
-        self._load_dxf_async()
-        
+
         self.playing = False
         self.total_frames = 0
         self.duration = 0.0
@@ -943,7 +701,7 @@ class MainWindow(QMainWindow):
             self.map_actions[abs_path] = action
         
         self.menu_mapas.addSeparator()
-        self.menu_mapas.addAction("Cargar Mapa Personalizado (.map)...", self._cargar_mapa_personalizado)
+        self.menu_mapas.addAction("Cargar Mapa Personalizado (.geojson)...", self._cargar_mapa_personalizado)
 
     def _setup_tool_bar(self):
         self.toolbar = QToolBar("Controles de Reproducción")
@@ -2790,61 +2548,6 @@ class MainWindow(QMainWindow):
         print(f"[REPROYECTOR] Velocidad de rotación detectada para {sac}/{sic} -> {rpm:.2f} RPM")
 
 
-    def _load_dxf_async(self):
-        # Auto-detectar si boundary.map existe en la carpeta del proyecto
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        map_path = os.path.join(base_dir, "mapa", "boundary.map")
-        if os.path.exists(map_path):
-            file_to_load = "mapa/boundary.map"
-            self.radar.map_is_absolute = True
-            print("[SOPORTE MAPA] Detectado boundary.map. Usando mapa de coordenadas absolutas.")
-        else:
-            file_to_load = "mapa/mapa.dxf"
-            self.radar.map_is_absolute = False
-            print("[SOPORTE MAPA] boundary.map no encontrado. Usando mapa.dxf heredado.")
-
-        self.dxf_loader = DxfLoaderThread(file_to_load)
-        self.dxf_loader.dxf_data.connect(self._on_dxf_data)
-        self.dxf_loader.dxf_error.connect(self._on_dxf_error)
-        self.dxf_loader.start()
-
-    def _on_dxf_data(self, segments, min_x, min_y, max_x, max_y):
-        # Si no es coordenadas absolutas, convertimos los segmentos DXF a coordenadas absolutas lat/lon
-        if not getattr(self.radar, 'map_is_absolute', False):
-            print("[DXF] Convirtiendo segmentos relativos (NM) a coordenadas absolutas lat/lon...")
-            abs_segments = []
-            for seg in segments:
-                if len(seg) >= 4 and seg[0] in ('M', 'L'):
-                    t, layer, x_nm, y_nm = seg[0], seg[1], seg[2], seg[3]
-                    lat, lon = self.radar._nm_offset_to_latlon(x_nm, y_nm)
-                    abs_segments.append((t, layer, lat, lon))
-                else:
-                    abs_segments.append(seg)
-            segments = abs_segments
-            
-            # Recalcular límites en lat/lon
-            min_x = min_y = float('inf')
-            max_x = max_y = float('-inf')
-            for seg in segments:
-                if len(seg) >= 4 and seg[0] in ('M', 'L'):
-                    lat, lon = seg[2], seg[3]
-                    min_x = min(min_x, lat)
-                    max_x = max(max_x, lat)
-                    min_y = min(min_y, lon)
-                    max_y = max(max_y, lon)
-            
-            # Forzar map_is_absolute a True una vez hecha la conversión
-            self.radar.map_is_absolute = True
-            
-        self._default_map_segments = segments
-        self._default_map_bounds = (min_x, min_y, max_x, max_y)
-        print(f"[DXF] Mapa por defecto cacheado y convertido. Segmentos: {len(segments)}")
-        self._rebuild_and_draw_maps()
-        self.radar.recenter_to_fit_map()
-
-    def _on_dxf_error(self, msg):
-        print(f"[DXF Error] {msg}")
-
     def _load_custom_map(self, file_path: str):
         abs_path = os.path.abspath(file_path)
         self._load_and_register_custom_map(abs_path)
@@ -2863,7 +2566,7 @@ class MainWindow(QMainWindow):
             initial_dir = "."
             
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Seleccionar Archivo de Mapa", initial_dir, "Archivos de Mapa (*.map *.geojson *.json);;Archivos GeoJSON (*.geojson *.json);;Archivos de Mapa (.map) (*.map);;Todos (*)"
+            self, "Seleccionar Archivo de Mapa", initial_dir, "Archivos GeoJSON (*.geojson *.json);;Todos (*)"
         )
         if file_path:
             abs_path = os.path.abspath(file_path)
@@ -2953,18 +2656,13 @@ class MainWindow(QMainWindow):
         self._rebuild_and_draw_maps()
 
     def _rebuild_and_draw_maps(self):
-        # 1. Limpiar las capas tácticas previas en el manager para no duplicar
-        capas_a_borrar = [name for name, layer in self.radar.map_manager.layers.items() if layer.tipo == "TACTICO"]
+        # 1. Limpiar SOLO las capas gestionadas por estos menús (no las del perfil/cartografía)
+        nombres_gestionados = {os.path.basename(p) for p in self.map_actions}
+        capas_a_borrar = [name for name in self.radar.map_manager.layers if name in nombres_gestionados]
         for nombre in capas_a_borrar:
             del self.radar.map_manager.layers[nombre]
-            
-        # 2. Agregar el mapa por defecto (si existe)
-        if self._default_map_segments:
-            self.radar.set_raw_map_segments(
-                self._default_map_segments, -100.0, -100.0, 100.0, 100.0, "Mapa Defecto"
-            )
-            
-        # 3. Agregar los mapas tácticos seleccionados
+
+        # 2. Agregar los mapas tácticos seleccionados
         for path in list(self._active_map_paths):
             if path in self._loaded_custom_maps:
                 segs, mx, my, max_x_val, max_y_val = self._loaded_custom_maps[path]
@@ -3384,8 +3082,6 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._limpiar_worker()
-        if hasattr(self, 'dxf_loader') and self.dxf_loader.isRunning():
-            self.dxf_loader.wait(1000)
         shutil.rmtree(self.cache_dir, ignore_errors=True)
         event.accept()
 
