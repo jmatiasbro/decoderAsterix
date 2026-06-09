@@ -1260,6 +1260,30 @@ if __name__ == '__main__':
             font-family: 'Consolas', 'Monospace';
             font-size: 11px;
         }
+        /* Opciones NO disponibles: color claro/atenuado respecto a las activas */
+        QPushButton:disabled {
+            background-color: #20242E;
+            color: #5A6273;
+            border: 1px solid #2E3440;
+        }
+        QComboBox:disabled, QSpinBox:disabled, QLineEdit:disabled {
+            background-color: #20242E;
+            color: #5A6273;
+            border: 1px solid #2E3440;
+        }
+        QCheckBox:disabled {
+            color: #5A6273;
+        }
+        QCheckBox::indicator:disabled {
+            border: 1px solid #2E3440;
+            background-color: #20242E;
+        }
+        QMenu::item:disabled, QMenuBar::item:disabled {
+            color: #5A6273;
+        }
+        QToolBar QToolButton:disabled {
+            color: #5A6273;
+        }
     """)
 
     window = MainWindow()

@@ -9,6 +9,7 @@ class ProfileManager:
     """
     DEFAULT_STRICT_PROFILE = {
         "nombre_usuario": "Matias_TWR",
+        "rol": "tecnico",
         "aeropuerto_trabajo": "SACO",
         "coordenadas_centro": {"lat": -31.31, "lon": -64.21},
         "nivel_incumbencia": 95,
@@ -35,6 +36,10 @@ class ProfileManager:
     def to_strict_schema(data: dict) -> dict:
         """Convierte un diccionario de perfil de cualquier formato al esquema estricto."""
         nombre_usuario = data.get("nombre_usuario") or data.get("name") or "Default"
+        rol = data.get("rol") or data.get("role") or "tecnico"
+        rol = str(rol).strip().lower()
+        if rol not in ("tecnico", "controlador"):
+            rol = "tecnico"
         aeropuerto_trabajo = data.get("aeropuerto_trabajo") or data.get("aeropuerto") or "SACO"
         
         coords = data.get("coordenadas_centro")
@@ -80,6 +85,7 @@ class ProfileManager:
         
         return {
             "nombre_usuario": nombre_usuario,
+            "rol": rol,
             "aeropuerto_trabajo": aeropuerto_trabajo,
             "coordenadas_centro": coordenadas_centro,
             "nivel_incumbencia": nivel_incumbencia,
@@ -200,6 +206,9 @@ class ProfileManager:
 
     def get_nivel_incumbencia(self) -> int:
         return int(self.profile.get("nivel_incumbencia", 95))
+
+    def get_rol(self) -> str:
+        return str(self.profile.get("rol", "tecnico")).strip().lower()
 
     def get_center_lat(self) -> float:
         return float(self.profile.get("center_lat", -31.31))
