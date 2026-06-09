@@ -717,6 +717,8 @@ class RadarWidget(QWidget):
         # Jurisdicción operativa: volumen = radio (NM) x techo (FL)
         self.techo_incumbencia = 95
         self.radio_incumbencia = 50.0
+        # Vista limpia para rol controlador (sin coberturas/símbolo radar/sweep/anillos de rango)
+        self.vista_controlador = False
         # Gestor de altimetría (impulsado por perfil; QNH manual desde HMI)
         self.altimetry = AltimetryManager()
         self.aeropuerto_lat = -31.31548
@@ -842,6 +844,17 @@ class RadarWidget(QWidget):
         self.stca_dialog = STCADialog(self)
         self.stca_habilitado = True
         self.quality_manager = QualityManager()
+        # Silenciar el logger interno del QM: registra en cada ciclo y satura el
+        # archivo. El registro de eventos de calidad ahora es deduplicado y vive
+        # en quality_events.log vía _log_quality_event().
+        try:
+            self.quality_manager.logger.handlers.clear()
+            self.quality_manager.logger.disabled = True
+        except Exception:
+            pass
+        # Dedup de eventos de calidad ya registrados: keys (track_id, razon) para
+        # DQF y reflector_key para reflexiones. Evita repetir la misma línea.
+        self._logged_quality_events: Set = set()
         self.modo_integrado = True
         self.tracks_en_alerta = set()
         self.conflictos_activos = []
@@ -1207,11 +1220,13 @@ class RadarWidget(QWidget):
         """
         # 1) Desplazar el centro al aeródromo
         self.centrar_en_coordenadas(lat, lon)
-        
-        # 2) Recalcular el zoom para un rango óptimo de 80 NM (50 NM jurisdicción + margen)
+
+        # 2) Zoom para enmarcar el área de control (radio de incumbencia + margen del 30%)
+        radio = float(getattr(self, 'radio_incumbencia', 50.0))
+        rango_vista_nm = max(radio * 1.3, 10.0)
         widget_radius_px = min(self.width(), self.height()) / 2.0
         if widget_radius_px > 0:
-            self.zoom_factor = widget_radius_px / (80.0 * 1852.0)
+            self.zoom_factor = widget_radius_px / (rango_vista_nm * 1852.0)
             self._clamp_zoom()
         self.update()
         print(f"[RADAR VIEW] Perfil configurado: Centro Lat={lat:.5f}, Lon={lon:.5f}, Zoom={self.zoom_factor:.6f}")
@@ -1730,6 +1745,16 @@ class RadarWidget(QWidget):
                     )
                     track.degradada = degradada
                     track.dqf_razon = razon
+                    # Registrar (deduplicado) solo FRUIT y GARBLING; INMADURA es
+                    # transitorio y no se loguea.
+                    if razon == 'FRUIT':
+                        self._log_quality_event(
+                            (track.id, 'FRUIT'), 'FRUIT',
+                            f"Track {track.id} | Edad:{track_age:.1f}s Updates:{track._update_count}")
+                    elif razon == 'GARBLING':
+                        self._log_quality_event(
+                            (track.id, 'GARBLING'), 'GARBLING',
+                            f"Track {track.id} | SSR garbled (CAT048 bit G)")
                 except Exception:
                     pass
                 
@@ -1993,39 +2018,73 @@ class RadarWidget(QWidget):
                         vx = speed_mps * math.sin(angle_rad)
                         vy = speed_mps * math.cos(angle_rad)
                 
-                # Si no se dispone de velocidad directa, estimar mediante historial con base temporal robusta
+                # Si no se dispone de velocidad directa, estimar mediante regresión
+                # lineal por mínimos cuadrados sobre la ventana de historial (A).
+                # Promedia el ruido de N muestras en lugar de fiarse de 2 puntos,
+                # reduciendo el jitter del CPA. Tras estimar, un gate de confianza
+                # (D) descarta el vector para predicción si saltó respecto al tick
+                # previo (maniobra/ruido): en ese caso el STCA solo evalúa VIOLATION.
                 if vx is None or vy is None:
                     hist = self.history.get(tid)
                     if hist and len(hist) >= 2:
-                        # Buscar un punto histórico con dt de 3.0s a 25.0s para mitigar ruido y alta frecuencia
-                        past_pt = None
-                        for pt in reversed(hist):
-                            dt = track.timestamp - pt.timestamp
-                            if 3.0 <= dt <= 25.0:
-                                past_pt = pt
-                                break
-                        
-                        # Fallback: buscar el más antiguo con dt >= 1.0s
-                        if past_pt is None:
-                            for pt in reversed(hist):
-                                dt = track.timestamp - pt.timestamp
-                                if dt >= 1.0:
-                                    past_pt = pt
-                                    break
-                                    
-                        if past_pt is not None:
-                            dt = track.timestamp - past_pt.timestamp
-                            dx_m = track.x - past_pt.x
-                            dy_m = track.y - past_pt.y
-                            
-                            est_vx = dx_m / dt
-                            est_vy = dy_m / dt
-                            speed = math.sqrt(est_vx**2 + est_vy**2)
-                            
-                            # Validar que la velocidad estimada sea realista para una aeronave (entre 5 y 600 m/s)
+                        # Recolectar muestras (t, x, y) dentro de la ventana temporal
+                        samples = [
+                            (pt.timestamp, pt.x, pt.y)
+                            for pt in hist
+                            if 1.0 <= (track.timestamp - pt.timestamp) <= 25.0
+                        ]
+                        # Incluir el punto actual como muestra más reciente
+                        samples.append((track.timestamp, track.x, track.y))
+
+                        est_vx = est_vy = None
+                        if len(samples) >= 3:
+                            # Regresión lineal: pendiente temporal = componente de velocidad
+                            n = len(samples)
+                            t_mean = sum(s[0] for s in samples) / n
+                            x_mean = sum(s[1] for s in samples) / n
+                            y_mean = sum(s[2] for s in samples) / n
+                            var_t = sum((s[0] - t_mean) ** 2 for s in samples)
+                            if var_t > 1e-6:
+                                est_vx = sum((s[0] - t_mean) * (s[1] - x_mean) for s in samples) / var_t
+                                est_vy = sum((s[0] - t_mean) * (s[2] - y_mean) for s in samples) / var_t
+                        elif len(samples) >= 2:
+                            # Fallback de 2 puntos si la ventana es demasiado corta
+                            (t0, x0, y0), (t1, x1, y1) = samples[0], samples[-1]
+                            dt = t1 - t0
+                            if dt >= 1.0:
+                                est_vx = (x1 - x0) / dt
+                                est_vy = (y1 - y0) / dt
+
+                        # Validar que la velocidad estimada sea realista (5–600 m/s)
+                        if est_vx is not None and est_vy is not None:
+                            speed = math.sqrt(est_vx ** 2 + est_vy ** 2)
                             if 5.0 <= speed <= 600.0:
                                 vx = est_vx
                                 vy = est_vy
+
+                        # --- Gate de confianza (D) ---
+                        # Solo aplica al vector ESTIMADO. Si el rumbo cambió > 25°
+                        # o la magnitud salió del rango 0.5x–2x respecto al tick
+                        # anterior, el vector no es confiable para predicción:
+                        # se descarta (vx,vy=None) y el STCA evaluará solo VIOLATION.
+                        if vx is not None and vy is not None:
+                            vel_prev_map = getattr(self, '_stca_vel_prev', None)
+                            if vel_prev_map is None:
+                                vel_prev_map = self._stca_vel_prev = {}
+                            prev = vel_prev_map.get(tid)
+                            if prev is not None:
+                                pvx, pvy = prev
+                                prev_mag = math.hypot(pvx, pvy)
+                                cur_mag = math.hypot(vx, vy)
+                                if prev_mag > 1e-3 and cur_mag > 1e-3:
+                                    dot = max(-1.0, min(1.0, (pvx * vx + pvy * vy) / (prev_mag * cur_mag)))
+                                    heading_change = math.degrees(math.acos(dot))
+                                    mag_ratio = cur_mag / prev_mag
+                                    if heading_change > 25.0 or mag_ratio < 0.5 or mag_ratio > 2.0:
+                                        vx = vy = None  # inestable: no confiable para predicción
+                            # Guardar para el próximo tick solo si quedó vector válido
+                            if vx is not None and vy is not None:
+                                vel_prev_map[tid] = (vx, vy)
                 
                 # Obtener velocidad en nudos (knots) para filtrar blancos estáticos (ruido/obstáculos MTR/transpondedores de calibración)
                 speed_kt = track.ground_speed
@@ -2131,6 +2190,24 @@ class RadarWidget(QWidget):
                 f.write(f"[{timestamp}] {message}\n")
         except Exception as e:
             print(f"[STCA LOG ERROR] {e}")
+
+    def _log_quality_event(self, event_key, event_type: str, message: str):
+        """
+        Registra eventos de calidad (FRUIT / GARBLING / REFLEXION) en un archivo
+        de auditoría, deduplicado: cada event_key se escribe una sola vez.
+        """
+        if event_key in self._logged_quality_events:
+            return
+        self._logged_quality_events.add(event_key)
+        try:
+            import datetime
+            log_path = "c:/documentos/decode_asterix/quality_events.log"
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"[{timestamp}] {event_type:<9} | {message}\n")
+        except Exception as e:
+            print(f"[QUALITY LOG ERROR] {e}")
 
     # ================================================================
     # FILTROS
@@ -2410,13 +2487,23 @@ class RadarWidget(QWidget):
                                                 ref['azimuth'] = (ref['azimuth'] * 4.0 + az_ghost) / 5.0
                                                 ref['range_nm'] = (ref['range_nm'] * 4.0 + d_ref) / 5.0
                                                 ref['last_seen_tod'] = current_tod
+                                                ref['ghost_sq'] = sq_str
+                                                ref['real_id'] = real_track.id
+                                                # Registrar (deduplicado) al confirmar el reflector
+                                                if ref['hits'] >= 4:
+                                                    self._log_quality_event(
+                                                        ('REFLEX', matched_key), 'REFLEXION',
+                                                        f"Ghost {sq_str} (id {ghost.id}) ← Real {real_track.id} | "
+                                                        f"Reflector R:{ref['range_nm']:.1f}NM Az:{ref['azimuth']:.0f}° ({ref['hits']}H)")
                                             else:
                                                 key = (int(az_ghost * 2), int(d_ref * 10))
                                                 self.detected_reflectors[key] = {
                                                     'hits': 1,
                                                     'azimuth': az_ghost,
                                                     'range_nm': d_ref,
-                                                    'last_seen_tod': current_tod
+                                                    'last_seen_tod': current_tod,
+                                                    'ghost_sq': sq_str,
+                                                    'real_id': real_track.id,
                                                 }
                                 except Exception:
                                     pass
@@ -2430,6 +2517,8 @@ class RadarWidget(QWidget):
                     ]
                     for k in expired:
                         del self.detected_reflectors[k]
+                        # Permitir re-loguear el reflector si reaparece tras expirar
+                        self._logged_quality_events.discard(('REFLEX', k))
 
                 # 4. FASE 4: Contar plots vivos por categoría y emitir señal de telemetría
                 counts = {1: 0, 21: 0, 48: 0, 62: 0}
@@ -2635,8 +2724,8 @@ class RadarWidget(QWidget):
             # ---- 1. MAPA ESTRUCTURAL (FONDO) ----
             self._draw_video_maps(painter, inv_z, "ESTRUCTURAL")
 
-            # ---- 1.5. COBERTURAS DE RADAR (Fase 16) ----
-            if getattr(self, 'radar_coverages', None) and self.projection_set and self.proy.activo:
+            # ---- 1.5. COBERTURAS DE RADAR (Fase 16) — oculto en vista controlador ----
+            if (not self.vista_controlador) and getattr(self, 'radar_coverages', None) and self.projection_set and self.proy.activo:
                 try:
                     for cov in self.radar_coverages:
                         lat = cov['lat']
@@ -2706,29 +2795,54 @@ class RadarWidget(QWidget):
                 except Exception:
                     pass
 
-            # ---- 2. ANILLOS ----
-            try:
-                pen_ring = QPen(COLOR_RING)
-                pen_ring.setWidthF(inv_z)
-                painter.setPen(pen_ring)
-                for dist_nm in [50, 100, 200]:
-                    r = dist_nm * METERS_PER_NM
-                    painter.drawEllipse(QPointF(0.0, 0.0), r, r)
-                font_label = QFont("Monospace", 8)
-                painter.setFont(font_label)
-                painter.setPen(COLOR_RING_LABEL)
-                for dist_nm in [50, 100, 200]:
-                    r = dist_nm * METERS_PER_NM
-                    painter.save()
-                    painter.translate(0.0 + r, 0.0)
-                    painter.scale(inv_z, -inv_z)
-                    painter.drawText(QPointF(4, 12), f"{dist_nm} NM")
-                    painter.restore()
-            except Exception:
-                pass
+            # ---- 2. ANILLOS DE RANGO (sensor-céntricos) — ocultos en vista controlador ----
+            if not self.vista_controlador:
+                try:
+                    pen_ring = QPen(COLOR_RING)
+                    pen_ring.setWidthF(inv_z)
+                    painter.setPen(pen_ring)
+                    for dist_nm in [50, 100, 200]:
+                        r = dist_nm * METERS_PER_NM
+                        painter.drawEllipse(QPointF(0.0, 0.0), r, r)
+                    font_label = QFont("Monospace", 8)
+                    painter.setFont(font_label)
+                    painter.setPen(COLOR_RING_LABEL)
+                    for dist_nm in [50, 100, 200]:
+                        r = dist_nm * METERS_PER_NM
+                        painter.save()
+                        painter.translate(0.0 + r, 0.0)
+                        painter.scale(inv_z, -inv_z)
+                        painter.drawText(QPointF(4, 12), f"{dist_nm} NM")
+                        painter.restore()
+                except Exception:
+                    pass
 
-            # ---- 2.5. CONO DE SILENCIO DINÁMICO ----
-            if getattr(self, 'show_silence_cone', True):
+            # ---- 2.b ANILLO DE ÁREA DE CONTROL (vista controlador) ----
+            if self.vista_controlador and self.projection_set and self.proy.activo \
+                    and getattr(self, 'aeropuerto_lat', None) is not None \
+                    and getattr(self, 'aeropuerto_lon', None) is not None:
+                try:
+                    acx, acy = self.proy.latlon_to_xy(self.aeropuerto_lat, self.aeropuerto_lon)
+                    if is_valid_coord(acx, acy):
+                        r_ctrl = float(getattr(self, 'radio_incumbencia', 50.0)) * METERS_PER_NM
+                        pen_ctrl = QPen(QColor(0, 229, 255, 180))
+                        pen_ctrl.setWidthF(inv_z * 1.5)
+                        painter.setPen(pen_ctrl)
+                        painter.setBrush(QBrush(QColor(0, 229, 255, 10)))
+                        painter.drawEllipse(QPointF(acx, acy), r_ctrl, r_ctrl)
+                        # Etiqueta del área
+                        painter.save()
+                        painter.translate(acx, acy + r_ctrl)
+                        painter.scale(inv_z, -inv_z)
+                        painter.setPen(QColor(0, 229, 255, 210))
+                        painter.setFont(QFont("Monospace", 8, QFont.Weight.Bold))
+                        painter.drawText(QPointF(4, -4), f"ÁREA DE CONTROL ({int(self.radio_incumbencia)} NM)")
+                        painter.restore()
+                except Exception:
+                    pass
+
+            # ---- 2.5. CONO DE SILENCIO DINÁMICO (oculto en vista controlador) ----
+            if (not self.vista_controlador) and getattr(self, 'show_silence_cone', True):
                 try:
                     # Determinar altitud de referencia: seleccionada o FL300
                     selected_fl = 300.0
@@ -2772,8 +2886,8 @@ class RadarWidget(QWidget):
                 except Exception:
                     pass
 
-            # ---- 3. BARRIDO ----
-            if self.sweep_visible and self.sweep_enabled:
+            # ---- 3. BARRIDO (oculto en vista controlador) ----
+            if (not self.vista_controlador) and self.sweep_visible and self.sweep_enabled:
                 try:
                     painter.save()
                     painter.translate(0.0, 0.0)
@@ -2793,8 +2907,8 @@ class RadarWidget(QWidget):
                 except Exception:
                     painter.restore()
 
-            # ---- 4. SENSOR CENTRAL ----
-            if self.projection_set:
+            # ---- 4. SENSOR CENTRAL (símbolo de radar — oculto en vista controlador) ----
+            if self.projection_set and not self.vista_controlador:
                 try:
                     painter.save()
                     # Dibujar un símbolo tipo 'Y' para representar el origen del radar
@@ -3176,62 +3290,36 @@ class RadarWidget(QWidget):
             except Exception as e:
                 print(f"[RENDER WARNING] Error al dibujar línea de conflicto STCA: {e}")
 
-            # ---- 5.5. OBSTÁCULOS MTR DETECTADOS ----
+            # ---- 5.5. OBSTÁCULOS MTR DETECTADOS (marcador mínimo) ----
+            # Solo un triángulo pequeño y estático. El detalle (squawk, rango,
+            # plot real reflejado) se registra en quality_events.log, no en pantalla.
             if getattr(self, 'mtr_visible', True) and hasattr(self, 'detected_reflectors') and self.detected_reflectors:
                 try:
-                    import time as time_module
-                    pulsing_val = 0.5 + 0.5 * math.sin(time_module.time() * 3.0)
                     for key, ref in self.detected_reflectors.items():
-                        # Incrementar umbral de confianza a 4 coincidencias para reducir ruido y falsos positivos
                         if ref['hits'] < 4:
                             continue
-                        
+
                         az_rad = math.radians(ref['azimuth'])
                         dist_m = ref['range_nm'] * METERS_PER_NM
                         rx = dist_m * math.sin(az_rad)
                         ry = dist_m * math.cos(az_rad)
-                        
+
                         if is_valid_coord(rx, ry):
                             painter.save()
-                            
-                            # 1. Círculo sutil punteado (muy fino para no ensuciar la pantalla)
-                            circ_r = safe_divide(8.0 + 2.0 * pulsing_val, z, 2.0)
-                            pen_pulse = QPen(QColor(255, 51, 102, 180), safe_divide(1.0, z, 0.5), Qt.PenStyle.DotLine)
-                            painter.setPen(pen_pulse)
-                            painter.setBrush(Qt.BrushStyle.NoBrush)
-                            painter.drawEllipse(QPointF(rx, ry), circ_r, circ_r)
-                            
-                            # 2. Triángulo minimalista de advertencia
                             painter.translate(rx, ry)
                             painter.scale(inv_z, -inv_z)
-                            
-                            tri_size = 7
+
+                            tri_size = 5
                             t_path = QPainterPath()
                             t_path.moveTo(0, -tri_size)
                             t_path.lineTo(-tri_size * 0.866, tri_size * 0.5)
                             t_path.lineTo(tri_size * 0.866, tri_size * 0.5)
                             t_path.closeSubpath()
-                            
-                            pen_warning = QPen(QColor(255, 51, 102), 1.0)
-                            painter.setPen(pen_warning)
+
+                            painter.setPen(QPen(QColor(255, 51, 102, 200), 1.0))
                             painter.setBrush(QBrush(QColor(255, 51, 102, 40)))
                             painter.drawPath(t_path)
-                            
-                            # 3. Etiqueta de texto de una sola línea muy compacta (tipo HUD militar)
-                            label_text = f"MTR: {ref['range_nm']:.1f}NM ({ref['hits']}H)"
-                            txt_font = QFont("Monospace", 6, QFont.Weight.Bold)
-                            painter.setFont(txt_font)
-                            fm_ref = painter.fontMetrics()
-                            txt_w = fm_ref.horizontalAdvance(label_text)
-                            
-                            # Fondo transparente sutil para legibilidad
-                            bg_rect = QRectF(-txt_w/2 - 4, tri_size + 2, txt_w + 8, 10)
-                            painter.fillRect(bg_rect, QColor(11, 14, 20, 220))
-                            
-                            # Escribir el texto compacto en una sola línea
-                            painter.setPen(QColor(255, 51, 102))
-                            painter.drawText(QPointF(-txt_w/2, tri_size + 9), label_text)
-                            
+
                             painter.restore()
                 except Exception as e:
                     print(f"[RENDER WARNING] Error drawing reflectors: {e}")
@@ -3239,8 +3327,8 @@ class RadarWidget(QWidget):
             # ---- MAPA TÁCTICO (FRENTE) ----
             self._draw_video_maps(painter, inv_z, "TACTICO")
 
-            # ---- 6. CARTEL DE SENSOR ACTIVO ----
-            if self._active_sensor_label:
+            # ---- 6. CARTEL DE SENSOR ACTIVO (oculto en vista controlador) ----
+            if (not self.vista_controlador) and self._active_sensor_label:
                 try:
                     painter.save()
                     painter.resetTransform()
