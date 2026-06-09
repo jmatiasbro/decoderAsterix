@@ -575,7 +575,7 @@ class MainWindow(QMainWindow):
 
         # 6. Reloj flotante UTC (arrastrable, visible en ambos roles)
         self.reloj_utc = RelojFlotanteUTC(self.radar)
-        self.reloj_utc.move(self.radar.width() - 150, 60)
+        self._reposicionar_reloj()
         self.reloj_utc.show()
         self.reloj_utc.raise_()
 
@@ -611,17 +611,10 @@ class MainWindow(QMainWindow):
 
         # Menú Archivo
         menu_archivo = menu_bar.addMenu("Archivo")
-        self.act_cargar = menu_archivo.addAction("Cargar PCAP...", self._cargar_pcap)
         self.act_ver_logs = menu_archivo.addAction("Ver Log de Alertas STCA...", self._abrir_log_stca)
-        self.act_ver_logs_calidad = menu_archivo.addAction("Ver Log de Eventos de Calidad (FRUIT/GARBLING/REFLEXIÓN)...", self._abrir_log_calidad)
+        self.act_ver_logs_calidad = menu_archivo.addAction("Log de Eventos", self._abrir_log_calidad)
         menu_archivo.addSeparator()
         self.act_salir = menu_archivo.addAction("Salir", self.close)
-
-        # Menú Análisis
-        menu_analisis = menu_bar.addMenu("Análisis")
-        self.act_pass = menu_analisis.addAction("📊 Generar Reporte PASS...", self._abrir_analisis_pass)
-        self.act_pass.setEnabled(False)
-        self.act_dqf = menu_analisis.addAction("🎛️ Filtros de Calidad (DQF)...", self._abrir_filtro_calidad)
 
         # Menú Exportar
         menu_exportar = menu_bar.addMenu("Exportar")
@@ -769,6 +762,10 @@ class MainWindow(QMainWindow):
         self.combo_vel.setStyleSheet("background-color: #2D313C; color: white;")
         self.toolbar.addWidget(self.combo_vel)
 
+        # Controles de reproducción ocultos hasta que se cargue un archivo (Modo Playback)
+        self._playback_disponible = False
+        self.toolbar.setVisible(False)
+
     def _setup_hud_bar(self):
         """Barra HUD operativa siempre visible (incluido rol controlador).
         Muestra: usuario/rol, aeropuerto, frecuencias de sector, QNH, TA y hora UTC.
@@ -892,7 +889,7 @@ class MainWindow(QMainWindow):
         grupo_rep = QGroupBox("Carga Rápida")
         l_rep = QVBoxLayout()
         l_rep.setSpacing(6)
-        self.btn_cargar = QPushButton("Cargar Archivo")
+        self.btn_cargar = QPushButton("Modo Playback")
         self.btn_centrar = QPushButton("🞺 Centrar Mapa")
         self.btn_centrar.setToolTip("Recentrar la vista en el sensor activo")
         self.btn_cargar.clicked.connect(self._cargar_pcap)
@@ -1308,6 +1305,18 @@ class MainWindow(QMainWindow):
             if visible:
                 self.reloj_utc.raise_()
 
+    def _reposicionar_reloj(self):
+        """Ancla el reloj flotante a la esquina superior derecha, debajo de la caja de coordenadas."""
+        if hasattr(self, 'reloj_utc') and hasattr(self, 'radar'):
+            self.reloj_utc.adjustSize()
+            x = self.radar.width() - self.reloj_utc.width() - 20
+            y = 80  # justo debajo de la caja de coordenadas (y=45, alto 28)
+            self.reloj_utc.move(max(0, x), y)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reposicionar_reloj()
+
     def _toggle_incumbencia(self, activo: bool):
         if hasattr(self, 'radar'):
             self.radar.mostrar_incumbencia = activo
@@ -1340,7 +1349,6 @@ class MainWindow(QMainWindow):
         self.btn_cargar.setEnabled(False)
         self.btn_stop.setEnabled(False)
         self.btn_pass.setEnabled(False)
-        self.act_pass.setEnabled(False)
         self.act_exp_kmz.setEnabled(False)
         self.act_exp_playback.setEnabled(False)
         self.act_exp_cobertura.setEnabled(False)
@@ -1477,6 +1485,11 @@ class MainWindow(QMainWindow):
             self.btn_pass.setEnabled(True)
             self.slider_tiempo.setEnabled(True)
             self.slider_tiempo.setMaximum(100)
+
+            # Mostrar los controles de reproducción ahora que hay un archivo cargado
+            self._playback_disponible = True
+            if not getattr(self.radar, 'vista_controlador', False):
+                self.toolbar.setVisible(True)
             
             # Asegurar que todos los sensores detectados sean visibles en el widget del radar
             self.radar.sensores_visibles = self.sensores_activos.copy()
@@ -1487,7 +1500,6 @@ class MainWindow(QMainWindow):
                 self._cambiar_velocidad()
             
             # Habilitar opciones de exportación y análisis en el menú principal
-            self.act_pass.setEnabled(True)
             self.act_exp_kmz.setEnabled(True)
             self.act_exp_playback.setEnabled(True)
             self.act_exp_cobertura.setEnabled(True)
@@ -2275,10 +2287,9 @@ class MainWindow(QMainWindow):
         # Vista del PPI
         self.radar.vista_controlador = es_controlador
 
-        # Bloqueo de controles de playback (solo técnico configura el playback)
-        self.toolbar.setVisible(not es_controlador)
-        if hasattr(self, 'act_cargar'):
-            self.act_cargar.setEnabled(not es_controlador)
+        # Bloqueo de controles de playback (solo técnico configura el playback).
+        # Visibles solo si hay un archivo cargado y el rol no es controlador.
+        self.toolbar.setVisible(getattr(self, '_playback_disponible', False) and not es_controlador)
         if hasattr(self, 'btn_cargar'):
             self.btn_cargar.setEnabled(not es_controlador)
             self.btn_cargar.setVisible(not es_controlador)
