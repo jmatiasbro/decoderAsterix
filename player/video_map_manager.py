@@ -113,7 +113,7 @@ class VideoMapManager:
             return
 
         for filename in os.listdir(carto_dir):
-            if filename.lower().endswith(".geojson"):
+            if filename.lower().endswith((".geojson", ".json")):
                 path = os.path.join(carto_dir, filename)
                 self.load_geojson(path, name=filename, tipo="ESTRUCTURAL")
 

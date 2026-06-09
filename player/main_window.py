@@ -778,6 +778,12 @@ class MainWindow(QMainWindow):
         # Aplicar el perfil guardado en disco
         self._aplicar_perfil(self.profile_manager.profile)
 
+        # Cargar cartografía base + mapas generales + mapas del perfil al arrancar
+        if hasattr(self.radar, 'map_manager') and hasattr(self.radar.map_manager, 'load_profile_maps'):
+            self.radar.map_manager.load_profile_maps(self.profile_manager.profile, self.profile_manager)
+            self.radar.map_manager.reproject_all(self.radar.proy)
+            self.radar.update()
+
     def _setup_ui(self):
         # 1. Widget Central (El Mapa de Radar)
         self.radar = RadarWidget(
