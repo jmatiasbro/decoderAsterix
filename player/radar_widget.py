@@ -770,7 +770,7 @@ class RadarWidget(QWidget):
             "direccion_aeronave": True, "numero_respuestas": False, "velocidad": True,
             "hora_utc": False, "numero_pista": True, "identific_aeronave": True,
             "altitud_adsb": True, "cat_emisor_adsb": False, "veloc_vertic_adsb": False,
-            "rho_theta": False,
+            "rho_theta": False, "rumbo_verdadero": False, "rumbo_magnetico": False,
             "orientacion": "NE", "sel_por_codigo_a": True, "sel_por_posicion": False
         }
 
@@ -4177,6 +4177,20 @@ class RadarWidget(QWidget):
                     replies = plot.raw_dict.get('num_replies') or plot.raw_dict.get('number_of_replies')
                 if replies is not None:
                     lines.append(f"REP:{replies}")
+
+            # Rumbo verdadero (°V) y/o magnético (°M) por posición del blanco (WMM).
+            # Solo cambia el TEXTO; la geometría del vector de tendencia usa el rumbo verdadero.
+            if plot.track_angle is not None and (cfg.get("rumbo_verdadero", False) or cfg.get("rumbo_magnetico", False)):
+                partes_hdg = []
+                if cfg.get("rumbo_verdadero", False):
+                    partes_hdg.append(f"{plot.track_angle % 360.0:03.0f}°V")
+                if cfg.get("rumbo_magnetico", False):
+                    tlat, tlon = self.proy.xy_to_latlon(plot.x, plot.y)
+                    if tlat is not None and tlon is not None:
+                        decl = self.magnetic_compensator.obtener_declinacion(tlat, tlon)
+                        partes_hdg.append(f"{(plot.track_angle - decl) % 360.0:03.0f}°M")
+                if partes_hdg:
+                    lines.append("HDG:" + " ".join(partes_hdg))
 
             # RHO / THETA (diagnóstico de cabezal de radar): solo técnico
             if plot.category in (1, 48) and plot.raw_range is not None and plot.raw_azimuth is not None:

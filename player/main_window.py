@@ -495,7 +495,7 @@ class MainWindow(QMainWindow):
             "direccion_aeronave": True, "numero_respuestas": False, "velocidad": True,
             "hora_utc": False, "numero_pista": True, "identific_aeronave": True,
             "altitud_adsb": True, "cat_emisor_adsb": False, "veloc_vertic_adsb": False,
-            "rho_theta": False,
+            "rho_theta": False, "rumbo_verdadero": False, "rumbo_magnetico": False,
             "orientacion": "NE", "sel_por_codigo_a": True, "sel_por_posicion": False
         }
         

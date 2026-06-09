@@ -119,7 +119,9 @@ class LabelFilterDialog(QDialog):
             ("altitud_adsb", "Altitud ADSB"),
             ("cat_emisor_adsb", "Cat. Emisor ADS-B"),
             ("veloc_vertic_adsb", "Veloc. Vertic. ADS-B"),
-            ("rho_theta", "RHO / THETA")
+            ("rho_theta", "RHO / THETA"),
+            ("rumbo_verdadero", "Rumbo Verdadero (°V)"),
+            ("rumbo_magnetico", "Rumbo Magnético (°M)")
         ]
         
         for i, (key, label) in enumerate(fields):
