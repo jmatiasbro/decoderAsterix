@@ -841,6 +841,38 @@ class MainWindow(QMainWindow):
         self.lbl_hud_freqs.setText(" / ".join(freqs))
         self.lbl_hud_ta.setText(f"{int(ta)} ft")
 
+    def _make_toggle_button(self, text: str, accent: str = "#00E5FF", checked: bool = False) -> QPushButton:
+        """Botón checkable estilo toggle para la consola (reemplazo de QCheckBox)."""
+        btn = QPushButton(text)
+        btn.setCheckable(True)
+        btn.setChecked(checked)
+        btn.setFixedHeight(24)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #121824;
+                border: 1px solid {accent};
+                border-radius: 4px;
+                color: {accent};
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 4px 8px;
+                text-align: left;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255, 255, 255, 12);
+            }}
+            QPushButton:checked {{
+                background-color: {accent};
+                color: #0B0E14;
+            }}
+            QPushButton:disabled {{
+                border: 1px solid rgba(255, 255, 255, 30);
+                color: gray;
+                background-color: rgba(45, 52, 71, 80);
+            }}
+        """)
+        return btn
+
     def _setup_dock_widget(self):
         self.dock_lateral = QDockWidget("Controles y Filtros", self)
         self.dock_lateral.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
@@ -918,23 +950,7 @@ class MainWindow(QMainWindow):
         l_udp_inputs.addWidget(self.txt_udp_ip, stretch=3)
         l_udp_inputs.addWidget(self.spin_udp_port, stretch=2)
 
-        self.chk_grabar_pcap = QCheckBox("Grabar Captura")
-        self.chk_grabar_pcap.setStyleSheet("""
-            QCheckBox {
-                color: #E0E6ED;
-                font-size: 8pt;
-            }
-            QCheckBox::indicator {
-                width: 12px;
-                height: 12px;
-                border: 1px solid #00E5FF;
-                background-color: #2D313C;
-                border-radius: 2px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #00E5FF;
-            }
-        """)
+        self.chk_grabar_pcap = self._make_toggle_button("Grabar Captura", "#00E5FF")
 
         self.btn_conectar_udp = QPushButton("Conectar UDP")
         self.btn_conectar_udp.setFixedHeight(22)
@@ -968,27 +984,8 @@ class MainWindow(QMainWindow):
         l_hist.setSpacing(4)
 
         # Checkbox para mostrar/ocultar historial
-        self.chk_show_history = QCheckBox("Mostrar Estela")
-        self.chk_show_history.setChecked(True)
+        self.chk_show_history = self._make_toggle_button("Mostrar Estela", "#00F5FF", checked=True)
         self.chk_show_history.toggled.connect(self._on_show_history_toggled)
-        self.chk_show_history.setStyleSheet("""
-            QCheckBox {
-                color: #E0E6ED;
-                font-size: 8pt;
-                font-weight: bold;
-                margin-bottom: 2px;
-            }
-            QCheckBox::indicator {
-                width: 12px;
-                height: 12px;
-                border: 1px solid #00F5FF;
-                background-color: #2D313C;
-                border-radius: 2px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #00F5FF;
-            }
-        """)
 
         # Fila 1: Modo de visualización
         l_modo = QHBoxLayout()
@@ -1032,128 +1029,22 @@ class MainWindow(QMainWindow):
             }
         """)
 
-        self.chk_sweep = QCheckBox("Barrido Radar")
-        self.chk_sweep.setChecked(False)
+        self.chk_sweep = self._make_toggle_button("Barrido Radar", "#00E5FF")
         self.chk_sweep.toggled.connect(self._update_sweep_state)
-        self.chk_sweep.setStyleSheet("""
-            QCheckBox {
-                color: #E0E6ED;
-                font-size: 8pt;
-            }
-            QCheckBox::indicator {
-                width: 12px;
-                height: 12px;
-                border: 1px solid #00E5FF;
-                background-color: #2D313C;
-                border-radius: 2px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #00E5FF;
-            }
-        """)
 
-        self.chk_silence_cone = QCheckBox("Cono de Silencio")
-        self.chk_silence_cone.setChecked(False)
+        self.chk_silence_cone = self._make_toggle_button("Cono de Silencio", "#FF3366")
         self.chk_silence_cone.toggled.connect(self._on_silence_cone_toggled)
-        self.chk_silence_cone.setStyleSheet("""
-            QCheckBox {
-                color: #E0E6ED;
-                font-size: 8pt;
-            }
-            QCheckBox::indicator {
-                width: 12px;
-                height: 12px;
-                border: 1px solid #FF3366;
-                background-color: #2D313C;
-                border-radius: 2px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #FF3366;
-            }
-        """)
 
-        self.chk_modo_integrado = QCheckBox("Modo Integrado (MRT)")
-        self.chk_modo_integrado.setChecked(True)
+        self.chk_modo_integrado = self._make_toggle_button("Modo Integrado (MRT)", "#00E5FF", checked=True)
         self.chk_modo_integrado.toggled.connect(self._on_modo_integrado_toggled)
-        self.chk_modo_integrado.setStyleSheet("""
-            QCheckBox {
-                color: #E0E6ED;
-                font-size: 8pt;
-                font-weight: bold;
-            }
-            QCheckBox::indicator {
-                width: 12px;
-                height: 12px;
-                border: 1px solid #00E5FF;
-                background-color: #2D313C;
-                border-radius: 2px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #00E5FF;
-            }
-        """)
 
-        self.chk_show_mtr = QCheckBox("Obstáculos MTR")
-        self.chk_show_mtr.setChecked(True)
+        self.chk_show_mtr = self._make_toggle_button("Obstáculos MTR", "#FF3366", checked=True)
         self.chk_show_mtr.toggled.connect(self._on_show_mtr_toggled)
-        self.chk_show_mtr.setStyleSheet("""
-            QCheckBox {
-                color: #E0E6ED;
-                font-size: 8pt;
-                font-weight: bold;
-            }
-            QCheckBox::indicator {
-                width: 12px;
-                height: 12px;
-                border: 1px solid #FF3366;
-                background-color: #2D313C;
-                border-radius: 2px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #FF3366;
-            }
-        """)
 
-        self.chk_modo_crudo = QCheckBox("Ver Plots Crudos (Sin Filtros)")
-        self.chk_modo_crudo.setChecked(False)
+        self.chk_modo_crudo = self._make_toggle_button("Ver Plots Crudos (Sin Filtros)", "#FFD700")
         self.chk_modo_crudo.toggled.connect(self._on_modo_crudo_toggled)
-        self.chk_modo_crudo.setStyleSheet("""
-            QCheckBox {
-                color: #E0E6ED;
-                font-size: 8pt;
-                font-weight: bold;
-            }
-            QCheckBox::indicator {
-                width: 12px;
-                height: 12px;
-                border: 1px solid #FFD700;
-                background-color: #2D313C;
-                border-radius: 2px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #FFD700;
-            }
-        """)
 
-        self.chk_ocultar_parrot = QCheckBox("Ocultar Parrot (Sqwk 0000)")
-        self.chk_ocultar_parrot.setChecked(False)
-        self.chk_ocultar_parrot.setStyleSheet("""
-            QCheckBox {
-                color: #E0E6ED;
-                font-size: 8pt;
-                font-weight: bold;
-            }
-            QCheckBox::indicator {
-                width: 12px;
-                height: 12px;
-                border: 1px solid #FFA500;
-                background-color: #2D313C;
-                border-radius: 2px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #FFA500;
-            }
-        """)
+        self.chk_ocultar_parrot = self._make_toggle_button("Ocultar Parrot (Sqwk 0000)", "#FFA500")
 
         # Control QNH manual (hPa) — recalcula TL y etiquetas A/F en caliente
         l_qnh = QHBoxLayout()

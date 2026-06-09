@@ -81,7 +81,7 @@ class LMG_Dialog(QDialog):
         self.parent_window = parent
         self.radar = parent.radar if parent and hasattr(parent, 'radar') else None
         
-        self.setWindowTitle("Local Maps Generation Tool (LMG)")
+        self.setWindowTitle("Herramienta de Dibujo")
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
         self.setMinimumSize(360, 620)
         self.resize(380, 680)
