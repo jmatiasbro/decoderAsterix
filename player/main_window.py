@@ -1017,15 +1017,17 @@ class MainWindow(QMainWindow):
         self.btn_clear_hist.clicked.connect(self._clear_history)
         self.btn_clear_hist.setStyleSheet("""
             QPushButton {
-                background-color: rgba(244, 67, 54, 120);
+                background-color: #2A1416;
                 border: 1px solid #F44336;
                 border-radius: 4px;
-                color: #FFFFFF;
+                color: #FF6B6B;
                 font-size: 8pt;
                 font-weight: bold;
+                padding: 4px;
             }
             QPushButton:hover {
                 background-color: #F44336;
+                color: #FFFFFF;
             }
         """)
 
@@ -1169,7 +1171,12 @@ class MainWindow(QMainWindow):
 
         scroll.setWidget(container)
         self.dock_lateral.setWidget(scroll)
+        self.dock_lateral.setMinimumWidth(260)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_lateral)
+        # Garantizar que el panel sea visible y acoplado al arrancar
+        self.dock_lateral.setFloating(False)
+        self.dock_lateral.setVisible(True)
+        self.dock_lateral.raise_()
 
     def _on_custom_sensor_toggled(self, text: str, checked: bool):
         """Maneja la selección individual de un sensor desde su checkbox personalizado."""
