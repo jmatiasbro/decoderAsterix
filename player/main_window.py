@@ -441,6 +441,69 @@ class HoverTopPanel(QWidget):
         """)
 
 
+class RelojFlotanteUTC(QWidget):
+    """Reloj flotante de hora UTC real (hora local + offset), arrastrable.
+
+    - Se superpone al PPI; el controlador lo arrastra a donde le quede cómodo.
+    - Toggle de visibilidad desde el menú Ver.
+    - UTC = hora local del sistema + UTC_OFFSET_H (Argentina UTC-3 → +3).
+    """
+    UTC_OFFSET_H = 3
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setCursor(Qt.CursorShape.SizeAllCursor)
+        self.setStyleSheet("""
+            QWidget { background-color: rgba(11, 14, 20, 200); border: 1px solid rgba(0, 229, 255, 90); border-radius: 6px; }
+            QLabel { border: none; background: transparent; }
+        """)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(10, 4, 10, 4)
+        lay.setSpacing(0)
+        self.lbl_hora = QLabel("--:--:--")
+        self.lbl_hora.setFont(QFont("Monospace", 18, QFont.Weight.Bold))
+        self.lbl_hora.setStyleSheet("color: #39FF14;")
+        self.lbl_hora.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub = QLabel("UTC")
+        sub.setFont(QFont("Monospace", 7, QFont.Weight.Bold))
+        sub.setStyleSheet("color: #6B7A8D;")
+        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(self.lbl_hora)
+        lay.addWidget(sub)
+
+        self._drag_offset = None
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._refrescar)
+        self._timer.start(1000)
+        self._refrescar()
+        self.adjustSize()
+
+    def _refrescar(self):
+        import datetime
+        utc = datetime.datetime.now() + datetime.timedelta(hours=self.UTC_OFFSET_H)
+        self.lbl_hora.setText(utc.strftime("%H:%M:%S"))
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = event.position().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if self._drag_offset is not None:
+            nueva = self.mapToParent(event.position().toPoint() - self._drag_offset)
+            if self.parent() is not None:
+                r = self.parent().rect()
+                x = max(0, min(nueva.x(), r.width() - self.width()))
+                y = max(0, min(nueva.y(), r.height() - self.height()))
+                nueva.setX(x)
+                nueva.setY(y)
+            self.move(nueva)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_offset = None
+
+
 class RadarSensorItemWidget(QWidget):
     toggled = pyqtSignal(str, bool)
 
@@ -743,6 +806,15 @@ class MainWindow(QMainWindow):
         # 4. Barra de Herramientas (QToolBar)
         self._setup_tool_bar()
 
+        # 5. Barra HUD operativa (siempre visible, también para controlador)
+        self._setup_hud_bar()
+
+        # 6. Reloj flotante UTC (arrastrable, visible en ambos roles)
+        self.reloj_utc = RelojFlotanteUTC(self.radar)
+        self.reloj_utc.move(self.radar.width() - 150, 60)
+        self.reloj_utc.show()
+        self.reloj_utc.raise_()
+
     def _setup_menu_bar(self):
         menu_bar = self.menuBar()
         menu_bar.setStyleSheet("""
@@ -805,6 +877,10 @@ class MainWindow(QMainWindow):
         self.act_toggle_dock = self.dock_lateral.toggleViewAction()
         self.act_toggle_dock.setText("Panel Lateral de Controles")
         menu_ver.addAction(self.act_toggle_dock)
+        self.act_toggle_reloj = menu_ver.addAction("Reloj UTC Flotante")
+        self.act_toggle_reloj.setCheckable(True)
+        self.act_toggle_reloj.setChecked(True)
+        self.act_toggle_reloj.toggled.connect(self._toggle_reloj_utc)
 
         # Menú Configuración
         menu_config = menu_bar.addMenu("Configuración")
@@ -918,6 +994,78 @@ class MainWindow(QMainWindow):
         self.combo_vel.currentIndexChanged.connect(self._cambiar_velocidad)
         self.combo_vel.setStyleSheet("background-color: #2D313C; color: white;")
         self.toolbar.addWidget(self.combo_vel)
+
+    def _setup_hud_bar(self):
+        """Barra HUD operativa siempre visible (incluido rol controlador).
+        Muestra: usuario/rol, aeropuerto, frecuencias de sector, QNH, TA y hora UTC.
+        """
+        self.hud_bar = QToolBar("HUD Operativo")
+        self.hud_bar.setMovable(False)
+        self.hud_bar.setStyleSheet("""
+            QToolBar {
+                background-color: #0E1420;
+                border-bottom: 1px solid rgba(0, 229, 255, 60);
+                padding: 4px;
+                spacing: 10px;
+            }
+        """)
+        # Nueva fila propia, encima de la toolbar de playback
+        self.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.hud_bar)
+
+        def _campo(titulo: str, valor: str, color_valor: str = "#39FF14"):
+            cont = QWidget()
+            lay = QHBoxLayout(cont)
+            lay.setContentsMargins(6, 0, 6, 0)
+            lay.setSpacing(4)
+            t = QLabel(titulo)
+            t.setStyleSheet("color: #6B7A8D; font-size: 8pt; font-weight: bold;")
+            v = QLabel(valor)
+            v.setFont(QFont("Monospace", 9, QFont.Weight.Bold))
+            v.setStyleSheet(f"color: {color_valor};")
+            lay.addWidget(t)
+            lay.addWidget(v)
+            return cont, v
+
+        cont_user, self.lbl_hud_user = _campo("OP", "—", "#00E5FF")
+        self.hud_bar.addWidget(cont_user)
+        self.hud_bar.addSeparator()
+        cont_apt, self.lbl_hud_apt = _campo("APT", "—", "#00E5FF")
+        self.hud_bar.addWidget(cont_apt)
+        self.hud_bar.addSeparator()
+        cont_freq, self.lbl_hud_freqs = _campo("TWR/GND/APP", "—", "#FFD700")
+        self.hud_bar.addWidget(cont_freq)
+        self.hud_bar.addSeparator()
+        cont_qnh, self.lbl_hud_qnh = _campo("QNH", "1013 hPa")
+        self.hud_bar.addWidget(cont_qnh)
+        self.hud_bar.addSeparator()
+        cont_ta, self.lbl_hud_ta = _campo("TA", "—")
+        self.hud_bar.addWidget(cont_ta)
+
+        # Espaciador para empujar la hora UTC a la derecha
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.hud_bar.addWidget(spacer)
+        cont_utc, self.lbl_hud_utc = _campo("UTC", "00:00:00", "#39FF14")
+        self.hud_bar.addWidget(cont_utc)
+
+        self._actualizar_hud(self.profile_manager.profile)
+
+    def _actualizar_hud(self, perfil_data: dict):
+        """Refresca los campos del HUD desde el perfil operativo."""
+        if not hasattr(self, 'hud_bar'):
+            return
+        nombre = perfil_data.get("nombre_usuario", "—")
+        rol = str(perfil_data.get("rol", "tecnico")).strip().upper()
+        apt = perfil_data.get("aeropuerto_trabajo") or perfil_data.get("aeropuerto") or "—"
+        freqs = perfil_data.get("frecuencias_sector", ["", "", ""])
+        freqs = [str(f).strip() if str(f).strip() else "---" for f in (list(freqs) + ["", "", ""])[:3]]
+        ta = perfil_data.get("transition_altitude", 10000)
+
+        self.lbl_hud_user.setText(f"{nombre} ({rol})")
+        self.lbl_hud_apt.setText(str(apt))
+        self.lbl_hud_freqs.setText(" / ".join(freqs))
+        self.lbl_hud_ta.setText(f"{int(ta)} ft")
 
     def _setup_dock_widget(self):
         self.dock_lateral = QDockWidget("Controles y Filtros", self)
@@ -1468,6 +1616,12 @@ class MainWindow(QMainWindow):
                 self, "Información",
                 "El archivo de eventos de calidad no existe o aún no se han registrado eventos (FRUIT/GARBLING/REFLEXIÓN) en esta sesión."
             )
+
+    def _toggle_reloj_utc(self, visible: bool):
+        if hasattr(self, 'reloj_utc'):
+            self.reloj_utc.setVisible(visible)
+            if visible:
+                self.reloj_utc.raise_()
 
     def _abrir_map_editor(self):
         from player.map_dialog import MapEditorDialog
@@ -2358,6 +2512,8 @@ class MainWindow(QMainWindow):
     def _on_qnh_changed(self, value: int):
         """Refresca el QNH del gestor de altimetría y repinta etiquetas (TL / A-F)."""
         self.radar.altimetry.qnh_local = float(value)
+        if hasattr(self, 'lbl_hud_qnh'):
+            self.lbl_hud_qnh.setText(f"{value} hPa")
         self.radar.update()
 
     def _aplicar_rol(self, perfil_data: dict):
@@ -2389,12 +2545,14 @@ class MainWindow(QMainWindow):
                 self.radar.configurar_vista_perfil(lat, lon)
 
         self.radar.update()
+        self._actualizar_hud(perfil_data)
         print(f"[ROL] Aplicado: {rol} (vista_controlador={es_controlador})")
 
     def _aplicar_perfil(self, perfil_data: dict):
         """Aplica el perfil operativo guardado: actualiza jurisdicción, recentra mapa."""
         # 1. Persistir al disco
         self.profile_manager.update_profile(perfil_data)
+        self._actualizar_hud(perfil_data)
 
         # 2. Actualizar techo de incumbencia operativa
         self.techo_incumbencia = perfil_data.get("nivel_incumbencia", 95)
@@ -2475,6 +2633,8 @@ class MainWindow(QMainWindow):
         minutes = int((tod % 3600) // 60)
         seconds = int(tod % 60)
         self.lbl_tiempo.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+        if hasattr(self, 'lbl_hud_utc'):
+            self.lbl_hud_utc.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
 
     def evaluar_stca(self):
         """Redirige la evaluación al widget de radar central."""
