@@ -717,6 +717,9 @@ class RadarWidget(QWidget):
         # Jurisdicción operativa: volumen = radio (NM) x techo (FL)
         self.techo_incumbencia = 95
         self.radio_incumbencia = 50.0
+        # Vista de incumbencia (Fase C): dibuja el anillo de jurisdicción y atenúa
+        # el tráfico fuera del radio o sobre el techo FL. En controlador va implícita.
+        self.mostrar_incumbencia = False
         # Vista limpia para rol controlador (sin coberturas/símbolo radar/sweep/anillos de rango)
         self.vista_controlador = False
         # Gestor de altimetría (impulsado por perfil; QNH manual desde HMI)
@@ -2826,8 +2829,9 @@ class RadarWidget(QWidget):
                 except Exception:
                     pass
 
-            # ---- 2.b ANILLO DE ÁREA DE CONTROL (vista controlador) ----
-            if self.vista_controlador and self.projection_set and self.proy.activo \
+            # ---- 2.b ANILLO DE ÁREA DE CONTROL (controlador o toggle de incumbencia) ----
+            if (self.vista_controlador or getattr(self, 'mostrar_incumbencia', False)) \
+                    and self.projection_set and self.proy.activo \
                     and getattr(self, 'aeropuerto_lat', None) is not None \
                     and getattr(self, 'aeropuerto_lon', None) is not None:
                 try:
@@ -4486,9 +4490,16 @@ class RadarWidget(QWidget):
             is_coasting = False
             alpha = 255
             is_alive = plot.age < 25.0
-                
+
             if not is_alive or alpha <= 0:
                 return
+
+            # Fase C — atenuación por incumbencia: si la vista de jurisdicción está
+            # activa (controlador siempre, o técnico con el toggle), el tráfico fuera
+            # del radio o sobre el techo FL se muestra tenue.
+            if (self.vista_controlador or getattr(self, 'mostrar_incumbencia', False)) \
+                    and not getattr(plot, 'en_jurisdiccion', True):
+                alpha = 70
             
             is_psr = False
             is_ssr = False

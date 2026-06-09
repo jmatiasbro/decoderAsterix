@@ -881,10 +881,17 @@ class MainWindow(QMainWindow):
         self.act_toggle_reloj.setCheckable(True)
         self.act_toggle_reloj.setChecked(True)
         self.act_toggle_reloj.toggled.connect(self._toggle_reloj_utc)
+        self.act_toggle_incumbencia = menu_ver.addAction("Vista de Incumbencia (Jurisdicción)")
+        self.act_toggle_incumbencia.setCheckable(True)
+        self.act_toggle_incumbencia.setChecked(False)
+        self.act_toggle_incumbencia.toggled.connect(self._toggle_incumbencia)
 
         # Menú Configuración
         menu_config = menu_bar.addMenu("Configuración")
         menu_config.addAction("⚙ Perfil Operativo / Jurisdicción...", self._abrir_perfil_admin)
+        # Submenú dinámico para cambiar de perfil activo en caliente
+        self.menu_perfiles = menu_config.addMenu("Cambiar Perfil")
+        self.menu_perfiles.aboutToShow.connect(self._rebuild_profiles_menu)
 
         # Menú Mapas
         self.menu_mapas = menu_bar.addMenu("Mapas")
@@ -1622,6 +1629,11 @@ class MainWindow(QMainWindow):
             self.reloj_utc.setVisible(visible)
             if visible:
                 self.reloj_utc.raise_()
+
+    def _toggle_incumbencia(self, activo: bool):
+        if hasattr(self, 'radar'):
+            self.radar.mostrar_incumbencia = activo
+            self.radar.update()
 
     def _abrir_map_editor(self):
         from player.map_dialog import MapEditorDialog
@@ -2454,6 +2466,37 @@ class MainWindow(QMainWindow):
         dialog.profile_saved.connect(self._aplicar_perfil)
         dialog.hot_load_triggered.connect(self.hot_load_profile)
         dialog.exec()
+
+    def _rebuild_profiles_menu(self):
+        """Reconstruye el submenú 'Cambiar Perfil' con los perfiles disponibles,
+        marcando el activo. Se reconstruye cada vez que se abre para reflejar
+        altas/bajas de perfiles."""
+        from PyQt6.QtGui import QActionGroup
+        self.menu_perfiles.clear()
+        try:
+            perfiles = self.profile_manager.listar_perfiles()
+        except Exception:
+            perfiles = []
+        activo = str(self.profile_manager.profile.get("nombre_usuario", "")).strip()
+
+        if not perfiles:
+            accion = self.menu_perfiles.addAction("(no hay perfiles)")
+            accion.setEnabled(False)
+            return
+
+        grupo = QActionGroup(self.menu_perfiles)
+        grupo.setExclusive(True)
+        for nombre in perfiles:
+            accion = self.menu_perfiles.addAction(nombre)
+            accion.setCheckable(True)
+            accion.setChecked(nombre == activo)
+            accion.triggered.connect(lambda _checked=False, n=nombre: self._cambiar_perfil(n))
+            grupo.addAction(accion)
+
+    def _cambiar_perfil(self, nombre: str):
+        """Cambia el perfil activo en caliente desde el menú."""
+        if nombre and nombre != str(self.profile_manager.profile.get("nombre_usuario", "")).strip():
+            self.hot_load_profile(nombre)
 
     def hot_load_profile(self, profile_name: str):
         """
