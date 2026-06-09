@@ -1615,16 +1615,37 @@ class RadarWidget(QWidget):
                 # 0. Actualizar el timestamp del track primero para que los filtros y el historial usen el tiempo correcto
                 track.timestamp = data.get('time', track.timestamp)
 
-                # 1. Adoptar la nueva posición física con suavizado de alineación de múltiples radares en Modo Integrado
-                if getattr(self, 'modo_integrado', True) and (len(track.reporting_sensors) > 1 or track.category == 62 or track.is_track) and not getattr(self, 'modo_crudo', False):
+                # 1. Adoptar la nueva posición física con suavizado alpha-beta.
+                # Se aplica en AMBOS modos (Integrado y Crudo): la diferencia entre modos
+                # es la fusión de identidad y los filtros, no el suavizado.
+                if (len(track.reporting_sensors) > 1 or track.category == 62 or track.is_track):
                     if track.ab_filter is None:
                         from analysis.filters import AlphaBetaFilter
-                        track.ab_filter = AlphaBetaFilter(track.x, track.y, alpha=0.6, beta=0.005)
+                        track.ab_filter = AlphaBetaFilter(track.x, track.y, alpha=0.3, beta=0.005)
                         track.ab_filter.last_update = track.timestamp
                     
                     smooth_x, smooth_y = track.ab_filter.update(x, y, current_time=track.timestamp)
                     track.x = smooth_x
                     track.y = smooth_y
+
+                    # Velocidad suavizada derivada de la trayectoria suavizada (m/s en
+                    # coords proyectadas). Alimenta el rumbo del vector de tendencia para
+                    # que no oscile entre los track_angle dispares de cada radar.
+                    prev_t = getattr(track, '_vel_prev_t', None)
+                    if prev_t is not None:
+                        dt_v = track.timestamp - prev_t
+                        if 0.1 < dt_v < 30.0:
+                            inst_vx = (track.x - track._vel_prev_x) / dt_v
+                            inst_vy = (track.y - track._vel_prev_y) / dt_v
+                            if getattr(track, '_smooth_vx', None) is None:
+                                track._smooth_vx, track._smooth_vy = inst_vx, inst_vy
+                            else:
+                                k = 0.25  # EMA: 25% medición nueva, 75% histórico
+                                track._smooth_vx = (1 - k) * track._smooth_vx + k * inst_vx
+                                track._smooth_vy = (1 - k) * track._smooth_vy + k * inst_vy
+                    track._vel_prev_x = track.x
+                    track._vel_prev_y = track.y
+                    track._vel_prev_t = track.timestamp
                 else:
                     track.x = x
                     track.y = y
@@ -4690,16 +4711,30 @@ class RadarWidget(QWidget):
 
             # 5. Vector de tendencia (Predictive speed vector in screen pixels - FASE 1)
             es_pista = plot.is_track or is_fused
-            if (es_pista and plot.ground_speed is not None and
-                    plot.track_angle is not None and plot.ground_speed > 10):
+
+            # Preferir la velocidad SUAVIZADA del filtro alpha-beta (multi-sensor) para
+            # derivar rumbo y módulo: evita que el vector oscile ~180° cuando distintos
+            # radares reportan track_angle dispares para el mismo blanco fusionado.
+            # Fallback al track_angle/ground_speed crudo si el filtro no está activo.
+            target_gs = None
+            target_heading = None
+            sv_x = getattr(plot, '_smooth_vx', None)
+            sv_y = getattr(plot, '_smooth_vy', None)
+            if sv_x is not None and sv_y is not None:
+                v_mps = math.hypot(sv_x, sv_y)
+                if v_mps > 5.0:  # ~10 kt: descartar ruido en blancos lentos/estáticos
+                    target_gs = v_mps * 1.94384  # m/s -> kt
+                    target_heading = math.degrees(math.atan2(sv_x, sv_y)) % 360.0
+            if target_gs is None and plot.ground_speed is not None and plot.track_angle is not None:
+                target_gs = plot.ground_speed
+                target_heading = plot.track_angle
+
+            if es_pista and target_gs is not None and target_heading is not None and target_gs > 10:
                 try:
                     painter.save()
                     painter.translate(x, y)
                     painter.scale(inv_z, -inv_z)
-                    
-                    target_gs = plot.ground_speed
-                    target_heading = plot.track_angle
-                    
+
                     # Rumbo y velocidad geodésica predictiva a X minutos
                     distancia_vector_nm = (target_gs / 60.0) * self.vector_tiempo_minutos
                     longitud_pixeles = distancia_vector_nm * self.píxeles_por_milla
