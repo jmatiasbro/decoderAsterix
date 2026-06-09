@@ -3393,7 +3393,7 @@ class RadarWidget(QWidget):
             try:
                 painter.save()
                 ancho_widget = self.width()
-                # 45px vertical para situarlo justo debajo del cartel de sensor activo sin solaparse
+                # Esquina superior derecha; el reloj flotante UTC se ubica justo debajo
                 rect_destino = QRectF(ancho_widget - 260, 45, 250, 28)
                 
                 painter.setBrush(QBrush(QColor(11, 14, 20, 220)))
