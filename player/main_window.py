@@ -1232,6 +1232,19 @@ class MainWindow(QMainWindow):
         grupo_filtros.setLayout(l_filtros)
         v_layout.addWidget(grupo_filtros)
 
+        # F2. Cartografía: acceso directo a la herramienta de dibujo
+        grupo_carto = QGroupBox("Cartografía")
+        l_carto = QVBoxLayout()
+        l_carto.setContentsMargins(6, 12, 6, 6)
+        l_carto.setSpacing(4)
+        self.btn_dibujo = QPushButton("✏️ Herramienta de Dibujo")
+        self.btn_dibujo.setToolTip("Abre el gestor de capas / herramienta de dibujo de cartografía")
+        self.btn_dibujo.clicked.connect(self._abrir_map_editor)
+        self.btn_dibujo.setStyleSheet(self.btn_filtro_datos.styleSheet())
+        l_carto.addWidget(self.btn_dibujo)
+        grupo_carto.setLayout(l_carto)
+        v_layout.addWidget(grupo_carto)
+
         # G. Botón Análisis PASS (Acceso Directo Lateral)
         grupo_analisis = QGroupBox("Análisis PASS")
         l_analisis = QVBoxLayout()
