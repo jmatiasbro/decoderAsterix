@@ -685,6 +685,9 @@ class RadarWidget(QWidget):
 
         self.sensor_info = sensores or {}
         self.declinacion_magnetica = declinacion_magnetica
+        # Compensador magnético dinámico (WMM); usa la declinación estática como fallback
+        from player.magnetic_compensator import MagneticCompensator
+        self.magnetic_compensator = MagneticCompensator(fallback_deg=declinacion_magnetica)
         self.plot_filter_fn = None
         self.proy = StereographicLocal()
         self.projection_set = False
@@ -3474,9 +3477,13 @@ class RadarWidget(QWidget):
                                 painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, "RBL")
                                 painter.restore()
 
-                    # Calcular métricas
+                    # Calcular métricas — declinación magnética dinámica (WMM) en el
+                    # centroide de la línea, cacheada por celda para no recalcular por frame.
                     dist = calcular_distancia_nm(olat, olon, dlat, dlon)
-                    rumbo = calcular_rumbo_magnetico(olat, olon, dlat, dlon, self.declinacion_magnetica)
+                    decl = self.magnetic_compensator.obtener_declinacion(
+                        (olat + dlat) / 2.0, (olon + dlon) / 2.0
+                    )
+                    rumbo = calcular_rumbo_magnetico(olat, olon, dlat, dlon, decl)
                     info_text = f"{rumbo:03.0f}\u00b0 M | {dist:.1f} NM"
                     if orig_lbl and dest_lbl:
                         label_text = f"{orig_lbl} -> {dest_lbl}\n{info_text}"
