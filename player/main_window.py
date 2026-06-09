@@ -971,14 +971,14 @@ class MainWindow(QMainWindow):
         self.txt_udp_ip.setFixedHeight(22)
         self.txt_udp_ip.setStyleSheet("background-color: #2D313C; color: white; border: 1px solid #4B5263; border-radius: 4px; padding: 2px;")
         
-        self.spin_udp_port = QSpinBox()
-        self.spin_udp_port.setRange(1, 65535)
-        self.spin_udp_port.setValue(20000)
-        self.spin_udp_port.setFixedHeight(22)
-        self.spin_udp_port.setStyleSheet("background-color: #2D313C; color: white; border: 1px solid #4B5263; border-radius: 4px; padding: 1px;")
+        self.txt_udp_port = QLineEdit("20000")
+        self.txt_udp_port.setPlaceholderText("Puerto(s): 6610,6611,6612")
+        self.txt_udp_port.setToolTip("Uno o varios puertos separados por coma para escuchar en simultáneo")
+        self.txt_udp_port.setFixedHeight(22)
+        self.txt_udp_port.setStyleSheet("background-color: #2D313C; color: white; border: 1px solid #4B5263; border-radius: 4px; padding: 2px;")
         
         l_udp_inputs.addWidget(self.txt_udp_ip, stretch=3)
-        l_udp_inputs.addWidget(self.spin_udp_port, stretch=2)
+        l_udp_inputs.addWidget(self.txt_udp_port, stretch=2)
 
         self.chk_grabar_pcap = self._make_toggle_button("Grabar Captura", "#00E5FF")
 
@@ -2726,32 +2726,47 @@ class MainWindow(QMainWindow):
         self.combo_udp_preset.setCurrentIndex(idx_sel)
         self.combo_udp_preset.blockSignals(False)
 
+    @staticmethod
+    def _parse_ports(texto: str) -> list:
+        """Convierte 'p1,p2,...' en lista de puertos válidos (1-65535), sin duplicados."""
+        puertos = []
+        for tok in str(texto).replace(";", ",").split(","):
+            tok = tok.strip()
+            if not tok:
+                continue
+            try:
+                v = int(tok)
+            except ValueError:
+                continue
+            if 1 <= v <= 65535 and v not in puertos:
+                puertos.append(v)
+        return puertos
+
     def _on_udp_preset_selected(self, _index: int) -> None:
         p = self.combo_udp_preset.currentData()
         if not isinstance(p, dict):
             return
         self.txt_udp_ip.setText(str(p.get('ip', '')))
-        try:
-            self.spin_udp_port.setValue(int(p.get('puerto')))
-        except (TypeError, ValueError):
-            pass
+        self.txt_udp_port.setText(str(p.get('puerto', '')))
 
-    def _upsert_udp_preset(self, nombre: str, ip: str, puerto: int, match_key: str = "nombre") -> None:
-        """Crea o actualiza un preset. match_key: 'nombre' o 'endpoint' (ip+puerto)."""
+    def _upsert_udp_preset(self, nombre: str, ip: str, puerto, match_key: str = "nombre") -> None:
+        """Crea o actualiza un preset. puerto puede ser '6610,6611,6612'.
+        match_key: 'nombre' o 'endpoint' (ip+puerto)."""
+        puerto = str(puerto)
         presets = self._load_udp_presets()
         encontrado = False
         for p in presets:
             if match_key == "endpoint":
-                if p.get('ip') == ip and int(p.get('puerto', -1)) == int(puerto):
+                if p.get('ip') == ip and str(p.get('puerto', '')) == puerto:
                     # Ya existe ese endpoint: respetar su nombre, no sobrescribir
                     encontrado = True
                     break
             elif p.get('nombre') == nombre:
-                p['ip'], p['puerto'] = ip, int(puerto)
+                p['ip'], p['puerto'] = ip, puerto
                 encontrado = True
                 break
         if not encontrado:
-            presets.append({"nombre": nombre, "ip": ip, "puerto": int(puerto)})
+            presets.append({"nombre": nombre, "ip": ip, "puerto": puerto})
         self._save_udp_presets(presets)
 
     def _eliminar_udp_preset(self) -> None:
@@ -2771,12 +2786,12 @@ class MainWindow(QMainWindow):
         presets = [x for x in self._load_udp_presets()
                    if not (x.get('nombre') == nombre
                            and x.get('ip') == p.get('ip')
-                           and int(x.get('puerto', -1)) == int(p.get('puerto', -1)))]
+                           and str(x.get('puerto', '')) == str(p.get('puerto', '')))]
         self._save_udp_presets(presets)
         self._refrescar_combo_udp_presets()
 
-    def _dialogo_conexion_udp(self, nombre: str = "", ip: str = "", puerto: int = 20000):
-        """Diálogo con nombre, IP y puerto. Retorna (nombre, ip, puerto) o None."""
+    def _dialogo_conexion_udp(self, nombre: str = "", ip: str = "", puerto: str = "20000"):
+        """Diálogo con nombre, IP y puerto(s). Retorna (nombre, ip, puerto) o None."""
         dlg = QDialog(self)
         dlg.setWindowTitle("Guardar conexión / radar")
         form = QFormLayout(dlg)
@@ -2784,12 +2799,11 @@ class MainWindow(QMainWindow):
         in_nombre.setPlaceholderText("Ej: Córdoba APP")
         in_ip = QLineEdit(ip)
         in_ip.setPlaceholderText("IP")
-        in_puerto = QSpinBox()
-        in_puerto.setRange(1, 65535)
-        in_puerto.setValue(int(puerto))
+        in_puerto = QLineEdit(str(puerto))
+        in_puerto.setPlaceholderText("Puerto(s): 6610,6611,6612")
         form.addRow("Nombre:", in_nombre)
         form.addRow("IP:", in_ip)
-        form.addRow("Puerto:", in_puerto)
+        form.addRow("Puerto(s):", in_puerto)
         btns = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -2798,23 +2812,23 @@ class MainWindow(QMainWindow):
         form.addRow(btns)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return None
-        return in_nombre.text().strip(), in_ip.text().strip(), in_puerto.value()
+        return in_nombre.text().strip(), in_ip.text().strip(), in_puerto.text().strip()
 
     def _guardar_udp_preset(self) -> None:
         datos = self._dialogo_conexion_udp(
             ip=self.txt_udp_ip.text().strip(),
-            puerto=self.spin_udp_port.value()
+            puerto=self.txt_udp_port.text().strip()
         )
         if datos is None:
             return
         nombre, ip, puerto = datos
-        if not nombre or not ip:
-            QMessageBox.warning(self, "Guardar conexión", "El nombre y la IP no pueden estar vacíos.")
+        if not nombre or not ip or not self._parse_ports(puerto):
+            QMessageBox.warning(self, "Guardar conexión", "Nombre, IP y al menos un puerto válido son obligatorios.")
             return
         self._upsert_udp_preset(nombre, ip, puerto, match_key="nombre")
         # Reflejar en los campos activos y seleccionar en el combo
         self.txt_udp_ip.setText(ip)
-        self.spin_udp_port.setValue(puerto)
+        self.txt_udp_port.setText(puerto)
         self._refrescar_combo_udp_presets(seleccionar=nombre)
 
     def _toggle_udp(self):
@@ -2853,16 +2867,20 @@ class MainWindow(QMainWindow):
 
             # 4. Crear nuevo PlaybackWorker en modo UDP en vivo
             ip_escucha = self.txt_udp_ip.text().strip()
-            puerto_escucha = self.spin_udp_port.value()
+            puertos_texto = self.txt_udp_port.text().strip()
+            puertos_escucha = self._parse_ports(puertos_texto)
+            if not puertos_escucha:
+                QMessageBox.warning(self, "Conectar UDP", "Ingresá al menos un puerto válido (ej: 6610,6611,6612).")
+                return
 
             # Auto-guardar el endpoint como preset (si no existe uno con esa ip:puerto)
             if ip_escucha:
-                self._upsert_udp_preset(f"{ip_escucha}:{puerto_escucha}", ip_escucha, puerto_escucha, match_key="endpoint")
+                self._upsert_udp_preset(f"{ip_escucha}:{puertos_texto}", ip_escucha, puertos_texto, match_key="endpoint")
                 self._refrescar_combo_udp_presets()
 
             self.worker = PlaybackWorker(
                 udp_ip=ip_escucha,
-                udp_port=puerto_escucha,
+                udp_port=puertos_escucha,
                 pcap_record_file=pcap_record_file,
                 sensores=self.sensores,
                 cache_dir=self.cache_dir,
@@ -2884,7 +2902,7 @@ class MainWindow(QMainWindow):
             self.slider_tiempo.setEnabled(False)
             self.combo_vel.setEnabled(False)
             self.txt_udp_ip.setEnabled(False)
-            self.spin_udp_port.setEnabled(False)
+            self.txt_udp_port.setEnabled(False)
             self.chk_grabar_pcap.setEnabled(False)
 
             # 6. Cambiar apariencia del botón Conectar a Desconectar (Rojo Neón)
@@ -2919,8 +2937,9 @@ class MainWindow(QMainWindow):
             self.radar.play()
             self.btn_pass.setEnabled(True)
 
-            print(f"[UDP Live] Conectado exitosamente. Escuchando en {ip_escucha}:{puerto_escucha}")
-            self.setWindowTitle(f"ASTERIX Radar Decoder - LIVE UDP ({ip_escucha}:{puerto_escucha})")
+            _puertos_str = ",".join(str(p) for p in puertos_escucha)
+            print(f"[UDP Live] Conectado exitosamente. Escuchando en {ip_escucha}:{_puertos_str}")
+            self.setWindowTitle(f"ASTERIX Radar Decoder - LIVE UDP ({ip_escucha}:{_puertos_str})")
         else:
             self._desconectar_udp_ui()
 
@@ -2942,7 +2961,7 @@ class MainWindow(QMainWindow):
         # 3. Habilitar controles históricos
         self.btn_cargar.setEnabled(True)
         self.txt_udp_ip.setEnabled(True)
-        self.spin_udp_port.setEnabled(True)
+        self.txt_udp_port.setEnabled(True)
         self.chk_grabar_pcap.setEnabled(True)
 
         # 4. Restaurar estilo del botón Conectar UDP
