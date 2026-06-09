@@ -855,6 +855,9 @@ class RadarWidget(QWidget):
         # Dedup de eventos de calidad ya registrados: keys (track_id, razon) para
         # DQF y reflector_key para reflexiones. Evita repetir la misma línea.
         self._logged_quality_events: Set = set()
+        # Cache de velocidad estimada por pista para el campo N: { plot_id: (gs_kt, timestamp) }.
+        # Evita recalcular en cada repintado y permite suavizar (EMA) entre scans.
+        self._gs_est_map: Dict[str, Tuple[float, float]] = {}
         self.modo_integrado = True
         self.tracks_en_alerta = set()
         self.conflictos_activos = []
@@ -1208,6 +1211,12 @@ class RadarWidget(QWidget):
 
         # 3) Reproyectar el mapa DXF al nuevo centro
         self._reproject_dxf_to_current_proy()
+
+        # 3.b) Reproyectar TODAS las tracks/pending/estelas al nuevo centro.
+        # Sin esto, las pistas existentes quedan en el marco de proyección anterior
+        # mientras los plots entrantes usan el nuevo: el emparejado de fusión (MRT)
+        # falla y aparecen duplicados al cambiar de rol/perfil.
+        self.reproject_all_coordinates()
 
         # 4) Forzar actualización visual
         self.update()
@@ -3954,10 +3963,13 @@ class RadarWidget(QWidget):
 
     def _build_plot_label_lines(self, plot: 'RadarPlot') -> List[str]:
         cfg = getattr(self, 'label_filter_config', {})
-        
+        # Rol controlador: datablock operacional fijo (callsign, SSR, FL, N, ADR);
+        # rol técnico: todos los campos disponibles según el filtro de etiquetas.
+        es_ctrl = getattr(self, 'vista_controlador', False)
+
         # 1. Line 1: Identity
-        show_id = cfg.get("identific_aeronave", True)
-        show_squawk = cfg.get("codigo_a", True)
+        show_id = True if es_ctrl else cfg.get("identific_aeronave", True)
+        show_squawk = True if es_ctrl else cfg.get("codigo_a", True)
         
         line1_parts = []
         
@@ -3988,8 +4000,8 @@ class RadarWidget(QWidget):
         line1 = " ".join(line1_parts) if line1_parts else ""
 
         # 2. Line 2: Altitude & Speed
-        show_altitude = cfg.get("codigo_c", True) or cfg.get("altitud_adsb", True)
-        show_speed = cfg.get("velocidad", True)
+        show_altitude = True if es_ctrl else (cfg.get("codigo_c", True) or cfg.get("altitud_adsb", True))
+        show_speed = True if es_ctrl else cfg.get("velocidad", True)
         
         alt_str = ""
         if show_altitude:
@@ -4039,35 +4051,47 @@ class RadarWidget(QWidget):
         if show_speed:
             gs_val = plot.ground_speed
             if gs_val is None:
-                if plot.id in self.history:
-                    hist = list(self.history[plot.id])
-                    curr_time = plot.timestamp
-                    if len(hist) >= 2 and curr_time is not None:
-                        # Recopilar todas las estimaciones de velocidad dentro de la ventana 6s–30s
-                        # y promediarlas para reducir el jitter causado por ruido de posición del radar
-                        speed_samples = []
-                        for pt in reversed(hist):
-                            if pt.timestamp <= 0:
-                                continue
-                            dt = curr_time - pt.timestamp
-                            if dt < 6.0:
-                                continue          # demasiado corto: muy ruidoso
-                            if dt > 30.0:
-                                break             # demasiado antiguo: puede ser de otra maniobra
-                            try:
-                                dx_m = plot.x - pt.x
-                                dy_m = plot.y - pt.y
-                                dist_m = math.sqrt(dx_m**2 + dy_m**2)
-                                if dt > 0:
-                                    speed_mps = dist_m / dt
-                                    speed_samples.append(speed_mps * 3600.0 / 1852.0)
-                            except Exception:
-                                pass
-                        if speed_samples:
-                            gs_val = sum(speed_samples) / len(speed_samples)
+                # Velocidad estimada y SUAVIZADA por pista. Se recalcula solo cuando
+                # llega un nuevo scan (cambia el timestamp), no en cada repintado, y se
+                # filtra para evitar la fluctuación irreal del campo N.
+                cached = self._gs_est_map.get(plot.id)
+                curr_time = plot.timestamp
+                if cached is not None and curr_time is not None and abs(curr_time - cached[1]) < 0.05:
+                    # Mismo scan ya calculado → reusar (sin parpadeo entre frames)
+                    gs_val = cached[0]
+                elif plot.id in self.history and curr_time is not None:
+                    hist = self.history[plot.id]
+                    # Muestras (t, x, y) en la ventana 0–30s + el punto actual
+                    samples = [
+                        (pt.timestamp, pt.x, pt.y)
+                        for pt in hist
+                        if pt.timestamp > 0 and 0.0 <= (curr_time - pt.timestamp) <= 30.0
+                    ]
+                    samples.append((curr_time, plot.x, plot.y))
+
+                    est = None
+                    if len(samples) >= 3:
+                        # Regresión lineal por mínimos cuadrados: |pendiente| = velocidad
+                        n = len(samples)
+                        t_mean = sum(s[0] for s in samples) / n
+                        x_mean = sum(s[1] for s in samples) / n
+                        y_mean = sum(s[2] for s in samples) / n
+                        var_t = sum((s[0] - t_mean) ** 2 for s in samples)
+                        if var_t > 1e-6:
+                            vx = sum((s[0] - t_mean) * (s[1] - x_mean) for s in samples) / var_t
+                            vy = sum((s[0] - t_mean) * (s[2] - y_mean) for s in samples) / var_t
+                            est = math.hypot(vx, vy) * 3600.0 / 1852.0  # m/s → kt
+
+                    if est is not None and 0.0 <= est <= 1200.0:
+                        prev = cached[0] if cached is not None else None
+                        gs_val = est if prev is None else (0.6 * prev + 0.4 * est)  # EMA
+                        self._gs_est_map[plot.id] = (gs_val, curr_time)
+                    elif cached is not None:
+                        gs_val = cached[0]  # mantener último valor válido
 
             if gs_val is not None:
-                speed_str = f"N{int(gs_val):03d}"
+                gs_disp = int(round(gs_val / 5.0) * 5)  # redondeo a 5 kt para estabilidad visual
+                speed_str = f"N{gs_disp:03d}"
             else:
                 speed_str = "N---"
 
@@ -4087,64 +4111,67 @@ class RadarWidget(QWidget):
             lines.append(line2)
             
         # 3. Extra fields/lines
-        # Track Number
-        if cfg.get("numero_pista", False) and plot.track_number is not None:
-            lines.append(f"TRK:{plot.track_number}")
-            
-        # Mode S Address
-        if cfg.get("direccion_aeronave", False) and plot.mode_s:
+        # Mode S Address (aircraft address): controlador lo ve si está disponible;
+        # técnico según el filtro de etiquetas.
+        if plot.mode_s and plot.mode_s.strip() and (es_ctrl or cfg.get("direccion_aeronave", False)):
             lines.append(f"ADR:{plot.mode_s.strip().upper()}")
-            
-        # UTC Time (TOD)
-        if cfg.get("hora_utc", False) and plot.timestamp is not None:
-            tod = plot.timestamp
-            hours = int(tod // 3600) % 24
-            minutes = int((tod % 3600) // 60)
-            seconds = int(tod % 60)
-            lines.append(f"UTC:{hours:02d}:{minutes:02d}:{seconds:02d}")
-            
-        # Vertical Rate
-        if cfg.get("veloc_vertic_adsb", False):
-            rate_val = None
-            if plot.raw_dict:
-                rate_val = plot.raw_dict.get('vertical_rate_ftmin')
-                if rate_val is None and 'extra_data' in plot.raw_dict:
-                    rate_val = plot.raw_dict['extra_data'].get('vertical_rate_ftmin')
-            if rate_val is not None:
-                sign = "+" if rate_val >= 0 else ""
-                lines.append(f"V/S:{sign}{int(rate_val)}")
-                
-        # Emitter Category
-        if cfg.get("cat_emisor_adsb", False):
-            ecat = None
-            if plot.raw_dict:
-                ecat = plot.raw_dict.get('emitter_category')
-                if ecat is None and 'extra_data' in plot.raw_dict:
-                    ecat = plot.raw_dict['extra_data'].get('emitter_category')
-            if ecat is not None:
-                lines.append(f"ECAT:{ecat}")
-                
-        # Message Number
-        if cfg.get("numero_mensaje", False):
-            msg_no = None
-            if plot.raw_dict:
-                msg_no = plot.raw_dict.get('message_number') or plot.raw_dict.get('msg_number')
-            if msg_no is not None:
-                lines.append(f"MSG:{msg_no}")
-                
-        # Number of Replies
-        if cfg.get("numero_respuestas", False):
-            replies = None
-            if plot.raw_dict:
-                replies = plot.raw_dict.get('num_replies') or plot.raw_dict.get('number_of_replies')
-            if replies is not None:
-                lines.append(f"REP:{replies}")
 
-        # RHO / THETA
-        if plot.category in (1, 48) and plot.raw_range is not None and plot.raw_azimuth is not None:
-            lines.append(f"R:{plot.raw_range:.1f}NM A:{plot.raw_azimuth:.1f}°")
-        elif cfg.get("rho_theta", False) and plot.raw_range is not None and plot.raw_azimuth is not None:
-            lines.append(f"R:{plot.raw_range:.1f}NM A:{plot.raw_azimuth:.1f}°")
+        # Resto de campos de diagnóstico: SOLO rol técnico.
+        if not es_ctrl:
+            # Track Number
+            if cfg.get("numero_pista", False) and plot.track_number is not None:
+                lines.append(f"TRK:{plot.track_number}")
+
+            # UTC Time (TOD)
+            if cfg.get("hora_utc", False) and plot.timestamp is not None:
+                tod = plot.timestamp
+                hours = int(tod // 3600) % 24
+                minutes = int((tod % 3600) // 60)
+                seconds = int(tod % 60)
+                lines.append(f"UTC:{hours:02d}:{minutes:02d}:{seconds:02d}")
+
+            # Vertical Rate
+            if cfg.get("veloc_vertic_adsb", False):
+                rate_val = None
+                if plot.raw_dict:
+                    rate_val = plot.raw_dict.get('vertical_rate_ftmin')
+                    if rate_val is None and 'extra_data' in plot.raw_dict:
+                        rate_val = plot.raw_dict['extra_data'].get('vertical_rate_ftmin')
+                if rate_val is not None:
+                    sign = "+" if rate_val >= 0 else ""
+                    lines.append(f"V/S:{sign}{int(rate_val)}")
+
+            # Emitter Category
+            if cfg.get("cat_emisor_adsb", False):
+                ecat = None
+                if plot.raw_dict:
+                    ecat = plot.raw_dict.get('emitter_category')
+                    if ecat is None and 'extra_data' in plot.raw_dict:
+                        ecat = plot.raw_dict['extra_data'].get('emitter_category')
+                if ecat is not None:
+                    lines.append(f"ECAT:{ecat}")
+
+            # Message Number
+            if cfg.get("numero_mensaje", False):
+                msg_no = None
+                if plot.raw_dict:
+                    msg_no = plot.raw_dict.get('message_number') or plot.raw_dict.get('msg_number')
+                if msg_no is not None:
+                    lines.append(f"MSG:{msg_no}")
+
+            # Number of Replies
+            if cfg.get("numero_respuestas", False):
+                replies = None
+                if plot.raw_dict:
+                    replies = plot.raw_dict.get('num_replies') or plot.raw_dict.get('number_of_replies')
+                if replies is not None:
+                    lines.append(f"REP:{replies}")
+
+            # RHO / THETA (diagnóstico de cabezal de radar): solo técnico
+            if plot.category in (1, 48) and plot.raw_range is not None and plot.raw_azimuth is not None:
+                lines.append(f"R:{plot.raw_range:.1f}NM A:{plot.raw_azimuth:.1f}°")
+            elif cfg.get("rho_theta", False) and plot.raw_range is not None and plot.raw_azimuth is not None:
+                lines.append(f"R:{plot.raw_range:.1f}NM A:{plot.raw_azimuth:.1f}°")
 
         return lines
 
