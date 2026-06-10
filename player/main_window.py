@@ -2351,13 +2351,25 @@ class MainWindow(QMainWindow):
                                 "La calibración de registración es exclusiva del rol técnico.")
             return
         from player.calib_dialog import CalibrationDialog
-        dlg = CalibrationDialog(self.sensores, pcap_path=getattr(self, 'pcap_path', ''), parent=self)
-        if dlg.exec():
-            # Recargar sensores con los nuevos offsets para próximas reproducciones
-            import os
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            from utils.geo import cargar_sensores
-            self.sensores = cargar_sensores(os.path.join(base_dir, "default-site-params"))
+        # No-modal: se mantiene la referencia para que no lo recolecte el GC y
+        # se permite seguir usando la consola mientras el calibrador está abierto.
+        if getattr(self, '_calib_dialog', None) is not None:
+            self._calib_dialog.raise_()
+            self._calib_dialog.activateWindow()
+            return
+        self._calib_dialog = CalibrationDialog(
+            self.sensores, pcap_path=getattr(self, 'pcap_path', ''), parent=self)
+        self._calib_dialog.setModal(False)
+        self._calib_dialog.accepted.connect(self._recargar_sensores_calib)
+        self._calib_dialog.finished.connect(lambda _=0: setattr(self, '_calib_dialog', None))
+        self._calib_dialog.show()
+
+    def _recargar_sensores_calib(self):
+        """Recarga sensores con los offsets recién guardados por el calibrador."""
+        import os
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        from utils.geo import cargar_sensores
+        self.sensores = cargar_sensores(os.path.join(base_dir, "default-site-params"))
 
     def hot_load_profile(self, profile_name: str):
         """
