@@ -1,6 +1,6 @@
 {
     "nombre_usuario": "ROBERTO",
-    "rol": "tecnico",
+    "rol": "controlador",
     "aeropuerto_trabajo": "SACO",
     "coordenadas_centro": {
         "lat": -31.31,
@@ -10,9 +10,9 @@
     "radio_incumbencia": 50,
     "transition_altitude": 10000,
     "frecuencias_sector": [
-        "118.3",
-        "119.5",
-        "121.70"
+        "",
+        "",
+        ""
     ],
     "mapas_visibles": [],
     "stca_habilitado": true

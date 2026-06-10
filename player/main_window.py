@@ -652,6 +652,19 @@ class MainWindow(QMainWindow):
         self.act_toggle_incumbencia.setChecked(False)
         self.act_toggle_incumbencia.toggled.connect(self._toggle_incumbencia)
 
+        # Submenú: horizonte del vector velocidad (1/2/3 min)
+        menu_vector = menu_ver.addMenu("Vector Velocidad")
+        from PyQt6.QtGui import QActionGroup
+        self._grupo_vector_min = QActionGroup(self)
+        self._grupo_vector_min.setExclusive(True)
+        actual_min = getattr(self.radar, 'vector_tiempo_minutos', 2)
+        for minutos in (1, 2, 3):
+            act = menu_vector.addAction(f"{minutos} minuto{'s' if minutos > 1 else ''}")
+            act.setCheckable(True)
+            act.setChecked(minutos == actual_min)
+            act.triggered.connect(lambda _checked, m=minutos: self._set_vector_minutos(m))
+            self._grupo_vector_min.addAction(act)
+
         # Menú Configuración
         menu_config = menu_bar.addMenu("Configuración")
         menu_config.addAction(_icon("fa5s.cog"), "Perfil Operativo / Jurisdicción...", self._abrir_perfil_admin)
@@ -1408,6 +1421,7 @@ class MainWindow(QMainWindow):
         self.act_exp_parquet.setEnabled(False)
         self.chk_modo_integrado.setEnabled(False)
         self._modo_manual = False  # permitir default automático por nº de sensores
+        self._auto_modo_estado = None
 
         # Limpiar combo box de proyección
         self.combo_sensor.blockSignals(True)
@@ -1574,7 +1588,9 @@ class MainWindow(QMainWindow):
             self.chk_modo_integrado.setEnabled(True)
             self.chk_modo_crudo.setEnabled(True)
             if not getattr(self, '_modo_manual', False):
-                self._set_modo(len(self.sensores_conocidos) > 1)
+                multis = len(self.sensores_conocidos) > 1
+                self._auto_modo_estado = multis
+                self._set_modo(multis)
         else:
             self.btn_play.setText("Error en PCAP")
             self._show_panel()
@@ -1655,10 +1671,15 @@ class MainWindow(QMainWindow):
 
         # Default dinámico en vivo (UDP): mientras el usuario no haya elegido manualmente,
         # un solo sensor -> Crudo; al aparecer el segundo -> Integrado.
+        # IMPORTANTE: solo actuar cuando cambia el estado 1<->multisensor (no en cada
+        # plot), porque _set_modo reconstruye pistas/estela y causaría parpadeo.
         self.chk_modo_integrado.setEnabled(True)
         self.chk_modo_crudo.setEnabled(True)
         if not getattr(self, '_modo_manual', False):
-            self._set_modo(len(self.sensores_conocidos) > 1)
+            multis = len(self.sensores_conocidos) > 1
+            if multis != getattr(self, '_auto_modo_estado', None):
+                self._auto_modo_estado = multis
+                self._set_modo(multis)
 
     def _on_sensor_combo_changed(self, index):
         if index <= 0:
@@ -1752,6 +1773,12 @@ class MainWindow(QMainWindow):
         if hasattr(self.radar, 'history'):
             self.radar.history.clear()
         self.radar.update()
+
+    def _set_vector_minutos(self, minutos: int):
+        """Cambia el horizonte (min) del vector de tendencia en caliente."""
+        if hasattr(self, 'radar'):
+            self.radar.vector_tiempo_minutos = int(minutos)
+            self.radar.update()
 
     def _on_modo_integrado_toggled(self, checked: bool):
         # Toggle excluyente: integrado on -> crudo off; integrado off -> crudo on
@@ -2865,6 +2892,7 @@ class MainWindow(QMainWindow):
             self.sensores_conocidos.clear()
             self.sensores_activos.clear()
             self._modo_manual = False  # permitir default automático por nº de sensores
+            self._auto_modo_estado = None
             self.autocentered_on_first_sensor = False
             self.data_filter_config.pop("sensores_seleccionados", None)
             self.total_messages_received = 0
