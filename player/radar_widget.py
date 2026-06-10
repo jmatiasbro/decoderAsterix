@@ -1646,12 +1646,19 @@ class RadarWidget(QWidget):
                         if 0.1 < dt_v < 30.0:
                             inst_vx = (track.x - track._vel_prev_x) / dt_v
                             inst_vy = (track.y - track._vel_prev_y) / dt_v
-                            if getattr(track, '_smooth_vx', None) is None:
-                                track._smooth_vx, track._smooth_vy = inst_vx, inst_vy
-                            else:
-                                k = 0.25  # EMA: 25% medición nueva, 75% histórico
-                                track._smooth_vx = (1 - k) * track._smooth_vx + k * inst_vx
-                                track._smooth_vy = (1 - k) * track._smooth_vy + k * inst_vy
+                            # Guarda de plausibilidad: un plot del siguiente sensor con
+                            # offset de registración produce un salto que implica
+                            # velocidades absurdas (>700 kt). Se descarta la muestra
+                            # para no envenenar la velocidad suavizada ni el vector de
+                            # tendencia (evita el artefacto "N740" y la mala extrapolación).
+                            MAX_VEL_MPS = 700.0 * (METERS_PER_NM / 3600.0)  # ~360 m/s
+                            if math.hypot(inst_vx, inst_vy) <= MAX_VEL_MPS:
+                                if getattr(track, '_smooth_vx', None) is None:
+                                    track._smooth_vx, track._smooth_vy = inst_vx, inst_vy
+                                else:
+                                    k = 0.25  # EMA: 25% medición nueva, 75% histórico
+                                    track._smooth_vx = (1 - k) * track._smooth_vx + k * inst_vx
+                                    track._smooth_vy = (1 - k) * track._smooth_vy + k * inst_vy
                     track._vel_prev_x = track.x
                     track._vel_prev_y = track.y
                     track._vel_prev_t = track.timestamp
@@ -2074,11 +2081,13 @@ class RadarWidget(QWidget):
         return dist_m <= 0.7 * 1852.0
 
     def _reconciliar_pistas(self):
-        """Fusiona pistas promovidas que son el mismo avión. Throttle ~1s."""
+        """Fusiona pistas promovidas que son el mismo avión. Throttle ~0.3s
+        para cerrar la ventana en que una pista recién promovida queda visible
+        al STCA antes de fusionarse (re-disparo de alarma al perder/recuperar)."""
         if not getattr(self, 'modo_integrado', True):
             return
         ahora = SimulationTime.time()
-        if ahora - getattr(self, '_last_reconcile', 0.0) < 1.0:
+        if ahora - getattr(self, '_last_reconcile', 0.0) < 0.3:
             return
         self._last_reconcile = ahora
 
