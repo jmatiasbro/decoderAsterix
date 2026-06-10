@@ -166,6 +166,9 @@ class DataEngine:
     def __init__(self, sensores: Dict = None, cache_dir: str = None, profile_config: Dict = None):
         self.router = AsterixRouter()
         self.sensores = sensores or {}
+        # Toggle global de la corrección de registración por sensor (Fase 4).
+        # La corrección igual requiere registration.enabled=true por sensor.
+        self.aplicar_registracion = (profile_config or {}).get('aplicar_registracion', True)
         # Gestor de altimetría impulsado por perfil (TA dinámica, tabla ENR 1.7)
         from decoder.altimetry import AltimetryManager
         self.altimetry_manager = AltimetryManager(profile_config=profile_config)
@@ -373,6 +376,15 @@ class DataEngine:
         pcap_abs_path = os.path.abspath(pcap_file)
         hasher = hashlib.md5()
         hasher.update(pcap_abs_path.encode('utf-8'))
+        # Incluir la registración HABILITADA en la llave: un cambio de offset
+        # invalida el caché. Sin registración activa, el caché previo sigue válido.
+        if getattr(self, 'aplicar_registracion', True):
+            for k in sorted(self.sensores.keys(), key=str):
+                reg = (self.sensores.get(k) or {}).get('registration')
+                if reg and reg.get('enabled'):
+                    hasher.update(f"|{k}:{reg.get('azimuth_offset_deg', 0.0)}:"
+                                  f"{reg.get('range_offset_nm', 0.0)}:"
+                                  f"{reg.get('range_scale', 1.0)}".encode('utf-8'))
         cache_filename = f"{hasher.hexdigest()}.cache.pkl"
         return os.path.join(self.cache_dir, cache_filename)
 
@@ -1010,7 +1022,16 @@ class DataEngine:
                     rho = rec.get('raw_range')
                     theta = rec.get('raw_azimuth')
                     if rho is not None and theta is not None:
-                        dist_m = float(rho) * METERS_PER_NM
+                        rho = float(rho)
+                        theta = float(theta)
+                        # Corrección de registración por sensor (opt-in: registration.enabled).
+                        # Ajusta SOLO la posición; raw_azimuth/raw_range quedan crudos.
+                        if getattr(self, 'aplicar_registracion', True) and sensor_info:
+                            reg = sensor_info.get('registration')
+                            if reg and reg.get('enabled'):
+                                theta -= float(reg.get('azimuth_offset_deg', 0.0))
+                                rho = rho * float(reg.get('range_scale', 1.0)) - float(reg.get('range_offset_nm', 0.0))
+                        dist_m = rho * METERS_PER_NM
                         try:
                             if WGS84_GEOD:
                                 lon_dest, lat_dest, _ = WGS84_GEOD.fwd(sensor_lon, sensor_lat, float(theta), dist_m)
