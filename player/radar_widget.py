@@ -693,6 +693,10 @@ class RadarWidget(QWidget):
         # Compensador magnético dinámico (WMM); usa la declinación estática como fallback
         from player.magnetic_compensator import MagneticCompensator
         self.magnetic_compensator = MagneticCompensator(fallback_deg=declinacion_magnetica)
+        # Núcleo de correlación multisensor headless (compartido con la herramienta
+        # de calibración offline). El TTL de la asociación usa el reloj de simulación.
+        from fusion.correlator import Correlator
+        self.correlator = Correlator(now_fn=SimulationTime.time)
         self.plot_filter_fn = None
         self.proy = StereographicLocal()
         self.projection_set = False
@@ -2021,94 +2025,18 @@ class RadarWidget(QWidget):
     # pistas duplicadas (mismo avión visto por fuentes con identidad
     # disjunta: Mode S/ADS-B sin squawk vs. SSR con squawk sin Mode S).
     # ================================================================
+    # Delegaciones al núcleo headless fusion.correlator.Correlator (Fase 1).
     def _velocidad_track(self, track) -> tuple:
-        """(vx, vy) en m/s, mismo plano proyectado que x,y. Prioriza la
-        velocidad suavizada; si no hay, deriva de ground_speed/track_angle
-        (convención STCA: x=Este=sin, y=Norte=cos)."""
-        sv = getattr(track, '_smooth_vx', None)
-        if sv is not None:
-            return sv, getattr(track, '_smooth_vy', 0.0)
-        gs = getattr(track, 'ground_speed', None)
-        ta = getattr(track, 'track_angle', None)
-        if gs is not None and ta is not None:
-            v = gs * (METERS_PER_NM / 3600.0)  # kt -> m/s
-            if 1.0 <= v <= 600.0:
-                rad = math.radians(ta)
-                return v * math.sin(rad), v * math.cos(rad)
-        return 0.0, 0.0
+        return self.correlator.velocidad(track)
 
     def _extrapolar_xy(self, track, t_target) -> tuple:
-        """Proyecta la posición de la pista a t_target con su velocidad."""
-        if t_target is None or track.timestamp is None:
-            return track.x, track.y
-        dt = t_target - track.timestamp
-        if dt < -40000:  # rollover de medianoche
-            dt += 86400.0
-        if not (-30.0 <= dt <= 30.0):  # evitar extrapolaciones absurdas
-            return track.x, track.y
-        vx, vy = self._velocidad_track(track)
-        return track.x + vx * dt, track.y + vy * dt
+        return self.correlator.extrapolar(track, t_target)
 
     def _claves_identidad(self, t) -> list:
-        """Claves de identidad discretas de una pista: ('MS', addr) y/o ('SQ', code)."""
-        keys = []
-        ms = (t.mode_s or "").strip().upper()
-        if ms and ms != "----":
-            keys.append(('MS', ms))
-        m = t.mode3a
-        s = f"{m:04o}" if isinstance(m, int) else str(m or "").strip()
-        if s and s not in ("----", "0000", "1200", "2000", "7000"):
-            keys.append(('SQ', s))
-        return keys
+        return self.correlator.claves_identidad(t)
 
     def _son_misma_aeronave(self, a, b) -> bool:
-        """True si a y b son con alta confianza el mismo avión (identidades
-        no contradictorias + co-ubicación estrecha extrapolada + FL compatible),
-        o si ya se aprendió la asociación squawk<->Mode S en un match previo."""
-        ms_a = (a.mode_s or "").strip().upper()
-        ms_b = (b.mode_s or "").strip().upper()
-        if ms_a and ms_b and ms_a not in ("----",) and ms_b not in ("----",) and ms_a != ms_b:
-            return False  # dos Mode S distintos => aviones distintos
-
-        def sq(t):
-            m = t.mode3a
-            s = f"{m:04o}" if isinstance(m, int) else str(m or "").strip()
-            return s if s and s not in ("----", "0000") and s not in ("1200", "2000", "7000") else None
-        sq_a, sq_b = sq(a), sq(b)
-        if sq_a and sq_b and sq_a != sq_b:
-            return False  # dos squawks discretos distintos => aviones distintos
-
-        # FL compatible (si ambos tienen)
-        fl_a = a.flight_level if a.flight_level is not None else a.altitude_ft / 100.0 if a.altitude_ft else None
-        fl_b = b.flight_level if b.flight_level is not None else b.altitude_ft / 100.0 if b.altitude_ft else None
-        if fl_a is not None and fl_b is not None and abs(fl_a - fl_b) * 100.0 >= 1500.0:
-            return False
-
-        # Co-ubicación extrapolando ambas al instante más reciente.
-        t_ref = max(a.timestamp or 0.0, b.timestamp or 0.0)
-        ax, ay = self._extrapolar_xy(a, t_ref)
-        bx, by = self._extrapolar_xy(b, t_ref)
-        dist_m = math.hypot(ax - bx, ay - by)
-
-        # Gate estricto 0.7 NM: por debajo de cualquier separación real entre
-        # aviones distintos al mismo FL => co-ubicación a <0.7 NM == mismo avión.
-        if dist_m <= 0.7 * 1852.0:
-            return True
-
-        # Asociación aprendida: si en un match previo (a <0.7 NM) se vinculó la
-        # identidad de a con la de b, mantenerlas fusionadas aunque la
-        # registración entre sensores las separe ahora (hasta 5 NM de sanidad).
-        # Esto evita la fusión intermitente y el re-disparo de STCA al perder y
-        # readquirir la pista. Expira a los 300 s.
-        assoc = getattr(self, '_assoc', None)
-        if assoc and dist_m <= 5.0 * 1852.0:
-            ahora = SimulationTime.time()
-            keys_b = self._claves_identidad(b)
-            for ka in self._claves_identidad(a):
-                rec = assoc.get(ka)
-                if rec and (ahora - rec[1]) <= 300.0 and rec[0] in keys_b:
-                    return True
-        return False
+        return self.correlator.son_misma_aeronave(a, b)
 
     def _reconciliar_pistas(self):
         """Fusiona pistas promovidas que son el mismo avión. Throttle ~0.3s
@@ -2166,15 +2094,7 @@ class RadarWidget(QWidget):
             # Registrar/refrescar la asociación de identidad aprendida (squawk<->Mode S)
             # para mantener la fusión estable ante separación por registración y
             # readquisición tras pérdida de pista.
-            assoc = getattr(self, '_assoc', None)
-            if assoc is None:
-                assoc = self._assoc = {}
-            ahora = SimulationTime.time()
-            keys = self._claves_identidad(win) + self._claves_identidad(los)
-            for k1 in keys:
-                for k2 in keys:
-                    if k1 != k2:
-                        assoc[k1] = (k2, ahora)
+            self.correlator.registrar_asociacion(win, los)
             if not (win.callsign or "").strip() and (los.callsign or "").strip():
                 win.callsign = los.callsign
             if win.track_number is None and los.track_number is not None:
