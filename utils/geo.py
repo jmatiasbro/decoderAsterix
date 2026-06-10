@@ -90,6 +90,8 @@ def cargar_sensores(directorio: str = "default-site-params") -> Dict[Tuple[int, 
             'category': str(data.get('category', '')),
             'type': str(data.get('type', '')),
             'rpm': float(rpm_val) if rpm_val is not None else None,
+            # Corrección de registración por sensor (Fase 4). Opt-in vía enabled.
+            'registration': data.get('registration'),
         }
 
     return registro
