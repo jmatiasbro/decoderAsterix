@@ -778,7 +778,7 @@ class RadarWidget(QWidget):
         self.zoom_factor = 1.0
         self.pan_x = 0.0
         self.pan_y = 0.0
-        self.vector_tiempo_minutos = 3
+        self.vector_tiempo_minutos = 2
 
         # Colores
         self.sensor_colors: Dict[Tuple[int, int], QColor] = {}
@@ -4712,41 +4712,45 @@ class RadarWidget(QWidget):
             # 5. Vector de tendencia (Predictive speed vector in screen pixels - FASE 1)
             es_pista = plot.is_track or is_fused
 
-            # Preferir la velocidad SUAVIZADA del filtro alpha-beta (multi-sensor) para
-            # derivar rumbo y módulo: evita que el vector oscile ~180° cuando distintos
-            # radares reportan track_angle dispares para el mismo blanco fusionado.
-            # Fallback al track_angle/ground_speed crudo si el filtro no está activo.
-            target_gs = None
-            target_heading = None
+            # MÓDULO (largo) = velocidad del blanco; DIRECCIÓN = velocidad suavizada
+            # (evita oscilación ~180° entre radares), con fallback al track_angle crudo.
+            target_gs = plot.ground_speed
+            target_heading = plot.track_angle
             sv_x = getattr(plot, '_smooth_vx', None)
             sv_y = getattr(plot, '_smooth_vy', None)
             if sv_x is not None and sv_y is not None:
                 v_mps = math.hypot(sv_x, sv_y)
                 if v_mps > 5.0:  # ~10 kt: descartar ruido en blancos lentos/estáticos
-                    target_gs = v_mps * 1.94384  # m/s -> kt
                     target_heading = math.degrees(math.atan2(sv_x, sv_y)) % 360.0
-            if target_gs is None and plot.ground_speed is not None and plot.track_angle is not None:
-                target_gs = plot.ground_speed
-                target_heading = plot.track_angle
+                    if target_gs is None:
+                        target_gs = v_mps * 1.94384  # m/s -> kt (solo si no hay gs reportado)
 
             if es_pista and target_gs is not None and target_heading is not None and target_gs > 10:
                 try:
+                    # Tope anti-inflación: la velocidad estimada puede dispararse por los
+                    # saltos de posición entre radares; ningún avión civil supera ~600 kt.
+                    gs_clamp = min(float(target_gs), 600.0)
+
                     painter.save()
                     painter.translate(x, y)
-                    painter.scale(inv_z, -inv_z)
+                    painter.scale(inv_z, -inv_z)  # espacio de PÍXELES de pantalla
 
-                    # Rumbo y velocidad geodésica predictiva a X minutos
-                    distancia_vector_nm = (target_gs / 60.0) * self.vector_tiempo_minutos
-                    longitud_pixeles = distancia_vector_nm * self.píxeles_por_milla
-                    
-                    # 0° apunta al Norte
-                    dx_vector = longitud_pixeles * math.sin(math.radians(target_heading))
-                    dy_vector = -longitud_pixeles * math.cos(math.radians(target_heading))
-                    
-                    pen_v = QPen(base_color, 1.0, Qt.PenStyle.SolidLine)
+                    # Largo FIJO en pantalla, proporcional a la velocidad (no escala con el
+                    # zoom): así siempre es visible y nunca cruza la pantalla. PX_POR_NM es
+                    # una escala visual fija (no representa distancia real en el mapa).
+                    PX_POR_NM = 5.0
+                    distancia_vector_nm = (gs_clamp / 60.0) * self.vector_tiempo_minutos
+                    longitud_px = distancia_vector_nm * PX_POR_NM
+
+                    # 0° apunta al Norte (el scale(-inv_z) ya invierte el eje Y).
+                    ang = math.radians(target_heading)
+                    dx_vector = longitud_px * math.sin(ang)
+                    dy_vector = -longitud_px * math.cos(ang)
+
+                    pen_v = QPen(base_color, 1.5, Qt.PenStyle.SolidLine)
                     painter.setPen(pen_v)
                     painter.drawLine(QPointF(0, 0), QPointF(dx_vector, dy_vector))
-                    
+
                     painter.restore()
                 except Exception:
                     pass
