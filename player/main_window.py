@@ -674,6 +674,11 @@ class MainWindow(QMainWindow):
         # Submenú para cambiar el rol operativo rápido (controlador ↔ técnico)
         self.menu_rol = menu_config.addMenu("Rol Operativo")
         self.menu_rol.aboutToShow.connect(self._rebuild_rol_menu)
+        # Calibración de registración: SOLO rol técnico (se habilita según rol)
+        menu_config.addSeparator()
+        self.act_calibracion = menu_config.addAction(
+            "Calibración de Registración (Técnico)…", self._abrir_calibracion)
+        self.act_calibracion.setEnabled(self.profile_manager.get_rol() == "tecnico")
 
         # Menú Mapas
         self.menu_mapas = menu_bar.addMenu("Mapas")
@@ -2332,8 +2337,27 @@ class MainWindow(QMainWindow):
         # Persistir el nuevo rol en el perfil activo y re-aplicar
         self.profile_manager.update_profile({"rol": rol})
         self._aplicar_rol(self.profile_manager.profile)
+        # La calibración de registración es exclusiva del rol técnico
+        if hasattr(self, 'act_calibracion'):
+            self.act_calibracion.setEnabled(rol == "tecnico")
         self.radar.update()
         print(f"[ROL] Cambiado en caliente a: {rol}")
+
+    def _abrir_calibracion(self):
+        """Abre el panel técnico de calibración de registración (solo rol técnico)."""
+        if self.profile_manager.get_rol() != "tecnico":
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Acceso restringido",
+                                "La calibración de registración es exclusiva del rol técnico.")
+            return
+        from player.calib_dialog import CalibrationDialog
+        dlg = CalibrationDialog(self.sensores, pcap_path=getattr(self, 'pcap_path', ''), parent=self)
+        if dlg.exec():
+            # Recargar sensores con los nuevos offsets para próximas reproducciones
+            import os
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            from utils.geo import cargar_sensores
+            self.sensores = cargar_sensores(os.path.join(base_dir, "default-site-params"))
 
     def hot_load_profile(self, profile_name: str):
         """
