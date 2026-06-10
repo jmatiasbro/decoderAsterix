@@ -35,8 +35,10 @@ def _mediana(v):
     return None if n == 0 else (v[n // 2] if n % 2 else 0.5 * (v[n // 2 - 1] + v[n // 2]))
 
 
-def resolver_red(pcap, sensores, bucket=1.0, iteraciones=8):
+def resolver_red(pcap, sensores, bucket=1.0, iteraciones=8, progress_cb=None):
     eng = DataEngine(sensores=sensores)
+    if progress_cb is not None:
+        eng.on_progress = progress_cb
     plots, dur, _ = eng.scan_pcap(pcap)
     clusters = construir_clusters(plots, sensores, bucket=bucket)
     if not clusters:

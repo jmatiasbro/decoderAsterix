@@ -15,7 +15,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget,
     QTableWidgetItem, QHeaderView, QFileDialog, QMessageBox, QCheckBox,
-    QDoubleSpinBox, QApplication, QWidget,
+    QDoubleSpinBox, QApplication, QWidget, QProgressBar,
 )
 
 SITE_DIR = "default-site-params"
@@ -25,6 +25,7 @@ class _SolverThread(QThread):
     """Corre el LSQ de red fuera del hilo de UI."""
     done = pyqtSignal(object)
     fail = pyqtSignal(str)
+    progress = pyqtSignal(int, int)   # (actual, total) del escaneo PCAP
 
     def __init__(self, pcap, sensores, iteraciones=8):
         super().__init__()
@@ -34,7 +35,8 @@ class _SolverThread(QThread):
         try:
             from fusion.calib_network import resolver_red
             from fusion.calib_solver import evaluar
-            report = resolver_red(self.pcap, self.sensores, iteraciones=self.iter)
+            report = resolver_red(self.pcap, self.sensores, iteraciones=self.iter,
+                                  progress_cb=lambda a, t: self.progress.emit(a, t))
             self.done.emit(evaluar(report))
         except Exception as e:
             self.fail.emit(str(e))
@@ -72,7 +74,11 @@ class CalibrationDialog(QDialog):
         self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         lay.addWidget(self.tabla, 1)
 
-        self.lbl_estado = QLabel("Elegí un PCAP y calculá. Solo se aplican los sensores tildados.")
+        self.barra = QProgressBar()
+        self.barra.setVisible(False)
+        lay.addWidget(self.barra)
+
+        self.lbl_estado = QLabel("Elegí un PCAP y apretá «Calcular». (Es offline: no inicia playback ni UDP.)")
         lay.addWidget(self.lbl_estado)
 
         bot = QHBoxLayout()
@@ -101,21 +107,31 @@ class CalibrationDialog(QDialog):
             return
         self.btn_calc.setEnabled(False)
         self.btn_save.setEnabled(False)
-        self.lbl_estado.setText("Calculando… (escaneo + LSQ de red, puede tardar)")
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        self.barra.setVisible(True)
+        self.barra.setRange(0, 0)  # indeterminado hasta el primer progreso
+        self.lbl_estado.setText("Escaneando PCAP… (luego corre el LSQ de red)")
         self._thread = _SolverThread(self.pcap_path, self.sensores)
+        self._thread.progress.connect(self._on_progress)
         self._thread.done.connect(self._on_done)
         self._thread.fail.connect(self._on_fail)
         self._thread.start()
 
+    def _on_progress(self, actual, total):
+        if total > 0:
+            self.barra.setRange(0, total)
+            self.barra.setValue(actual)
+            if actual >= total:
+                self.lbl_estado.setText("Resolviendo LSQ de red…")
+                self.barra.setRange(0, 0)  # indeterminado durante el solve
+
     def _on_fail(self, msg):
-        QApplication.restoreOverrideCursor()
+        self.barra.setVisible(False)
         self.btn_calc.setEnabled(True)
         self.lbl_estado.setText("Error en el cálculo.")
         QMessageBox.critical(self, "Error", msg)
 
     def _on_done(self, prop):
-        QApplication.restoreOverrideCursor()
+        self.barra.setVisible(False)
         self.btn_calc.setEnabled(True)
         self._poblar(prop['proposals'])
         n_app = sum(1 for p in prop['proposals'] if p['registration']['verdict'] == 'applicable')
