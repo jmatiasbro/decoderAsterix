@@ -155,6 +155,43 @@ def recolectar(pcap, sensores, bucket=1.0):
     return _resumir(acc, pcap, dur)
 
 
+def construir_clusters(plots, sensores, bucket=1.0):
+    """Agrupa reportes co-temporales del mismo avión y devuelve, por cluster,
+    la verdad ADS-B (si hay) y la lista de reportes radar con su geometría polar
+    (rho ground, theta) y posición. Consumido por el solver de red (Fase 5)."""
+    from collections import defaultdict as _dd
+    grupos = _dd(list)
+    for p in plots:
+        if p.lat is None or p.lon is None or p.category not in (21, 48):
+            continue
+        k = _key_aeronave(p)
+        if k is None:
+            continue
+        grupos[(k, round(p.time / bucket))].append(p)
+
+    clusters = []
+    for (k, tb), reps in grupos.items():
+        radars = [p for p in reps if p.category == 48 and p.raw_range and p.raw_azimuth]
+        adsb = [p for p in reps if p.category == 21]
+        if not radars or (not adsb and len(radars) < 2):
+            continue
+        reports = []
+        for p in radars:
+            info = sensores.get(_sac_sic_tuple(p.sac_sic))
+            if not info or info.get('lat') is None:
+                continue
+            alt = _alt_m(p)
+            rho_slant = p.raw_range * METERS_PER_NM
+            rho_g = math.sqrt(rho_slant ** 2 - alt ** 2) if (alt and rho_slant > alt) else rho_slant
+            reports.append({'sac_sic': p.sac_sic, 'slat': info['lat'], 'slon': info['lon'],
+                            'lat': p.lat, 'lon': p.lon, 'rho_g': rho_g, 'theta': p.raw_azimuth % 360.0})
+        if not reports:
+            continue
+        adsb_pos = (_mediana([p.lat for p in adsb]), _mediana([p.lon for p in adsb])) if adsb else None
+        clusters.append({'adsb': adsb_pos, 'reports': reports})
+    return clusters
+
+
 def _sac_sic_tuple(sac_sic):
     try:
         a, b = sac_sic.split('/')
