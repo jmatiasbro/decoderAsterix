@@ -307,7 +307,12 @@ class RadarPlot:
                  'garbled', 'degradada', 'dqf_razon', '_update_count', '_first_seen',
                  'en_jurisdiccion', 'label_offset', 'is_dragging', 'label_rect',
                  'widget_ref',
-                 '_update_period')
+                 '_update_period',
+                 # Suavizado de velocidad y filtros de plausibilidad (antes ausentes
+                 # de __slots__: el AttributeError silencioso deshabilitaba el
+                 # cross-fill de identidad y la acumulación de reporting_sensors).
+                 '_smooth_vx', '_smooth_vy', '_vel_prev_x', '_vel_prev_y', '_vel_prev_t',
+                 '_last_fl_time', '_last_gs_time')
 
     def __init__(self, x: float, y: float, sac_sic: str, category: int,
                  timestamp: float, mode3a: str, callsign: str,
@@ -1548,6 +1553,7 @@ class RadarWidget(QWidget):
                 has_alt = alt_curr_val is not None
                 # Sin altitud: 1 NM (estricto); con altitud: 3 NM + verificación vertical
                 max_dist_m = (3.0 if has_alt else 1.0) * 1852.0
+                t_plot = plot_time if plot_time is not None else data.get('time')
                 best_dist_m = float('inf')
                 best_tid = None
                 for tid, track in list(self.tracks.items()) + list(self.pending_tracks.items()):
@@ -1557,8 +1563,11 @@ class RadarWidget(QWidget):
                     if has_alt and alt_t_val is not None:
                         if abs(alt_curr_val - alt_t_val) >= 1500.0:
                             continue
-                    dx = track.x - x
-                    dy = track.y - y
+                    # (b) Extrapolar la pista a la hora del plot antes de medir distancia,
+                    # para no penalizar el desfase de barrido entre sensores.
+                    tx, ty = self._extrapolar_xy(track, t_plot)
+                    dx = tx - x
+                    dy = ty - y
                     dist_m = math.sqrt(dx*dx + dy*dy)
                     if dist_m < max_dist_m and dist_m < best_dist_m:
                         best_dist_m = dist_m
@@ -1985,6 +1994,7 @@ class RadarWidget(QWidget):
         # ya dibuja cada blanco con su símbolo y etiqueta. Agregar a plots_raw causaría
         # renderizado doble (o triple si BLINDAJE también está activo).
         self._process_plot_data(plot)
+        self._reconciliar_pistas()
         self.evaluar_stca()
         if trigger_update:
             self.update()
@@ -1995,8 +2005,159 @@ class RadarWidget(QWidget):
             return
         for data in batch:
             self._process_plot_data(data)
+        self._reconciliar_pistas()
         self.evaluar_stca()
         self.update()
+
+    # ================================================================
+    # FUSIÓN MULTISENSOR: extrapolación cinemática y reconciliación de
+    # pistas duplicadas (mismo avión visto por fuentes con identidad
+    # disjunta: Mode S/ADS-B sin squawk vs. SSR con squawk sin Mode S).
+    # ================================================================
+    def _velocidad_track(self, track) -> tuple:
+        """(vx, vy) en m/s, mismo plano proyectado que x,y. Prioriza la
+        velocidad suavizada; si no hay, deriva de ground_speed/track_angle
+        (convención STCA: x=Este=sin, y=Norte=cos)."""
+        sv = getattr(track, '_smooth_vx', None)
+        if sv is not None:
+            return sv, getattr(track, '_smooth_vy', 0.0)
+        gs = getattr(track, 'ground_speed', None)
+        ta = getattr(track, 'track_angle', None)
+        if gs is not None and ta is not None:
+            v = gs * (METERS_PER_NM / 3600.0)  # kt -> m/s
+            if 1.0 <= v <= 600.0:
+                rad = math.radians(ta)
+                return v * math.sin(rad), v * math.cos(rad)
+        return 0.0, 0.0
+
+    def _extrapolar_xy(self, track, t_target) -> tuple:
+        """Proyecta la posición de la pista a t_target con su velocidad."""
+        if t_target is None or track.timestamp is None:
+            return track.x, track.y
+        dt = t_target - track.timestamp
+        if dt < -40000:  # rollover de medianoche
+            dt += 86400.0
+        if not (-30.0 <= dt <= 30.0):  # evitar extrapolaciones absurdas
+            return track.x, track.y
+        vx, vy = self._velocidad_track(track)
+        return track.x + vx * dt, track.y + vy * dt
+
+    def _son_misma_aeronave(self, a, b) -> bool:
+        """True si a y b son con alta confianza el mismo avión (identidades
+        no contradictorias + co-ubicación estrecha extrapolada + FL compatible)."""
+        ms_a = (a.mode_s or "").strip().upper()
+        ms_b = (b.mode_s or "").strip().upper()
+        if ms_a and ms_b and ms_a not in ("----",) and ms_b not in ("----",) and ms_a != ms_b:
+            return False  # dos Mode S distintos => aviones distintos
+
+        def sq(t):
+            m = t.mode3a
+            s = f"{m:04o}" if isinstance(m, int) else str(m or "").strip()
+            return s if s and s not in ("----", "0000") and s not in ("1200", "2000", "7000") else None
+        sq_a, sq_b = sq(a), sq(b)
+        if sq_a and sq_b and sq_a != sq_b:
+            return False  # dos squawks discretos distintos => aviones distintos
+
+        # FL compatible (si ambos tienen)
+        fl_a = a.flight_level if a.flight_level is not None else a.altitude_ft / 100.0 if a.altitude_ft else None
+        fl_b = b.flight_level if b.flight_level is not None else b.altitude_ft / 100.0 if b.altitude_ft else None
+        if fl_a is not None and fl_b is not None and abs(fl_a - fl_b) * 100.0 >= 1500.0:
+            return False
+
+        # Co-ubicación estrecha (extrapolando ambas al instante más reciente).
+        # Gate 0.7 NM: por debajo de cualquier separación real entre aviones
+        # distintos al mismo FL, así que co-ubicación a <0.7 NM == mismo avión.
+        t_ref = max(a.timestamp or 0.0, b.timestamp or 0.0)
+        ax, ay = self._extrapolar_xy(a, t_ref)
+        bx, by = self._extrapolar_xy(b, t_ref)
+        dist_m = math.hypot(ax - bx, ay - by)
+        return dist_m <= 0.7 * 1852.0
+
+    def _reconciliar_pistas(self):
+        """Fusiona pistas promovidas que son el mismo avión. Throttle ~1s."""
+        if not getattr(self, 'modo_integrado', True):
+            return
+        ahora = SimulationTime.time()
+        if ahora - getattr(self, '_last_reconcile', 0.0) < 1.0:
+            return
+        self._last_reconcile = ahora
+
+        items = list(self.tracks.items())
+        n = len(items)
+        if n < 2:
+            return
+        fusionados = set()
+        for i in range(n):
+            tid_a, a = items[i]
+            if tid_a in fusionados:
+                continue
+            for j in range(i + 1, n):
+                tid_b, b = items[j]
+                if tid_b in fusionados:
+                    continue
+                if not self._son_misma_aeronave(a, b):
+                    continue
+                # Ganador: más sensores, luego is_track (62/21), luego más historial.
+                def rank(tid, t):
+                    return (len(getattr(t, 'reporting_sensors', ())),
+                            1 if t.is_track else 0,
+                            len(self.history.get(tid, ())))
+                if rank(tid_b, b) > rank(tid_a, a):
+                    wid, win, lid, los = tid_b, b, tid_a, a
+                else:
+                    wid, win, lid, los = tid_a, a, tid_b, b
+                self._fusionar_pistas(wid, win, lid, los)
+                fusionados.add(lid)
+                if lid == tid_a:
+                    break  # a se fusionó; pasar al siguiente i
+
+    def _fusionar_pistas(self, wid, win, lid, los):
+        """Une identidad, sensores e historial de la pista perdedora en la ganadora
+        y elimina la perdedora de tracks/pending/history/STCA."""
+        try:
+            win.reporting_sensors = set(getattr(win, 'reporting_sensors', set())) | \
+                                    set(getattr(los, 'reporting_sensors', set()))
+            if not (win.mode_s or "").strip() and (los.mode_s or "").strip():
+                win.mode_s = los.mode_s
+            def sq_valido(m):
+                s = f"{m:04o}" if isinstance(m, int) else str(m or "").strip()
+                return s and s not in ("----", "0000")
+            if not sq_valido(win.mode3a) and sq_valido(los.mode3a):
+                win.mode3a = los.mode3a
+            if not (win.callsign or "").strip() and (los.callsign or "").strip():
+                win.callsign = los.callsign
+            if win.track_number is None and los.track_number is not None:
+                win.track_number = los.track_number
+            if los.bds_data:
+                merged = dict(los.bds_data); merged.update(win.bds_data or {})
+                win.bds_data = merged
+            # Categoría de mayor calidad (62 > 21 > resto)
+            if 62 in (win.category, los.category):
+                win.category = 62
+            elif 21 in (win.category, los.category):
+                win.category = 21
+            # Si la perdedora es más reciente, adoptar su posición/tiempo
+            if (los.timestamp or 0.0) > (win.timestamp or 0.0):
+                win.x, win.y = los.x, los.y
+                win.timestamp = los.timestamp
+                win._last_seen = max(getattr(win, '_last_seen', 0.0), getattr(los, '_last_seen', 0.0))
+            # Fusionar historial conservando orden temporal
+            hist_w = self.history.get(wid)
+            hist_l = self.history.pop(lid, None)
+            if hist_l:
+                if hist_w is None:
+                    hist_w = self.history[wid]
+                combinado = sorted(list(hist_w) + list(hist_l), key=lambda hp: hp.timestamp)
+                hist_w.clear()
+                hist_w.extend(combinado[-hist_w.maxlen:] if hist_w.maxlen else combinado)
+            # Eliminar la perdedora de todas las estructuras
+            self.tracks.pop(lid, None)
+            self.pending_tracks.pop(lid, None)
+            vp = getattr(self, '_stca_vel_prev', None)
+            if isinstance(vp, dict):
+                vp.pop(lid, None)
+        except Exception:
+            pass
 
     def evaluar_stca(self):
         """
