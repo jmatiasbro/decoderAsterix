@@ -61,7 +61,7 @@ class CalibrationDialog(QDialog):
         self.sensores = sensores
         self.pcap_path = pcap_path
         self._thread = None
-        self.setWindowTitle("Calibración de Registración (Técnico)")
+        self.setWindowTitle("Calibración Radar")
         self.resize(820, 560)
         self._build()
 
