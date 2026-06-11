@@ -73,7 +73,7 @@ class CalibrationDialog(QDialog):
         self.lbl_pcap.setWordWrap(True)
         btn_pick = QPushButton("Elegir PCAP…")
         btn_pick.clicked.connect(self._pick_pcap)
-        self.btn_calc = QPushButton("Calcular (LSQ de red)")
+        self.btn_calc = QPushButton("Calcular correcciones")
         self.btn_calc.clicked.connect(self._calcular)
         top.addWidget(self.lbl_pcap, 1)
         top.addWidget(btn_pick)
@@ -132,7 +132,7 @@ class CalibrationDialog(QDialog):
             self.barra.setRange(0, total)
             self.barra.setValue(actual)
             if actual >= total:
-                self.lbl_estado.setText("Resolviendo LSQ de red…")
+                self.lbl_estado.setText("Calculando correcciones…")
                 self.barra.setRange(0, 0)  # indeterminado durante el solve
 
     def _on_fail(self, msg):
