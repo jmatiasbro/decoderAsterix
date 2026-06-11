@@ -137,10 +137,14 @@ class CalibrationDialog(QDialog):
         self.btn_save = QPushButton("Guardar y aplicar a tildados")
         self.btn_save.clicked.connect(self._guardar)
         self.btn_save.setEnabled(False)
+        self.btn_off = QPushButton("Desactivar tildados")
+        self.btn_off.clicked.connect(self._desactivar)
+        self.btn_off.setEnabled(False)
         btn_close = QPushButton("Cerrar")
         btn_close.clicked.connect(self.reject)
         bot.addStretch(1)
         bot.addWidget(self.btn_save)
+        bot.addWidget(self.btn_off)
         bot.addWidget(btn_close)
         lay.addLayout(bot)
 
@@ -189,6 +193,7 @@ class CalibrationDialog(QDialog):
         n_app = sum(1 for p in prop['proposals'] if p['registration']['verdict'] == 'applicable')
         self.lbl_estado.setText(f"{len(prop['proposals'])} sensores · {n_app} aplicables (tildados por defecto).")
         self.btn_save.setEnabled(True)
+        self.btn_off.setEnabled(True)
 
     def _poblar(self, proposals):
         self.tabla.setRowCount(0)
@@ -263,6 +268,52 @@ class CalibrationDialog(QDialog):
                 f"{len(cambios)} sensor(es) actualizados.\n"
                 "Recargá/reproducí la captura para que la corrección tome efecto.")
         self.accept()
+
+    def _desactivar(self):
+        sensores = [self.tabla.item(r, 0).text() for r in range(self.tabla.rowCount())
+                    if (ref := self.tabla.item(r, 0).data(Qt.ItemDataRole.UserRole))
+                    and ref['chk'].isChecked()]
+        if not sensores:
+            QMessageBox.information(self, "Desactivar", "No hay sensores tildados.")
+            return
+        if QMessageBox.question(
+            self, "Confirmar",
+            f"Se desactivará la corrección (enabled=false) en {len(sensores)} sensor(es). "
+            "El offset calculado se conserva. ¿Continuar?") != QMessageBox.StandardButton.Yes:
+            return
+        hechos, omitidos, errores = 0, 0, []
+        for sac_sic in sensores:
+            try:
+                if self._desactivar_registration(sac_sic):
+                    hechos += 1
+                else:
+                    omitidos += 1
+            except Exception as e:
+                errores.append(f"{sac_sic}: {e}")
+        msg = f"Desactivados: {hechos}. Sin corrección previa: {omitidos}."
+        if errores:
+            QMessageBox.warning(self, "Desactivación parcial", msg + "\nErrores:\n" + "\n".join(errores))
+        else:
+            QMessageBox.information(self, "Desactivado",
+                                    msg + "\nRecargá/reproducí la captura para ver el efecto.")
+        self.accept()
+
+    def _desactivar_registration(self, sac_sic) -> bool:
+        """Pone registration.enabled=false (conserva el offset). Devuelve False si
+        el sensor no tenía bloque registration."""
+        sac, sic = sac_sic.split('/')
+        path = os.path.join(SITE_DIR, f"{sac}_{sic}.json")
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"no existe {path}")
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+        if not data.get('registration'):
+            return False
+        shutil.copyfile(path, path + ".bak")
+        data['registration']['enabled'] = False
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
 
     def _escribir_registration(self, sac_sic, az, rng, ref):
         sac, sic = sac_sic.split('/')
