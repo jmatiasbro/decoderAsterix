@@ -607,6 +607,7 @@ class PassDashboardDialog(QDialog):
             ("Ganancia en Distancia", "range_gain_slope", "{:+.4f}"),
             ("Delay Medio Transmisión (s)", "delay_mean", "{:.3f}"),
             ("Tasa de Reflexión (%)", "reflection_rate", "{:.2f}%"),
+            ("Tasa de Lóbulo Lateral (%)", "sidelobe_rate", "{:.2f}%"),
         ]
 
         self.table_frozen.setRowCount(len(rows_def))

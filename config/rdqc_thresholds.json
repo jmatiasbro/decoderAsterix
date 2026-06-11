@@ -23,7 +23,8 @@
         "split_plots_pct":    {"dir": "lower",     "green": 0.10,  "orange": 1.0,  "ref": "≤ 0.10%"},
         "range_gain_slope":   {"dir": "abs_lower", "green": 0.001, "ref": "≤ ±0.001"},
         "delay_mean":         {"dir": "abs_lower", "green": 2.0,   "orange": 5.0,  "ref": "≤ 2.000 s"},
-        "reflection_rate":    {"dir": "lower",     "green": 0.20,  "orange": 1.0,  "ref": "≤ 0.20%"}
+        "reflection_rate":    {"dir": "lower",     "green": 0.20,  "orange": 1.0,  "ref": "≤ 0.20%"},
+        "sidelobe_rate":      {"dir": "lower",     "green": 0.10,  "orange": 0.5,  "ref": "≤ 0.10%"}
       }
     },
     "sliding_window": {
@@ -46,7 +47,8 @@
         "split_plots_pct":    {"dir": "lower",     "green": 1.0,   "orange": 2.0,  "ref": "≤ 1.00%"},
         "range_gain_slope":   {"dir": "abs_lower", "green": 0.001, "ref": "≤ ±0.001"},
         "delay_mean":         {"dir": "abs_lower", "green": 2.0,   "orange": 5.0,  "ref": "≤ 2.000 s"},
-        "reflection_rate":    {"dir": "lower",     "green": 1.0,   "orange": 3.0,  "ref": "≤ 1.00%"}
+        "reflection_rate":    {"dir": "lower",     "green": 1.0,   "orange": 3.0,  "ref": "≤ 1.00%"},
+        "sidelobe_rate":      {"dir": "lower",     "green": 0.50,  "orange": 1.0,  "ref": "≤ 0.50%"}
       }
     }
   }

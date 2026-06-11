@@ -701,32 +701,45 @@ class PASSAnalyticsEngine:
             else:
                 delay_mean = delay_std = delay_min = delay_max = delay_median = delay_p95 = 0.0
 
-            # --- REFLECTION RATE (Tasa de Reflexiones) ---
-            reflejados_count = 0
+            # --- CLASIFICACIÓN DE FALSOS BLANCOS SSR (ICAO §3.2.20-23) ---
+            # Pares con mismo squawk casi simultáneos: si la separación angular
+            # supera ~2x el ancho de haz, es un blanco espurio. Se distingue:
+            #   side-lobe  = mismo rango, acimut equivocado (§3.2.20)
+            #   reflexión  = camino indirecto más largo => mayor rango (§3.2.21)
+            # (split = misma posición, <2x ancho de haz, ya contado por dedup §3.2.22)
+            SSR_BEAMWIDTH_DEG = 2.4
+            FALSE_AZ_SEP_DEG = 2.0 * SSR_BEAMWIDTH_DEG
+            SIDELOBE_RANGE_TOL_NM = 0.5
+            FALSE_TIME_WINDOW_S = 2.0
+            reflejados_set = set()
+            sidelobe_set = set()
             if sensor_cat in ("CAT048", "CAT001"):
                 plots_con_squawk.sort(key=lambda x: x[1])
-                reflejados_set = set()
-                
                 for i in range(len(plots_con_squawk)):
-                    _, t_i, sq_i, az_i, r_i = plots_con_squawk[i]
+                    id_i, t_i, sq_i, az_i, r_i = plots_con_squawk[i]
                     for j in range(i + 1, len(plots_con_squawk)):
-                        _, t_j, sq_j, az_j, r_j = plots_con_squawk[j]
-                        if t_j - t_i > 2.0:
+                        id_j, t_j, sq_j, az_j, r_j = plots_con_squawk[j]
+                        if t_j - t_i > FALSE_TIME_WINDOW_S:
                             break
                         if sq_i != sq_j:
                             continue
                         daz_ref = abs(az_i - az_j)
                         if daz_ref > 180:
                             daz_ref = 360 - daz_ref
-                        if daz_ref > 10.0:
-                            if r_i > r_j:
-                                reflejados_set.add(plots_con_squawk[i][0])
-                            else:
-                                reflejados_set.add(plots_con_squawk[j][0])
-                
-                reflejados_count = len(reflejados_set)
-            
+                        if daz_ref <= FALSE_AZ_SEP_DEG:
+                            continue
+                        if abs(r_i - r_j) <= SIDELOBE_RANGE_TOL_NM:
+                            sidelobe_set.add(id_j)            # mismo rango, acimut espurio
+                        elif r_i > r_j:
+                            reflejados_set.add(id_i)          # el de mayor rango es el reflejo
+                        else:
+                            reflejados_set.add(id_j)
+
+            reflejados_set -= sidelobe_set  # evitar doble conteo (prioriza side-lobe)
+            reflejados_count = len(reflejados_set)
+            sidelobe_count = len(sidelobe_set)
             reflection_rate = (reflejados_count / total_plots * 100.0) if total_plots > 0 else 0.0
+            sidelobe_rate = (sidelobe_count / total_plots * 100.0) if total_plots > 0 else 0.0
 
             # --- COMPARATIVA DE CO-DETECCIÓN RADAR VS ADS-B ---
             pd_vs_adsb = None
@@ -830,6 +843,7 @@ class PASSAnalyticsEngine:
                 'delays_data': delays,
                 'reflection_count': reflejados_count,
                 'reflection_rate': reflection_rate,
+                'sidelobe_rate': sidelobe_rate,
             }
 
         # Calcular la Probabilidad de Detección Cruzada en Áreas de Solapamiento (Overlap Pd)
