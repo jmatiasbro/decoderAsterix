@@ -1,4 +1,4 @@
-# Plan de Trabajo — Configuración de Tratamiento Radar
+# Plan de Trabajo — Configuración Radar
 
 Hoja de ruta para extender el sistema con una "Radar Treatment Configuration"
 (estilo Indra): ajuste de registración, slant-range, zonas de filtro de reflexión
@@ -49,7 +49,7 @@ Nota: `adjustment` unifica/reemplaza el actual bloque `registration`.
 - **E — Adjustment Manual/Automatic + calibración en vivo (Fase 7).** Unificar `registration`;
   modo Automatic = acumulador en vivo / LSQ. Aplicación en caliente (mutar dict de sensores → efecto inmediato).
 - **F — Enables por tipo de detección (PSR/SSR/MET/CMB/TEST).** Filtrar por TYP de CAT048.
-- **G — UI unificada "Configuración de Tratamiento Radar".** Layout de la imagen: lista de
+- **G — UI unificada "Configuración Radar".** Layout de la imagen: lista de
   estaciones + panel por radar (enables, Adjustment manual/auto + az/range, slant, grillas de zonas).
   Reusa el panel de calibración existente. Estilo de la app, gateado a rol técnico.
 
