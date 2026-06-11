@@ -680,7 +680,7 @@ class MainWindow(QMainWindow):
         # Calibración de registración: SOLO rol técnico (se habilita según rol)
         menu_config.addSeparator()
         self.act_calibracion = menu_config.addAction(
-            "Calibración de Registración (Técnico)…", self._abrir_calibracion)
+            "Análisis y Calibración (Técnico)…", self._abrir_calibracion)
         self.act_calibracion.setEnabled(self.profile_manager.get_rol() == "tecnico")
 
         # Menú Mapas
