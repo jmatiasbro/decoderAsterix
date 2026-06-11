@@ -12,6 +12,7 @@ import json
 import shutil
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget,
     QTableWidgetItem, QHeaderView, QFileDialog, QMessageBox, QCheckBox,
@@ -65,7 +66,45 @@ class CalibrationDialog(QDialog):
         self.resize(820, 560)
         self._build()
 
+    QSS = """
+        QDialog { background-color: #0E131F; }
+        QLabel { color: #E0E6ED; font-family: 'Segoe UI', sans-serif; font-size: 9pt; }
+        QPushButton {
+            background-color: #121824; border: 1px solid #00E5FF; border-radius: 4px;
+            color: #00E5FF; font-family: 'Segoe UI', sans-serif; font-size: 9pt;
+            font-weight: bold; padding: 6px 14px;
+        }
+        QPushButton:hover { border: 1px solid #39FF14; color: #39FF14;
+                            background-color: rgba(57,255,20,20); }
+        QPushButton:pressed { background-color: rgba(57,255,20,50); }
+        QPushButton:disabled { color: #5A6273; border: 1px solid #2A3142; }
+        QTableWidget {
+            background-color: #0B0E14; alternate-background-color: #121824;
+            gridline-color: #2A3142; color: #E0E6ED; border: 1px solid #4B5263;
+            border-radius: 4px; font-size: 9pt;
+        }
+        QTableWidget::item:selected { background-color: rgba(0,229,255,45); }
+        QHeaderView::section {
+            background-color: #121824; color: #00E5FF; border: 1px solid #2A3142;
+            padding: 5px; font-weight: bold;
+        }
+        QTableCornerButton::section { background-color: #121824; border: 1px solid #2A3142; }
+        QDoubleSpinBox {
+            background-color: #1A2130; color: #FFFFFF; border: 1px solid #4B5263;
+            border-radius: 3px; padding: 2px;
+        }
+        QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid #00E5FF;
+                               background-color: #1A2130; border-radius: 3px; }
+        QCheckBox::indicator:checked { background-color: #00E5FF; }
+        QProgressBar {
+            border: 1px solid #4B5263; border-radius: 4px; text-align: center;
+            color: #FFFFFF; background-color: #121824;
+        }
+        QProgressBar::chunk { background-color: #00E5FF; border-radius: 3px; }
+    """
+
     def _build(self):
+        self.setStyleSheet(self.QSS)
         lay = QVBoxLayout(self)
 
         top = QHBoxLayout()
@@ -82,6 +121,8 @@ class CalibrationDialog(QDialog):
 
         self.tabla = QTableWidget(0, len(self.COLS))
         self.tabla.setHorizontalHeaderLabels(self.COLS)
+        self.tabla.setAlternatingRowColors(True)
+        self.tabla.verticalHeader().setVisible(False)
         self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         lay.addWidget(self.tabla, 1)
 
@@ -174,7 +215,10 @@ class CalibrationDialog(QDialog):
             self.tabla.setCellWidget(row, 4, sp_rng)
 
             self.tabla.setItem(row, 5, _item("Absoluta" if r['absolute'] else "Relativa"))
-            self.tabla.setItem(row, 6, _item(VERDICT_ES.get(r['verdict'], r['verdict'])))
+            it_estado = _item(VERDICT_ES.get(r['verdict'], r['verdict']))
+            _colores = {'applicable': '#39FF14', 'aligned': '#00E5FF'}
+            it_estado.setForeground(QColor(_colores.get(r['verdict'], '#8A93A6')))
+            self.tabla.setItem(row, 6, it_estado)
 
             chk = QCheckBox()
             chk.setChecked(r['verdict'] == 'applicable')
