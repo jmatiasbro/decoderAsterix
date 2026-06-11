@@ -12,5 +12,24 @@
   },
   "range": 250,
   "azimuth_coverage": 360,
-  "antenna_rotation_speed": 12
+  "antenna_rotation_speed": 12,
+  "registration": {
+    "azimuth_offset_deg": -0.673,
+    "range_offset_nm": 0.182,
+    "range_scale": 1.0,
+    "enabled": true,
+    "source": "interradar",
+    "absolute": false,
+    "stats": {
+      "coverage_az_pct": 50.0,
+      "n": 1269,
+      "residual_az_after": 0.071,
+      "residual_az_before": 0.677,
+      "residual_rng_after": 0.125,
+      "residual_rng_before": 0.221,
+      "sigma_az_deg": 0.071,
+      "sigma_rng_nm": 0.125
+    },
+    "verdict": "applicable"
+  }
 }

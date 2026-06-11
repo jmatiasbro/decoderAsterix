@@ -24,3 +24,6 @@ scratch/
 
 # Plugins/skills clonados
 ui-ux-pro-max-skill/
+
+# Backups del calibrador de registración
+*.bak

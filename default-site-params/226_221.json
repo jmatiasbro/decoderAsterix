@@ -11,5 +11,24 @@
     "altitude": 650
   },
   "range": 250,
-  "azimuth_coverage": 360
+  "azimuth_coverage": 360,
+  "registration": {
+    "azimuth_offset_deg": -0.07,
+    "range_offset_nm": 0.487,
+    "range_scale": 1.0,
+    "enabled": true,
+    "source": "interradar",
+    "absolute": false,
+    "stats": {
+      "coverage_az_pct": 100.0,
+      "n": 3707,
+      "residual_az_after": 0.085,
+      "residual_az_before": 0.11,
+      "residual_rng_after": 0.148,
+      "residual_rng_before": 0.509,
+      "sigma_az_deg": 0.085,
+      "sigma_rng_nm": 0.148
+    },
+    "verdict": "applicable"
+  }
 }
