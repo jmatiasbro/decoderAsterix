@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from utils.geo import obtener_centros_control
+from analysis.rdqc_thresholds import load_profile, severity
 
 # Intentar importar FPDF para PDF
 try:
@@ -240,11 +241,14 @@ class PassDashboardDialog(QDialog):
         
         total_plots = sum(r['total_plots'] for r in self.results.values())
         total_sensors = len(self.results)
-        
+        profile_label, _ = load_profile()
+        profile_txt = profile_label or "perfil ICAO sin definir"
+
         self.lbl_stats = QLabel(
             f"📡 <b>Sensores Evaluados:</b> {total_sensors} | "
             f"📊 <b>Ploteos Analizados:</b> {total_plots} | "
-            f"⚖ <b>Estándar de Evaluación:</b> Eurocontrol SASS-C / EANA PASS"
+            f"⚖ <b>Umbrales:</b> {profile_txt} | "
+            f"<b>Estándar:</b> Eurocontrol SASS-C / EANA PASS"
         )
         self.lbl_stats.setFont(QFont("Segoe UI", 11))
         self.lbl_stats.setStyleSheet(f"color: {COLOR_ACCENT_CYAN};")
@@ -576,29 +580,36 @@ class PassDashboardDialog(QDialog):
             for col_idx in range(len(headers)):
                 self.table.horizontalHeader().setSectionResizeMode(col_idx, QHeaderView.ResizeMode.Stretch)
 
-        # 2. Definir los parámetros medidos (filas) y sus objetivos de referencia
+        # 2. Definir los parámetros medidos (filas). Las referencias y el semáforo
+        #    provienen de config/rdqc_thresholds.json (ICAO Doc 8071, Tablas 3-1/3-2).
+        profile_label, thresholds = load_profile()
+        sev_colors = {"ok": COLOR_NEON_GREEN, "warn": COLOR_NEON_ORANGE, "bad": COLOR_NEON_RED}
+
+        # (nombre, clave, formato). El umbral/referencia se resuelve por clave.
         rows_def = [
-            ("Muestras (Ploteos)", "-", "total_plots", "{:.0f}", lambda v: None),
-            ("Período de Giro (s/vuelta)", "-", "rpm", lambda v: f"{60.0/v:.2f} s" if v > 0 else "0.00 s", lambda v: None),
-            ("Prob. Detección SSR", "≥ 95.00%", "pd_global", "{:.2f}%", lambda v: COLOR_NEON_GREEN if v >= 95.0 else COLOR_NEON_RED),
-            ("Prob. Detección por Solapamiento (Overlap Pd)", "≥ 95.00%", "pd_overlap", lambda v: f"{v:.2f}%" if v > 0.0 else "N/A", lambda v: COLOR_NEON_GREEN if v >= 95.0 else (COLOR_NEON_RED if v > 0.0 else None)),
-            ("Prob. Detección vs ADS-B (Co-detección)", "≥ 95.00%", "pd_vs_adsb", lambda v: f"{v:.2f}%" if v is not None else "N/A", lambda v: COLOR_NEON_GREEN if v is not None and v >= 95.0 else (COLOR_NEON_RED if v is not None else None)),
-            ("Prob. Global de Detección Modo A", "≥ 98.00%", "pd_mode_a", "{:.2f}%", lambda v: COLOR_NEON_GREEN if v >= 98.0 else (COLOR_NEON_ORANGE if v >= 90.0 else COLOR_NEON_RED)),
-            ("Prob. Global de Detección Modo C", "≥ 95.00%", "pd_mode_c", "{:.2f}%", lambda v: COLOR_NEON_GREEN if v >= 95.0 else (COLOR_NEON_ORANGE if v >= 85.0 else COLOR_NEON_RED)),
-            ("Sesgo en Distancia (m)", "≤ ±100.0 m", "range_bias_m", "{:+.1f}", lambda v: COLOR_NEON_GREEN if abs(v) <= 100.0 else COLOR_NEON_ORANGE),
-            ("Sesgo en Acimut (°)", "≤ ±0.150°", "azimuth_bias_deg", "{:+.3f}°", lambda v: COLOR_NEON_GREEN if abs(v) <= 0.15 else COLOR_NEON_RED),
-            ("Jitter en Distancia (m)", "≤ 150.0 m", "range_jitter_m", "{:.1f}", lambda v: COLOR_NEON_GREEN if v <= 150.0 else COLOR_NEON_ORANGE),
-            ("Jitter en Acimut (°)", "≤ 0.200°", "azimuth_jitter_deg", "{:.3f}°", lambda v: COLOR_NEON_GREEN if v <= 0.2 else COLOR_NEON_RED),
-            ("% de Split Plots", "≤ 2.00%", "split_plots_pct", "{:.2f}%", lambda v: COLOR_NEON_GREEN if v <= 2.0 else COLOR_NEON_ORANGE),
-            ("Ganancia en Distancia", "≤ ±0.001", "range_gain_slope", "{:+.4f}", lambda v: COLOR_NEON_GREEN if abs(v) <= 0.001 else COLOR_NEON_RED),
-            ("Delay Medio Transmisión (s)", "≤ 2.000s", "delay_mean", "{:.3f}", lambda v: COLOR_NEON_GREEN if abs(v) <= 2.0 else (COLOR_NEON_ORANGE if abs(v) <= 5.0 else COLOR_NEON_RED)),
-            ("Tasa de Reflexión (%)", "≤ 1.00%", "reflection_rate", "{:.2f}%", lambda v: COLOR_NEON_GREEN if v <= 1.0 else (COLOR_NEON_ORANGE if v <= 2.0 else COLOR_NEON_RED))
+            ("Muestras (Ploteos)", "total_plots", "{:.0f}"),
+            ("Período de Giro (s/vuelta)", "rpm", lambda v: f"{60.0/v:.2f} s" if v > 0 else "0.00 s"),
+            ("Prob. Detección SSR", "pd_global", "{:.2f}%"),
+            ("Prob. Detección por Solapamiento (Overlap Pd)", "pd_overlap", lambda v: f"{v:.2f}%" if v > 0.0 else "N/A"),
+            ("Prob. Detección vs ADS-B (Co-detección)", "pd_vs_adsb", lambda v: f"{v:.2f}%" if v is not None else "N/A"),
+            ("Prob. Global de Detección Modo A", "pd_mode_a", "{:.2f}%"),
+            ("Prob. Global de Detección Modo C", "pd_mode_c", "{:.2f}%"),
+            ("Sesgo en Distancia (m)", "range_bias_m", "{:+.1f}"),
+            ("Sesgo en Acimut (°)", "azimuth_bias_deg", "{:+.3f}°"),
+            ("Jitter en Distancia (m)", "range_jitter_m", "{:.1f}"),
+            ("Jitter en Acimut (°)", "azimuth_jitter_deg", "{:.3f}°"),
+            ("% de Split Plots", "split_plots_pct", "{:.2f}%"),
+            ("Ganancia en Distancia", "range_gain_slope", "{:+.4f}"),
+            ("Delay Medio Transmisión (s)", "delay_mean", "{:.3f}"),
+            ("Tasa de Reflexión (%)", "reflection_rate", "{:.2f}%"),
         ]
-        
+
         self.table_frozen.setRowCount(len(rows_def))
         self.table.setRowCount(len(rows_def))
         
-        for row_idx, (param_name, ref_val, key, fmt, color_fn) in enumerate(rows_def):
+        for row_idx, (param_name, key, fmt) in enumerate(rows_def):
+            spec = thresholds.get(key)
+            ref_val = spec["ref"] if spec else "-"
             # Col 0: Parámetro
             item_name = self._create_item(param_name)
             item_name.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -631,9 +642,10 @@ class PassDashboardDialog(QDialog):
                     else:
                         text_val = fmt.format(val)
                         
-                    # Colorear según la regla condicional de calidad
-                    color = color_fn(val)
-                    
+                    # Semáforo ICAO: la severidad sale del umbral del perfil activo.
+                    # Si el valor no está disponible (N/A) no se colorea.
+                    color = None if text_val == "N/A" else sev_colors.get(severity(spec, val))
+
                 item_val = self._create_item(text_val)
                 if color:
                     item_val.setForeground(QColor(color))
