@@ -146,6 +146,16 @@ class PASSAnalyticsEngine:
                     'points': sorted_ref
                 }
 
+        # Código Mode A de consenso por aeronave (constante durante el vuelo): la
+        # moda de los códigos no vacíos vistos por toda la red. Es la "verdad"
+        # para la tasa Correct de Mode A (ICAO Doc 8071 §3.2.16).
+        consensus_mode_a = {}
+        for target_key, target_plots in plots_by_target.items():
+            codes = [p.get('mode3a') for p in target_plots
+                     if p.get('mode3a') not in (None, "", "----")]
+            if codes:
+                consensus_mode_a[target_key] = collections.Counter(codes).most_common(1)[0][0]
+
         # 3. Analizar cada sensor por separado
         results = {}
         
@@ -492,18 +502,40 @@ class PASSAnalyticsEngine:
                     false_plots_count += len(t_s_plots)
             false_pct = (false_plots_count / total_plots * 100.0) if total_plots > 0 else 0.0
 
-            # Contar Mode A y Mode C válidos en los ploteos de este sensor
-            mode_a_count = 0
-            mode_c_count = 0
-            for p in s_plots:
-                m3a = p.get('mode3a')
-                if m3a is not None and m3a != "" and m3a != "----":
-                    mode_a_count += 1
-                if p.get('flight_level') is not None or p.get('altitude_ft') is not None:
-                    mode_c_count += 1
-            
-            pd_mode_a = (mode_a_count / total_plots * 100.0) if total_plots > 0 else 0.0
-            pd_mode_c = (mode_c_count / total_plots * 100.0) if total_plots > 0 else 0.0
+            # Detección de código Mode A/C: tasas Valid y Correct (ICAO §3.2.16).
+            #   Valid   = el reporte trae código (validado).
+            #   Correct = el código coincide con la verdad: consenso de red para
+            #             Mode A, FL de la traza de referencia para Mode C.
+            # Denominador: reportes recibidos por el sensor (total_plots).
+            MODE_C_TOL_FL = 2.0  # ±200 ft: cuantización Mode C + baro vs geométrico
+            mode_a_valid = mode_a_correct = 0
+            mode_c_valid = mode_c_correct = 0
+            for t_key, t_s_plots in sensor_plots_by_target.items():
+                ref_a = consensus_mode_a.get(t_key)
+                ref_track = reference_tracks.get(t_key)
+                ref_pts = ref_track['points'] if ref_track else None
+                for p in t_s_plots:
+                    m3a = p.get('mode3a')
+                    if m3a not in (None, "", "----"):
+                        mode_a_valid += 1
+                        if ref_a is not None and m3a == ref_a:
+                            mode_a_correct += 1
+                    fl = get_fl(p)
+                    if fl is not None:
+                        mode_c_valid += 1
+                        if ref_pts:
+                            tp = p.get('time') or 0.0
+                            nearest = min(ref_pts, key=lambda r: abs((r.get('time') or 0.0) - tp))
+                            ref_fl = get_fl(nearest)
+                            if (ref_fl is not None
+                                    and abs((nearest.get('time') or 0.0) - tp) <= period
+                                    and abs(fl - ref_fl) <= MODE_C_TOL_FL):
+                                mode_c_correct += 1
+
+            pd_mode_a = (mode_a_valid / total_plots * 100.0) if total_plots > 0 else 0.0
+            pd_mode_c = (mode_c_valid / total_plots * 100.0) if total_plots > 0 else 0.0
+            mode_a_correct_pct = (mode_a_correct / total_plots * 100.0) if total_plots > 0 else 0.0
+            mode_c_correct_pct = (mode_c_correct / total_plots * 100.0) if total_plots > 0 else 0.0
 
             # Generar datos espaciales para curvas Pd vs Distancia y Acimut
             pd_vs_range = []
@@ -748,6 +780,8 @@ class PASSAnalyticsEngine:
                 'pd_global': global_pd,
                 'pd_mode_a': pd_mode_a,
                 'pd_mode_c': pd_mode_c,
+                'mode_a_correct_pct': mode_a_correct_pct,
+                'mode_c_correct_pct': mode_c_correct_pct,
                 'range_bias_m': range_bias,
                 'azimuth_bias_deg': azimuth_bias,
                 'range_jitter_m': range_jitter,
