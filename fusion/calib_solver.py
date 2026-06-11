@@ -31,6 +31,7 @@ class SolverConfig:
     z_signif: float = 3.0          # nº de sigmas para considerar el sesgo real
     min_off_az: float = 0.05       # offset por debajo del cual se considera alineado (deg)
     min_off_rng: float = 0.05      # idem en rango (NM)
+    min_gain: float = 0.0003       # ganancia de rango (adim) mínima para corregir (~0.06 NM a 200 NM)
 
 
 def _significativo(bias, sigma, n, z):
@@ -46,8 +47,10 @@ def proponer(s, cfg: SolverConfig) -> dict:
     cov = s['coverage_az_pct']
     d_az, d_rng = s['d_az_deg'], s['d_rng_nm']
     sg_az, sg_rng = s['sigma_az_deg'], s['sigma_rng_nm']
+    gain = s.get('range_gain', 0.0)   # ganancia de rango (adim, m/m); ausente en colector Fase 2
 
     # Veredicto
+    sig_gain = False
     if n < cfg.n_min:
         verdict = 'insufficient_samples'
     elif cov < cfg.cov_min_pct:
@@ -57,7 +60,8 @@ def proponer(s, cfg: SolverConfig) -> dict:
     else:
         sig_az = _significativo(d_az, sg_az, n, cfg.z_signif) and abs(d_az) >= cfg.min_off_az
         sig_rng = _significativo(d_rng, sg_rng, n, cfg.z_signif) and abs(d_rng) >= cfg.min_off_rng
-        verdict = 'applicable' if (sig_az or sig_rng) else 'aligned'
+        sig_gain = abs(gain) >= cfg.min_gain
+        verdict = 'applicable' if (sig_az or sig_rng or sig_gain) else 'aligned'
 
     # Fuente y si la corrección es absoluta (ADS-B) o relativa (consenso/inter-radar)
     ref = s['ref']
@@ -74,7 +78,7 @@ def proponer(s, cfg: SolverConfig) -> dict:
         'registration': {
             'azimuth_offset_deg': round(d_az, 3) if aplica else 0.0,
             'range_offset_nm': round(d_rng, 3) if aplica else 0.0,
-            'range_scale': 1.0,
+            'range_scale': round(1.0 + gain, 6) if (aplica and sig_gain) else 1.0,
             'enabled': False,
             'source': source,
             'absolute': es_adsb,

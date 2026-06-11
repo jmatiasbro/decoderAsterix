@@ -53,14 +53,19 @@ VERDICT_ES = {
 
 
 class CalibrationDialog(QDialog):
-    COLS = ["Radar (SAC/SIC)", "Muestras", "Cobertura 360°",
+    COLS = ["Radar (SAC/SIC)", "Nombre", "Muestras", "Cobertura 360°",
             "Corrección azimut (°)", "Corrección rango (NM)",
             "Tipo", "Estado", "Aplicar"]
 
     def __init__(self, sensores, pcap_path="", parent=None):
         super().__init__(parent)
         self.sensores = sensores
-        self.pcap_path = pcap_path
+        if isinstance(pcap_path, (list, tuple)):
+            self.pcap_paths = [p for p in pcap_path if p]
+        elif pcap_path:
+            self.pcap_paths = [pcap_path]
+        else:
+            self.pcap_paths = []
         self._thread = None
         self.setWindowTitle("Análisis y Calibración")
         self.resize(820, 560)
@@ -110,7 +115,7 @@ class CalibrationDialog(QDialog):
         top = QHBoxLayout()
         self.lbl_pcap = QLabel(self._pcap_label())
         self.lbl_pcap.setWordWrap(True)
-        btn_pick = QPushButton("Elegir PCAP…")
+        btn_pick = QPushButton("Elegir PCAP(s)…")
         btn_pick.clicked.connect(self._pick_pcap)
         self.btn_calc = QPushButton("Calcular correcciones")
         self.btn_calc.clicked.connect(self._calcular)
@@ -149,24 +154,30 @@ class CalibrationDialog(QDialog):
         lay.addLayout(bot)
 
     def _pcap_label(self):
-        return f"PCAP: {os.path.basename(self.pcap_path)}" if self.pcap_path else "PCAP: (ninguno)"
+        n = len(self.pcap_paths)
+        if n == 0:
+            return "PCAP: (ninguno)"
+        if n == 1:
+            return f"PCAP: {os.path.basename(self.pcap_paths[0])}"
+        return f"PCAP: {n} archivos · " + ", ".join(os.path.basename(p) for p in self.pcap_paths)
 
     def _pick_pcap(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Elegir PCAP", "", "PCAP (*.pcap);;Todos (*)")
-        if path:
-            self.pcap_path = path
+        paths, _ = QFileDialog.getOpenFileNames(self, "Elegir PCAP(s)", "", "PCAP (*.pcap);;Todos (*)")
+        if paths:
+            self.pcap_paths = paths
             self.lbl_pcap.setText(self._pcap_label())
 
     def _calcular(self):
-        if not self.pcap_path or not os.path.exists(self.pcap_path):
-            QMessageBox.warning(self, "PCAP", "Elegí un archivo PCAP válido.")
+        validos = [p for p in self.pcap_paths if os.path.exists(p)]
+        if not validos:
+            QMessageBox.warning(self, "PCAP", "Elegí al menos un archivo PCAP válido.")
             return
         self.btn_calc.setEnabled(False)
         self.btn_save.setEnabled(False)
         self.barra.setVisible(True)
         self.barra.setRange(0, 0)  # indeterminado hasta el primer progreso
-        self.lbl_estado.setText("Escaneando PCAP… (luego corre el LSQ de red)")
-        self._thread = _SolverThread(self.pcap_path, self.sensores)
+        self.lbl_estado.setText(f"Escaneando {len(validos)} PCAP… (luego corre el LSQ de red)")
+        self._thread = _SolverThread(validos, self.sensores)
         self._thread.progress.connect(self._on_progress)
         self._thread.done.connect(self._on_done)
         self._thread.fail.connect(self._on_fail)
@@ -214,31 +225,33 @@ class CalibrationDialog(QDialog):
                 return it
 
             self.tabla.setItem(row, 0, _item(p['sac_sic']))
-            self.tabla.setItem(row, 1, _item(st['n']))
-            self.tabla.setItem(row, 2, _item(f"{st['coverage_az_pct']:.0f}"))
+            self.tabla.setItem(row, 1, _item(self._radar_name(p['sac_sic'])))
+            self.tabla.setItem(row, 2, _item(st['n']))
+            self.tabla.setItem(row, 3, _item(f"{st['coverage_az_pct']:.0f}"))
 
             sp_az = QDoubleSpinBox(); sp_az.setRange(-20, 20); sp_az.setDecimals(3)
             sp_az.setSingleStep(0.01); sp_az.setValue(r['azimuth_offset_deg'])
-            self.tabla.setCellWidget(row, 3, sp_az)
+            self.tabla.setCellWidget(row, 4, sp_az)
             sp_rng = QDoubleSpinBox(); sp_rng.setRange(-20, 20); sp_rng.setDecimals(3)
             sp_rng.setSingleStep(0.01); sp_rng.setValue(r['range_offset_nm'])
-            self.tabla.setCellWidget(row, 4, sp_rng)
+            self.tabla.setCellWidget(row, 5, sp_rng)
 
-            self.tabla.setItem(row, 5, _item("Absoluta" if r['absolute'] else "Relativa"))
+            self.tabla.setItem(row, 6, _item("Absoluta" if r['absolute'] else "Relativa"))
             it_estado = _item(VERDICT_ES.get(r['verdict'], r['verdict']))
             _colores = {'applicable': '#39FF14', 'aligned': '#00E5FF'}
             it_estado.setForeground(QColor(_colores.get(r['verdict'], '#8A93A6')))
-            self.tabla.setItem(row, 6, it_estado)
+            self.tabla.setItem(row, 7, it_estado)
 
             chk = QCheckBox()
             chk.setChecked(r['verdict'] == 'applicable')
             cont = QWidget(); cl = QHBoxLayout(cont); cl.setContentsMargins(0, 0, 0, 0)
             cl.setAlignment(Qt.AlignmentFlag.AlignCenter); cl.addWidget(chk)
-            self.tabla.setCellWidget(row, 7, cont)
+            self.tabla.setCellWidget(row, 8, cont)
             # guardar refs para leer al guardar
             sp_az.setProperty("sac_sic", p['sac_sic'])
             self.tabla.item(row, 0).setData(Qt.ItemDataRole.UserRole,
                                             {'chk': chk, 'az': sp_az, 'rng': sp_rng,
+                                             'scale': r.get('range_scale', 1.0),
                                              'src': r['source'], 'abs': r['absolute'],
                                              'stats': st, 'verdict': r['verdict']})
 
@@ -303,6 +316,15 @@ class CalibrationDialog(QDialog):
                                     msg + "\nRecargá/reproducí la captura para ver el efecto.")
         self.accept()
 
+    def _radar_name(self, sac_sic) -> str:
+        try:
+            sac, sic = sac_sic.split('/')
+            path = os.path.join(SITE_DIR, f"{sac}_{sic}.json")
+            with open(path, encoding='utf-8') as f:
+                return json.load(f).get('name', '') or ''
+        except (OSError, ValueError, json.JSONDecodeError):
+            return ''
+
     def _desactivar_registration(self, sac_sic) -> bool:
         """Pone registration.enabled=false (conserva el offset). Devuelve False si
         el sensor no tenía bloque registration."""
@@ -331,7 +353,7 @@ class CalibrationDialog(QDialog):
         data['registration'] = {
             'azimuth_offset_deg': round(az, 4),
             'range_offset_nm': round(rng, 4),
-            'range_scale': 1.0,
+            'range_scale': round(ref.get('scale', 1.0), 6),
             'enabled': True,
             'source': ref['src'],
             'absolute': ref['abs'],
