@@ -230,7 +230,8 @@ class PASSAnalyticsEngine:
             # 4. Cálculo de Sesgos y Jitter (Residuos contra Trayectorias de Referencia)
             total_plots = len(s_plots)
             split_plots_count = 0
-            
+            gap_sizes = []  # longitud (en vueltas perdidas) de cada hueco, todos los targets
+
             for t_key, t_s_plots in sensor_plots_by_target.items():
                 ref_track = reference_tracks.get(t_key)
                 if not ref_track:
@@ -460,6 +461,14 @@ class PASSAnalyticsEngine:
                             range_bins_expected[r_bin] += 1
                             az_bins_expected[az_bin] += 1
 
+                # 5b. Huecos de detección (ICAO §3.2.14): rachas de vueltas
+                # ausentes entre la primera y la última detección de este target.
+                present_scans = sorted(plots_by_scan.keys())
+                for a, b in zip(present_scans, present_scans[1:]):
+                    miss = b - a - 1
+                    if miss > 0:
+                        gap_sizes.append(miss)
+
             # 6. Estadísticas Finales del Sensor
             n_samples = len(residuals_range)
             
@@ -481,6 +490,14 @@ class PASSAnalyticsEngine:
             
             global_pd = (total_actual_updates / total_expected_updates * 100.0) if total_expected_updates > 0 else 100.0
             global_pd = min(100.0, global_pd)
+
+            # Métricas de huecos (ICAO §3.2.14)
+            n_gaps = len(gap_sizes)
+            total_misses = sum(gap_sizes)
+            big_gaps = [g for g in gap_sizes if g > 2]
+            gap_mean_size = (total_misses / n_gaps) if n_gaps > 0 else 0.0
+            gap_pct_gt2 = (len(big_gaps) / n_gaps * 100.0) if n_gaps > 0 else 0.0
+            gap_pct_misses_big = (sum(big_gaps) / total_misses * 100.0) if total_misses > 0 else 0.0
             
             # Si no hay trazas de referencia para calcular Pd geodésico, usamos fallback básico de gaps
             if total_expected_updates == 0 and total_plots > 5:
@@ -782,6 +799,9 @@ class PASSAnalyticsEngine:
                 'pd_mode_c': pd_mode_c,
                 'mode_a_correct_pct': mode_a_correct_pct,
                 'mode_c_correct_pct': mode_c_correct_pct,
+                'gap_mean_size': gap_mean_size,
+                'gap_pct_gt2': gap_pct_gt2,
+                'gap_pct_misses_big': gap_pct_misses_big,
                 'range_bias_m': range_bias,
                 'azimuth_bias_deg': azimuth_bias,
                 'range_jitter_m': range_jitter,
