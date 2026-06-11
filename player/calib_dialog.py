@@ -173,12 +173,17 @@ class CalibrationDialog(QDialog):
         self._thread.start()
 
     def _on_progress(self, actual, total):
-        if total > 0:
-            self.barra.setRange(0, total)
-            self.barra.setValue(actual)
-            if actual >= total:
-                self.lbl_estado.setText("Calculando correcciones…")
-                self.barra.setRange(0, 0)  # indeterminado durante el solve
+        if total <= 0:
+            return
+        # Máximo monótono: si el total estimado cambia, la barra no salta ni retrocede.
+        maxi = max(total, self.barra.maximum())
+        if self.barra.maximum() != maxi:
+            self.barra.setRange(0, maxi)
+        v = min(actual, maxi)
+        if v != self.barra.value():
+            self.barra.setValue(v)
+        if actual >= total:
+            self.lbl_estado.setText("Calculando correcciones…")
 
     def _on_fail(self, msg):
         self.barra.setVisible(False)
