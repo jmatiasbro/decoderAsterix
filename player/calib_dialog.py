@@ -42,8 +42,19 @@ class _SolverThread(QThread):
             self.fail.emit(str(e))
 
 
+VERDICT_ES = {
+    'applicable': 'Aplicable',
+    'aligned': 'Ya alineado',
+    'insufficient_samples': 'Pocas muestras',
+    'low_coverage': 'Cobertura insuficiente',
+    'high_residual': 'Medición ruidosa',
+}
+
+
 class CalibrationDialog(QDialog):
-    COLS = ["Sensor", "N", "Cob%", "ΔAZ (°)", "ΔRNG (NM)", "Abs", "Veredicto", "Aplicar"]
+    COLS = ["Radar (SAC/SIC)", "Muestras", "Cobertura 360°",
+            "Corrección azimut (°)", "Corrección rango (NM)",
+            "Tipo", "Estado", "Aplicar"]
 
     def __init__(self, sensores, pcap_path="", parent=None):
         super().__init__(parent)
@@ -162,8 +173,8 @@ class CalibrationDialog(QDialog):
             sp_rng.setSingleStep(0.01); sp_rng.setValue(r['range_offset_nm'])
             self.tabla.setCellWidget(row, 4, sp_rng)
 
-            self.tabla.setItem(row, 5, _item("sí" if r['absolute'] else "rel"))
-            self.tabla.setItem(row, 6, _item(r['verdict']))
+            self.tabla.setItem(row, 5, _item("Absoluta" if r['absolute'] else "Relativa"))
+            self.tabla.setItem(row, 6, _item(VERDICT_ES.get(r['verdict'], r['verdict'])))
 
             chk = QCheckBox()
             chk.setChecked(r['verdict'] == 'applicable')
