@@ -276,6 +276,7 @@ class RelojFlotanteUTC(QWidget):
 
 class RadarSensorItemWidget(QWidget):
     toggled = pyqtSignal(str, bool)
+    colorClicked = pyqtSignal(str)
 
     def __init__(self, color: QColor, text: str, checked: bool = True, parent=None):
         super().__init__(parent)
@@ -306,18 +307,13 @@ class RadarSensorItemWidget(QWidget):
         """)
         layout.addWidget(self.checkbox)
 
-        # Círculo de color premium
+        # Círculo de color premium (clickeable para cambiar el color del sensor)
         self.color_badge = QLabel()
         self.color_badge.setFixedSize(14, 14)
-        pixmap = QPixmap(14, 14)
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(QBrush(color))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(0, 0, 14, 14, 3, 3)
-        painter.end()
-        self.color_badge.setPixmap(pixmap)
+        self.color_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.color_badge.setToolTip("Clic para cambiar el color del sensor")
+        self.color_badge.mousePressEvent = self._on_badge_click
+        self._render_badge(color)
         layout.addWidget(self.color_badge)
 
         self.label = QLabel(text)
@@ -327,6 +323,23 @@ class RadarSensorItemWidget(QWidget):
 
         self.text_label = text
         self.checkbox.toggled.connect(self._on_toggled)
+
+    def _render_badge(self, color: QColor):
+        pixmap = QPixmap(14, 14)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QBrush(color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(0, 0, 14, 14, 3, 3)
+        painter.end()
+        self.color_badge.setPixmap(pixmap)
+
+    def set_color(self, color: QColor):
+        self._render_badge(color)
+
+    def _on_badge_click(self, event):
+        self.colorClicked.emit(self.text_label)
 
     def _on_toggled(self, checked: bool):
         self.toggled.emit(self.text_label, checked)
@@ -909,6 +922,7 @@ class MainWindow(QMainWindow):
         # Scroll area dentro del dock para evitar clipping
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background-color: #0B0E14; }")
         
         container = QWidget()
@@ -1042,6 +1056,10 @@ class MainWindow(QMainWindow):
         self.chk_show_history = self._make_toggle_button("Mostrar Estela", "#00F5FF", checked=True)
         self.chk_show_history.toggled.connect(self._on_show_history_toggled)
 
+        # Checkbox para colorear estelas por radar (distinto color por sensor)
+        self.chk_trail_color = self._make_toggle_button("Estelas a Color (por Radar)", "#00E5FF", checked=True)
+        self.chk_trail_color.toggled.connect(self._on_trail_color_toggled)
+
         # Fila 1: Modo de visualización
         l_modo = QHBoxLayout()
         lbl_modo = QLabel("Modo:")
@@ -1119,6 +1137,7 @@ class MainWindow(QMainWindow):
         l_qnh.addWidget(self.sb_qnh)
 
         l_hist.addWidget(self.chk_show_history)
+        l_hist.addWidget(self.chk_trail_color)
         l_hist.addLayout(l_qnh)
         l_hist.addLayout(l_modo)
         l_hist.addLayout(l_cant)
@@ -1257,6 +1276,25 @@ class MainWindow(QMainWindow):
             self.radar.sensores_visibles = self.sensores_activos.copy()
             self.radar.update()
 
+    def _on_sensor_color_clicked(self, text: str):
+        """Abre un selector de color para cambiar el color de un sensor en vivo."""
+        from PyQt6.QtWidgets import QColorDialog
+        match = re.match(r'^\[(\d+)/(\d+)\]', text)
+        if not match:
+            return
+        sac, sic = map(int, match.groups())
+        actual = self.radar._get_sensor_color(sac, sic)
+        nuevo = QColorDialog.getColor(actual, self, "Color del sensor")
+        if not nuevo.isValid():
+            return
+        self.radar.set_sensor_color(sac, sic, nuevo)
+        # Reflejar el cambio en el badge de la lista
+        for i in range(self.list_sensores.count()):
+            widget = self.list_sensores.itemWidget(self.list_sensores.item(i))
+            if widget and getattr(widget, 'text_label', None) == text:
+                widget.set_color(nuevo)
+                break
+
     def _on_sensor_check_changed(self, item):
         pass
 
@@ -1311,6 +1349,25 @@ class MainWindow(QMainWindow):
         """Muestra u oculta la estela histórica del radar."""
         if hasattr(self, 'radar') and self.radar is not None:
             self.radar.set_history_visible(checked)
+
+    def _on_trail_color_toggled(self, checked: bool):
+        """Activa/desactiva el color por radar de las estelas (off = verde uniforme)."""
+        if hasattr(self, 'radar') and self.radar is not None:
+            self.radar.set_trail_colored(checked)
+
+    def _ajustar_alto_lista_sensores(self):
+        """Ajusta el alto de la lista de radares a su contenido (hasta 16 filas) para que
+        no se corte el último radar; el scroll del dock absorbe el resto."""
+        n = self.list_sensores.count()
+        if n == 0:
+            self.list_sensores.setFixedHeight(40)
+            return
+        row_h = self.list_sensores.sizeHintForRow(0)
+        if row_h <= 0:
+            row_h = 24
+        frame = 2 * self.list_sensores.frameWidth() + 4
+        visibles = min(n, 16)
+        self.list_sensores.setFixedHeight(row_h * visibles + frame)
 
     def _on_show_mtr_toggled(self, checked: bool):
         """Muestra u oculta los obstáculos/reflectores MTR en la pantalla del radar."""
@@ -1665,12 +1722,14 @@ class MainWindow(QMainWindow):
             # Instanciar widget personalizado con color badge y checkbox
             sensor_widget = RadarSensorItemWidget(color_sensor, text_label, checked=True, parent=self)
             sensor_widget.toggled.connect(self._on_custom_sensor_toggled)
+            sensor_widget.colorClicked.connect(self._on_sensor_color_clicked)
             
             item.setSizeHint(sensor_widget.sizeHint())
             self.list_sensores.addItem(item)
             self.list_sensores.setItemWidget(item, sensor_widget)
-            
+
             self.list_sensores.blockSignals(False)
+            self._ajustar_alto_lista_sensores()
 
         # 4. Autocenter en el primer sensor detectado (una única vez para evitar re-proyectar el mapa DXF constantemente)
         if not getattr(self, 'autocentered_on_first_sensor', False) and len(self.sensores_conocidos) == 1:
@@ -2612,7 +2671,7 @@ class MainWindow(QMainWindow):
                 self.radar.reproject_all_coordinates()
                 self.radar._active_sensor_label = f"SENSOR ACTIVO: {nombre} ({sac}/{sic})"
                 print(f"[CENTRAR MAPA] Recentrado en sensor activo: {nombre} ({sac}/{sic})")
-                self.radar.recenter_to_fit_map()
+                self.radar.centrar_en_coordenadas(lat, lon)
                 return
 
         # Fallback: centrar en el primer sensor conocido con coordenadas
@@ -2629,7 +2688,7 @@ class MainWindow(QMainWindow):
                     self.radar.reproject_all_coordinates()
                     self.radar._active_sensor_label = f"SENSOR ACTIVO: {nombre} ({sac}/{sic})"
                     print(f"[CENTRAR MAPA] Fallback - Centrado en: {nombre} ({sac}/{sic})")
-                    self.radar.recenter_to_fit_map()
+                    self.radar.centrar_en_coordenadas(lat, lon)
                     return
             except (ValueError, AttributeError):
                 continue

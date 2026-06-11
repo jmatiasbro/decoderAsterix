@@ -39,10 +39,12 @@ def resolver_red(pcap, sensores, bucket=1.0, iteraciones=8, progress_cb=None):
     eng = DataEngine(sensores=sensores)
     if progress_cb is not None:
         eng.on_progress = progress_cb
+    pcap_label = (os.path.basename(pcap) if isinstance(pcap, str)
+                  else ", ".join(os.path.basename(p) for p in pcap))
     plots, dur, _ = eng.scan_pcap(pcap)
     clusters = construir_clusters(plots, sensores, bucket=bucket)
     if not clusters:
-        return {'run': {'pcap': os.path.basename(pcap), 'duration_s': round(dur, 1)}, 'sensors': []}
+        return {'run': {'pcap': pcap_label, 'duration_s': round(dur, 1)}, 'sensors': []}
 
     # Marco común conforme centrado en el centroide de los reportes
     lats = [r['lat'] for c in clusters for r in c['reports']]
@@ -56,8 +58,11 @@ def resolver_red(pcap, sensores, bucket=1.0, iteraciones=8, progress_cb=None):
         for r in c['reports']:
             px, py = proy.latlon_to_xy(r['lat'], r['lon'])
             th = math.radians(r['theta']); rho = r['rho_g']
-            J = np.array([[math.sin(th), rho * math.cos(th)],
-                          [math.cos(th), -rho * math.sin(th)]])
+            # Sesgo = [Δρ0 (bias a rango cero), Δθ (azimut), g (ganancia de rango)].
+            # La ganancia aporta un desplazamiento radial proporcional al rango:
+            # g·ρ en la dirección [sinθ, cosθ] (ICAO §3.2.32 b).
+            J = np.array([[math.sin(th), rho * math.cos(th), rho * math.sin(th)],
+                          [math.cos(th), -rho * math.sin(th), rho * math.cos(th)]])
             reps.append({'s': r['sac_sic'], 'p': np.array([px, py]), 'J': J,
                          'theta': r['theta'], 'rho': rho})
         T_adsb = None
@@ -67,7 +72,7 @@ def resolver_red(pcap, sensores, bucket=1.0, iteraciones=8, progress_cb=None):
         cl.append({'T_adsb': T_adsb, 'reps': reps})
 
     sensores_set = {rp['s'] for c in cl for rp in c['reps']}
-    b = {s: np.zeros(2) for s in sensores_set}   # [Δρ_m, Δθ_rad]
+    b = {s: np.zeros(3) for s in sensores_set}   # [Δρ0_m, Δθ_rad, g_adim]
 
     # Iteración: (1) estimar verdad T_k por cluster; (2) resolver sesgo por sensor
     for _ in range(iteraciones):
@@ -78,8 +83,8 @@ def resolver_red(pcap, sensores, bucket=1.0, iteraciones=8, progress_cb=None):
             else:
                 corr = [rp['p'] - rp['J'] @ b[rp['s']] for rp in c['reps']]
                 T.append(np.mean(corr, axis=0))
-        AT = {s: np.zeros((2, 2)) for s in sensores_set}
-        rhs = {s: np.zeros(2) for s in sensores_set}
+        AT = {s: np.zeros((3, 3)) for s in sensores_set}
+        rhs = {s: np.zeros(3) for s in sensores_set}
         for c, Tk in zip(cl, T):
             for rp in c['reps']:
                 d = rp['p'] - Tk
@@ -89,7 +94,7 @@ def resolver_red(pcap, sensores, bucket=1.0, iteraciones=8, progress_cb=None):
                 rhs[rp['s']] += rp['J'].T @ d
         for s in sensores_set:
             try:
-                b[s] = np.linalg.solve(AT[s] + 1e-6 * np.eye(2), rhs[s])
+                b[s] = np.linalg.solve(AT[s] + 1e-6 * np.eye(3), rhs[s])
             except np.linalg.LinAlgError:
                 pass
 
@@ -123,20 +128,22 @@ def resolver_red(pcap, sensores, bucket=1.0, iteraciones=8, progress_cb=None):
         n = len(a['rng'])
         if n == 0:
             continue
-        d_rng = b[s][0] / METERS_PER_NM            # NM (bias de rango)
+        d_rng = b[s][0] / METERS_PER_NM            # NM (bias de rango a rango cero)
         d_az = math.degrees(b[s][1])               # grados (bias de azimut)
+        range_gain = b[s][2]                       # adimensional (m/m), ICAO §3.2.32 b
         sg_rng = _mediana([abs(x) for x in a['rng']]) or 0.0
         sg_az = _mediana([abs(x) for x in a['az']]) or 0.0
         sensors_out.append({
             'sac_sic': s, 'n': n,
             'coverage_az_pct': round(100.0 * len(a['sec']) / N_SECTORES, 1),
             'd_az_deg': round(d_az, 3), 'd_rng_nm': round(d_rng, 3),
+            'range_gain': round(range_gain, 6),
             'sigma_az_deg': round(1.4826 * sg_az, 3),
             'sigma_rng_nm': round(1.4826 * sg_rng, 3),
             'ref': {'adsb': a['anchor'], 'consenso': a['rel']},
             'per_sector': [],
         })
-    return {'run': {'pcap': os.path.basename(pcap), 'duration_s': round(dur, 1),
+    return {'run': {'pcap': pcap_label, 'duration_s': round(dur, 1),
                     'method': 'network_lsq', 'iter': iteraciones}, 'sensors': sensors_out}
 
 
