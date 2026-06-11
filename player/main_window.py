@@ -587,6 +587,9 @@ class MainWindow(QMainWindow):
         self._reposicionar_reloj()
         self.reloj_utc.show()
         self.reloj_utc.raise_()
+        # Reubicar el reloj cuando cambia el ancho del radar (ej. al ensanchar el
+        # dock lateral, que no dispara el resizeEvent de la ventana).
+        self.radar.installEventFilter(self)
 
     def _setup_menu_bar(self):
         menu_bar = self.menuBar()
@@ -1373,6 +1376,14 @@ class MainWindow(QMainWindow):
             x = self.radar.width() - self.reloj_utc.width() - 20
             y = 80  # justo debajo de la caja de coordenadas (y=45, alto 28)
             self.reloj_utc.move(max(0, x), y)
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj is getattr(self, 'radar', None) and event.type() == QEvent.Type.Resize:
+            self._reposicionar_reloj()
+            if hasattr(self, 'reloj_utc'):
+                self.reloj_utc.raise_()
+        return super().eventFilter(obj, event)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
