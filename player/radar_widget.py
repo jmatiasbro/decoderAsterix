@@ -756,6 +756,7 @@ class RadarWidget(QWidget):
         self.history_limit = 500
         self.history_mode = "Tracking"
         self.history_visible = True
+        self.trail_colored = True   # estelas coloreadas por radar (distinto color por sensor)
         self.mtr_visible = True
 
         from player.map_manager import MapManager
@@ -899,10 +900,22 @@ class RadarWidget(QWidget):
     def _get_sensor_color(self, sac: int, sic: int) -> QColor:
         key = (sac, sic)
         if key not in self.sensor_colors:
-            color = COLOR_PALETTE[self.color_palette_index % len(COLOR_PALETTE)]
+            idx = self.color_palette_index
+            if idx < len(COLOR_PALETTE):
+                color = COLOR_PALETTE[idx]
+            else:
+                # Más sensores que la paleta fija: generar tonos distintos por
+                # paso áureo en HSV para que ningún color se repita.
+                hue = (idx * 0.61803398875) % 1.0
+                color = QColor.fromHsvF(hue, 0.65, 1.0)
             self.sensor_colors[key] = color
             self.color_palette_index += 1
         return self.sensor_colors.get(key, COLOR_CYAN)
+
+    def set_sensor_color(self, sac: int, sic: int, color: QColor):
+        """Fija manualmente el color de un sensor y repinta."""
+        self.sensor_colors[(sac, sic)] = color
+        self.update()
 
     def set_sweep_speed(self, rpm: float):
         if rpm > 0:
@@ -922,6 +935,11 @@ class RadarWidget(QWidget):
 
     def set_history_visible(self, visible: bool):
         self.history_visible = visible
+        self.update()
+
+    def set_trail_colored(self, colored: bool):
+        """Activa/desactiva el coloreado de estelas por radar. Desactivado = verde uniforme."""
+        self.trail_colored = colored
         self.update()
 
     def set_sweep_enabled(self, enabled: bool):
@@ -2932,7 +2950,8 @@ class RadarWidget(QWidget):
                             painter.save()
                             painter.translate(cx, cy)
                             painter.scale(inv_z, -inv_z)
-                            painter.drawText(QPointF(6, 12), f"{short_name} (ACTIVE)")
+                            # Título separado del símbolo (arriba-derecha) para no pisarlo
+                            painter.drawText(QPointF(12, 22), f"{short_name} (ACTIVE)")
                             painter.restore()
                         else:
                             # Subtle background radar coverage
@@ -2958,7 +2977,7 @@ class RadarWidget(QWidget):
                             painter.save()
                             painter.translate(cx, cy)
                             painter.scale(inv_z, -inv_z)
-                            painter.drawText(QPointF(6, 12), short_name)
+                            painter.drawText(QPointF(12, 22), short_name)
                             painter.restore()
                 except Exception:
                     pass
@@ -3142,6 +3161,8 @@ class RadarWidget(QWidget):
                                 trail_base = QColor("#FFD700")
                             else:
                                 trail_base = QColor("#FFA500")
+                        elif self.trail_colored:
+                            trail_base = self._get_sensor_color(plot.sac, plot.sic)
                         else:
                             trail_base = COLOR_GREEN_NEON
 
