@@ -782,6 +782,8 @@ class MainWindow(QMainWindow):
         self.total_frames = 0
         self.duration = 0.0
         self.pcap_path = ""
+        # Centro/zoom previos a una reproducción filtrada (para restaurar al detener)
+        self._centro_pre_filtrado = None
         self.udp_active = False
 
         # Aplicar el perfil guardado en disco
@@ -1680,6 +1682,8 @@ class MainWindow(QMainWindow):
         if getattr(self, '_analizador_win', None) is None:
             from player.packet_analyzer import AsterixAnalyzerWindow
             self._analizador_win = AsterixAnalyzerWindow(repo_db, self.worker, self)
+            self._analizador_win.seek_solicitado.connect(self._analizador_seek)
+            self._analizador_win.reproducir_filtrado.connect(self._analizador_reproducir_filtrado)
         else:
             # Reapuntar a la BD/worker vigentes y refrescar
             self._analizador_win.repo_db = repo_db
@@ -1688,6 +1692,57 @@ class MainWindow(QMainWindow):
         self._analizador_win.show()
         self._analizador_win.raise_()
         self._analizador_win.activateWindow()
+
+    def _iniciar_reproduccion(self):
+        """Arranca/reanuda la reproducción (lógica compartida con el botón Play)."""
+        if self.worker is None or self.playing:
+            return
+        if not self.worker.isRunning():
+            self.worker.engine.tracks.clear()
+            self.worker.engine.relojes_sensores.clear()
+            self.worker.engine.is_playing = True
+            self._cambiar_velocidad()
+            self.worker.start()
+        else:
+            self.worker.engine.is_playing = True
+            self.worker.set_paused(False)
+        self.playing = True
+        if hasattr(self, 'radar') and self.radar is not None:
+            self.radar.play()
+        self._set_play_state(True)
+
+    def _analizador_seek(self, t: float):
+        """Doble clic en el analizador: reposicionar la consola a ese instante."""
+        if self.worker is None:
+            return
+        self.worker.set_target_filter(None)  # quitar cualquier filtro de reproducción previo
+        self.worker.seek_to_time(float(t))
+        self._iniciar_reproduccion()
+
+    def _analizador_reproducir_filtrado(self, t0: float, lat_c: float, lon_c: float,
+                                        radio_nm: float, targets):
+        """Reproduce en la consola solo las aeronaves filtradas en el analizador.
+        Encuadra la vista en la(s) aeronave(s) para que entren en el filtro de
+        distancia (si no, un blanco lejano al centro actual se descarta)."""
+        if self.worker is None:
+            return
+        if self.worker.contar_targets(targets) == 0:
+            QMessageBox.warning(
+                self, "Reproducir filtrado",
+                "Ninguna de las filas filtradas tiene identificador de aeronave "
+                "reproducible (callsign / Mode-S / track#).")
+            return
+        self.worker.set_target_filter(targets)
+        self.worker.seek_to_time(float(t0))
+        # Encuadrar la pantalla táctica en la(s) aeronave(s) filtrada(s),
+        # guardando antes el centro previo para restaurarlo al detener.
+        if abs(lat_c) > 0.1 and abs(lon_c) > 0.1:
+            if self._centro_pre_filtrado is None:
+                self._centro_pre_filtrado = (
+                    self.radar.centro_lat, self.radar.centro_lon,
+                    self.radar.center_key, self.radar.zoom_factor)
+            self.radar.centrar_en_objetivo(lat_c, lon_c, radio_nm)
+        self._iniciar_reproduccion()
 
     def _abrir_log_stca(self):
         import os
@@ -1884,7 +1939,17 @@ class MainWindow(QMainWindow):
         self.playing = False
         if self.worker:
             self.worker.set_paused(True)
+            self.worker.set_target_filter(None)
             self.worker.seek_to_percent(0)
+        # Restaurar el centro/zoom previos si veníamos de una reproducción filtrada
+        if self._centro_pre_filtrado is not None:
+            lat, lon, ckey, zoom = self._centro_pre_filtrado
+            self._centro_pre_filtrado = None
+            if lat is not None and lon is not None:
+                sac, sic = ckey if isinstance(ckey, tuple) else (0, 0)
+                self.radar.reset_origin_for_new_file(lat, lon, sac, sic)
+                self.radar.zoom_factor = zoom
+                self.radar._clamp_zoom()
         if hasattr(self, 'radar') and self.radar is not None:
             self.radar.pause()
             self.radar.reset_sweep_angle()
@@ -2452,7 +2517,7 @@ class MainWindow(QMainWindow):
                         else:
                             if not cfg.get("plots_secun", True): continue
             elif cat in (2, 34) and not cfg.get("servicio", True): continue
-            
+
             # B. Filtro de Sensores (desde diálogo Filtro Datos)
             sensores_sel = cfg.get("sensores_seleccionados", None)
             if sensores_sel is not None:
@@ -2496,7 +2561,7 @@ class MainWindow(QMainWindow):
                     
             if not (cfg.get("dist_inf", 0.0) <= dist_nm <= cfg.get("dist_sup", 500.0)):
                 continue
-                
+
             # - Acimut (en grados)
             az_deg = 0.0
             if px is not None and py is not None:
@@ -2517,7 +2582,7 @@ class MainWindow(QMainWindow):
                     
             if not (cfg.get("az_inf", 0) <= az_deg <= cfg.get("az_sup", 360)):
                 continue
-                
+
             # - Altura (pies o Flight Level)
             fl = plot.get('flight_level')
             alt_ft = plot.get('altitude_ft')
@@ -2529,7 +2594,7 @@ class MainWindow(QMainWindow):
                 
             if not (cfg.get("alt_inf", -9999) <= alt_val <= cfg.get("alt_sup", 99999)):
                 continue
-                
+
             # - Dirección Mode S / ICAO Hex
             mode_s = (plot.get('mode_s') or "").strip().upper()
             if mode_s:

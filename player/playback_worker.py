@@ -70,6 +70,7 @@ class PlaybackWorker(QThread):
         
         # Estado
         self._plots: List[AsterixPlot] = []
+        self._filter_targets: Optional[Set[tuple]] = None  # si != None, solo se dibujan estas aeronaves
         self._play_index = 0
         self._duration = 0.0
         self._scanned = False
@@ -111,6 +112,36 @@ class PlaybackWorker(QThread):
             # Resync tiempo UI
             self.tod_updated.emit(self._plots[self._play_index].time)
         self._mutex.unlock()
+
+    def set_target_filter(self, claves):
+        """Restringe la reproducción a un conjunto de aeronaves (no a plots sueltos).
+        `claves` = set de tuplas ('cs', callsign) | ('ms', mode_s) | ('tn', sac_sic, track#),
+        o None para reproducir todo. Se matchea por atributo (que sobrevive a la
+        deduplicación de plots), evitando que se cuelen otras aeronaves del mismo ToD."""
+        self._mutex.lock()
+        self._filter_targets = set(claves) if claves else None
+        self._mutex.unlock()
+
+    def contar_targets(self, targets) -> int:
+        """Cuántos plots cargados coinciden con `targets` (para avisar si es 0)."""
+        self._mutex.lock()
+        plots = list(self._plots)
+        self._mutex.unlock()
+        if not targets:
+            return len(plots)
+        return sum(1 for p in plots if self._plot_en_targets(p, targets))
+
+    @staticmethod
+    def _plot_en_targets(plot, targets) -> bool:
+        cs = (plot.callsign or "").strip().upper()
+        if cs and ("cs", cs) in targets:
+            return True
+        if plot.mode_s and ("ms", str(plot.mode_s).strip()) in targets:
+            return True
+        if plot.track_number is not None and \
+                ("tn", str(plot.sac_sic), str(plot.track_number)) in targets:
+            return True
+        return False
 
     def seek_to_time(self, t: float):
         """Reposiciona el playback al primer plot con time >= t (los plots están
@@ -410,6 +441,7 @@ class PlaybackWorker(QThread):
             paused = self._paused
             speed = self.playback_speed
             idx = self._play_index
+            ftargets = self._filter_targets
             self._mutex.unlock()
 
             if not running: break
@@ -449,8 +481,10 @@ class PlaybackWorker(QThread):
                 time.sleep(sleep_time)
                 continue
 
-            # Avanzamos un plot
-            batch.append(plot.to_dict())
+            # Avanzamos un plot (se mantiene el tiempo real; si hay filtro activo,
+            # solo se dibujan los plots cuyo ToD pertenece al subconjunto filtrado)
+            if ftargets is None or self._plot_en_targets(plot, ftargets):
+                batch.append(plot.to_dict())
             self._mutex.lock()
             self._play_index += 1
             idx = self._play_index
