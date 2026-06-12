@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QCheckBox, QLineEdit,
     QComboBox, QPushButton, QDialogButtonBox, QLabel, QTableView, QTimeEdit,
     QAbstractItemView, QHeaderView, QMessageBox, QStyle, QStyleOptionHeader,
+    QMenu,
 )
 
 
@@ -121,6 +122,21 @@ class PlotsTableModel(QAbstractTableModel):
         if 0 <= row < len(self._rows) and 0 <= col < len(COLUMNS):
             return self._rows[row][col]
         return None
+
+    def raw_bytes_at(self, row: int):
+        """Bytes crudos del registro (columna extra tras las de COLUMNS), si están."""
+        if 0 <= row < len(self._rows):
+            r = self._rows[row]
+            if len(r) > len(COLUMNS):
+                return r[len(COLUMNS)]
+        return None
+
+    def info_at(self, row: int) -> dict:
+        """Campos decodificados del registro como dict {clave_sql: valor}."""
+        if 0 <= row < len(self._rows):
+            r = self._rows[row]
+            return {COLUMNS[i][1]: r[i] for i in range(len(COLUMNS))}
+        return {}
 
     def data(self, index: QModelIndex, role=Qt.ItemDataRole.DisplayRole) -> Any:
         if not index.isValid():
@@ -402,6 +418,8 @@ class AsterixAnalyzerWindow(QDialog):
         self.tabla.horizontalScrollBar().valueChanged.connect(self._header._reposicionar)
 
         self.tabla.doubleClicked.connect(self._on_doble_clic)
+        self.tabla.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tabla.customContextMenuRequested.connect(self._menu_contexto)
         v.addWidget(self.tabla)
 
         hint = QLabel("Filtrá en la cabecera de cada columna · clic en el título ordena · "
@@ -443,7 +461,9 @@ class AsterixAnalyzerWindow(QDialog):
         self._header._reposicionar()
 
     def aplicar_filtros_base_datos(self, criterios: Optional[dict]):
-        query = (f"SELECT {SELECT_COLS} FROM asterix_plots WHERE 1=1")
+        # raw_bytes se selecciona como columna extra al final (no se muestra; la usa
+        # el inspector de bajo nivel por clic derecho).
+        query = (f"SELECT {SELECT_COLS}, raw_bytes FROM asterix_plots WHERE 1=1")
         params: List[Any] = []
 
         if criterios:
@@ -527,6 +547,26 @@ class AsterixAnalyzerWindow(QDialog):
             return
         self.reproducir_filtrado.emit(float(t0 or 0.0), lat_c, lon_c, radio_nm, keys)
         self.showMinimized()
+
+    def _menu_contexto(self, pos):
+        index = self.tabla.indexAt(pos)
+        if not index.isValid():
+            return
+        menu = QMenu(self)
+        act_inspeccionar = menu.addAction("Inspeccionar paquete…")
+        elegido = menu.exec(self.tabla.viewport().mapToGlobal(pos))
+        if elegido == act_inspeccionar:
+            self._abrir_inspector(index)
+
+    def _abrir_inspector(self, index: QModelIndex):
+        src_row = self.proxy.mapToSource(index).row()
+        rb = self.modelo_tabla.raw_bytes_at(src_row)
+        info = self.modelo_tabla.info_at(src_row)
+        from player.asterix_inspector import AsterixInspectorDialog
+        dlg = AsterixInspectorDialog(rb or b"", info, self)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
 
     def _on_doble_clic(self, index: QModelIndex):
         if not index.isValid():
