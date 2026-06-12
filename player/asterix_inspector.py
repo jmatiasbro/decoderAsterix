@@ -125,23 +125,131 @@ def _fmt_campo(clave: str, val) -> str:
     return str(val)
 
 
-def deep_offsets(category, raw_bytes) -> List[Tuple[str, int, int]]:
-    """Re-decodifica el registro y devuelve [(código_item, byte_ini, byte_fin)] del
-    primer Data Record. Lista vacía si la categoría aún no tiene deep-decode.
-    Usa el decoder real (sin tocar su camino normal) para que los offsets coincidan
-    exactamente con lo que la app decodifica."""
+# Nombres oficiales EUROCONTROL por Item (los más frecuentes; los que falten se
+# muestran solo con el código). Clave: código "I0XX/YYY".
+ITEM_NAMES = {
+    # CAT048
+    "I048/010": "Data Source Identifier", "I048/140": "Time of Day",
+    "I048/020": "Target Report Descriptor",
+    "I048/040": "Measured Position in Polar Co-ordinates",
+    "I048/070": "Mode-3/A Code in Octal Representation",
+    "I048/090": "Flight Level in Binary Representation",
+    "I048/130": "Radar Plot Characteristics", "I048/220": "Aircraft Address",
+    "I048/240": "Aircraft Identification", "I048/250": "Mode S MB Data",
+    "I048/161": "Track Number",
+    "I048/042": "Calculated Position in Cartesian Co-ordinates",
+    "I048/200": "Calculated Track Velocity in Polar Co-ordinates",
+    "I048/170": "Track Status", "I048/210": "Track Quality",
+    "I048/030": "Warning/Error Conditions",
+    "I048/080": "Mode-3/A Code Confidence Indicator",
+    "I048/100": "Mode-C Code and Confidence Indicator",
+    "I048/110": "Height Measured by 3D Radar",
+    "I048/120": "Radial Doppler Speed",
+    "I048/230": "Communications/ACAS Capability and Flight Status",
+    "I048/260": "ACAS Resolution Advisory Report",
+    "I048/055": "Mode-1 Code in Octal Representation",
+    "I048/050": "Mode-2 Code in Octal Representation",
+    "I048/065": "Mode-1 Code Confidence Indicator",
+    "I048/060": "Mode-2 Code Confidence Indicator",
+    # CAT021 (ADS-B)
+    "I021/010": "Data Source Identification", "I021/040": "Target Report Descriptor",
+    "I021/161": "Track Number", "I021/015": "Service Identification",
+    "I021/071": "Time of Applicability for Position",
+    "I021/130": "Position in WGS-84 Co-ordinates",
+    "I021/131": "High-Resolution Position in WGS-84 Co-ordinates",
+    "I021/072": "Time of Applicability for Velocity", "I021/080": "Target Address",
+    "I021/073": "Time of Message Reception of Position",
+    "I021/075": "Time of Message Reception of Velocity",
+    "I021/140": "Geometric Height", "I021/090": "Quality Indicators",
+    "I021/210": "MOPS Version", "I021/070": "Mode 3/A Code",
+    "I021/145": "Flight Level", "I021/155": "Barometric Vertical Rate",
+    "I021/160": "Airborne Ground Vector", "I021/165": "Track Angle Rate",
+    "I021/170": "Target Identification", "I021/020": "Emitter Category",
+    "I021/146": "Selected Altitude", "I021/200": "Target Status",
+    # CAT062 (system track)
+    "I062/010": "Data Source Identifier", "I062/015": "Service Identification",
+    "I062/070": "Time of Track Information",
+    "I062/105": "Calculated Position in WGS-84 Co-ordinates",
+    "I062/100": "Calculated Position in Cartesian Co-ordinates",
+    "I062/185": "Calculated Track Velocity in Cartesian Co-ordinates",
+    "I062/210": "Calculated Acceleration (Cartesian)",
+    "I062/060": "Track Mode 3/A Code", "I062/245": "Target Identification",
+    "I062/380": "Aircraft Derived Data", "I062/040": "Track Number",
+    "I062/080": "Track Status", "I062/290": "System Track Update Ages",
+    "I062/200": "Mode of Movement", "I062/295": "Track Data Ages",
+    "I062/136": "Measured Flight Level",
+    "I062/130": "Calculated Track Geometric Altitude",
+    "I062/135": "Calculated Track Barometric Altitude",
+    "I062/220": "Calculated Rate of Climb/Descent",
+    "I062/390": "Flight Plan Related Data", "I062/500": "Estimated Accuracies",
+    # CAT001
+    "I001/010": "Data Source Identifier", "I001/020": "Target Report Descriptor",
+    "I001/040": "Measured Position in Polar Co-ordinates",
+    "I001/070": "Mode-3/A Code in Octal Representation",
+    "I001/090": "Mode-C Code in Binary Representation",
+    "I001/130": "Radar Plot Characteristics", "I001/141": "Truncated Time of Day",
+    "I001/131": "Received Power", "I001/161": "Track/Plot Number",
+    "I001/170": "Track Status", "I001/120": "Measured Radial Doppler Speed",
+    # CAT034
+    "I034/010": "Data Source Identifier", "I034/000": "Message Type",
+    "I034/030": "Time of Day", "I034/020": "Sector Number",
+    "I034/041": "Antenna Rotation Speed",
+    "I034/050": "System Configuration and Status",
+    "I034/060": "System Processing Mode", "I034/070": "Message Count Values",
+}
+
+
+def _item_name(code: str) -> str:
+    return ITEM_NAMES.get(code, "")
+
+
+def _plot_a_info(p: dict) -> dict:
+    """Normaliza un plot crudo del decoder al formato que usa _items_de_registro."""
+    info = dict(p)
+    sac, sic = p.get("sac"), p.get("sic")
+    if sac is not None:
+        info["sac"] = str(sac)
+        info["sac_sic"] = f"{sac}/{sic}"
+    if sic is not None:
+        info["sic"] = str(sic)
+    m3a = p.get("mode_3a")
+    if isinstance(m3a, int):
+        info["mode3a"] = f"{m3a:04o}"
+    ed = p.get("extra_data", {}) or {}
+    if ed.get("ground_speed_nms") is not None:
+        info["ground_speed"] = ed["ground_speed_nms"] * 3600.0
+    if ed.get("track_angle") is not None:
+        info["track_angle"] = ed["track_angle"]
+    return info
+
+
+def deep_records(category, raw_bytes):
+    """Re-decodifica el bloque y devuelve una lista de Data Records; cada uno es
+    (info_normalizada, [(código_item, byte_ini, byte_fin), ...]). Lista vacía si la
+    categoría aún no tiene deep-decode. Usa el decoder real (camino normal intacto)."""
     if not raw_bytes or len(raw_bytes) < 4:
         return []
     try:
         cat = int(category)
+        decoder = None
         if cat == 48:
-            from decoder.decoders import cat048
-            acc: list = []
-            cat048.decode(bytes(raw_bytes), 3, len(raw_bytes), 48, record_offsets=acc)
-            return [(code, s, e) for (ridx, code, s, e) in acc if ridx == 0]
+            from decoder.decoders import cat048 as decoder
+        if decoder is None:
+            return []
+        acc: list = []
+        plots = decoder.decode(bytes(raw_bytes), 3, len(raw_bytes), cat, record_offsets=acc)
+        por_rec: dict = {}
+        for ridx, code, s, e in acc:
+            por_rec.setdefault(ridx, []).append((code, s, e))
+        salida = []
+        for ridx in sorted(por_rec):
+            plot = plots[ridx] if ridx < len(plots) else {}
+            info = _plot_a_info(plot)
+            info["category"] = cat
+            salida.append((info, por_rec[ridx]))
+        return salida
     except Exception:
         return []
-    return []
 
 
 def _items_de_registro(info: dict) -> List[Tuple[str, str]]:
@@ -228,39 +336,47 @@ class AsterixInspectorDialog(QDialog):
         splitter.setSizes([460, 520])
         layout.addWidget(splitter)
 
+    def _etiqueta_item(self, code: str) -> str:
+        nombre = _item_name(code)
+        return f"Data Item {code} — {nombre}" if nombre else f"Data Item {code}"
+
     def _cargar(self):
         self.hex_viewer.setText(generar_hex_dump(self.raw_bytes))
 
         self.tree_model.removeRows(0, self.tree_model.rowCount())
         root = self.tree_model.invisibleRootItem()
+        cat = self.info.get("category")
 
         nodo_block = QStandardItem("Data Block 1")
-        root.appendRow([nodo_block, QStandardItem("")])
-        nodo_record = QStandardItem("Data Record 1")
-        cat = self.info.get("category")
-        nodo_record.setData(cat)
-        nodo_block.appendRow([nodo_record, QStandardItem(f"CAT{cat:03d}" if cat else "")])
+        root.appendRow([nodo_block, QStandardItem(f"CAT{cat:03d}" if cat else "")])
 
         filas_txt = []
-        summ_map = {code: summ for code, summ in _items_de_registro(self.info)}
-        items_off = deep_offsets(cat, self.raw_bytes)
+        records = deep_records(cat, self.raw_bytes)
 
-        if items_off:
-            # Set completo de Items del FSPEC, con rango de bytes (resaltado al clickear).
-            for code, start, end in items_off:
-                summary = summ_map.get(code) or self._hex_rango(start, end)
-                n_item = QStandardItem(f"Data Item {code}")
-                n_item.setData((start, end), Qt.ItemDataRole.UserRole)
-                nodo_record.appendRow([n_item, QStandardItem(summary)])
-                filas_txt.append(f"{code:<10} [{start:>3}:{end:<3}]  {summary}")
+        if records:
+            # Deep-decode: todos los Data Records del bloque, con offsets y nombres.
+            for ridx, (info, items) in enumerate(records):
+                nodo_rec = QStandardItem(f"Data Record {ridx + 1}")
+                nodo_block.appendRow([nodo_rec, QStandardItem("")])
+                summ_map = {c: s for c, s in _items_de_registro(info)}
+                filas_txt.append(f"--- Data Record {ridx + 1} ---")
+                for code, start, end in items:
+                    summary = summ_map.get(code) or self._hex_rango(start, end)
+                    n_item = QStandardItem(self._etiqueta_item(code))
+                    n_item.setData((start, end), Qt.ItemDataRole.UserRole)
+                    nodo_rec.appendRow([n_item, QStandardItem(summary)])
+                    filas_txt.append(f"{code:<10} [{start:>3}:{end:<3}]  {summary}")
         else:
-            # Fallback (categorías sin deep-decode todavía): solo campos decodificados.
+            # Fallback (categorías sin deep-decode todavía): solo campos decodificados
+            # del registro clickeado, sin offsets/resaltado.
+            nodo_rec = QStandardItem("Data Record 1")
+            nodo_block.appendRow([nodo_rec, QStandardItem("")])
             for code, summary in _items_de_registro(self.info):
-                nodo_record.appendRow([
-                    QStandardItem(f"Data Item {code}"), QStandardItem(summary)])
+                nodo_rec.appendRow([
+                    QStandardItem(self._etiqueta_item(code)), QStandardItem(summary)])
                 filas_txt.append(f"{code:<10} {summary}")
             if not filas_txt:
-                nodo_record.appendRow([
+                nodo_rec.appendRow([
                     QStandardItem("(sin desglose para esta categoría)"), QStandardItem("")])
 
         self.tree.expandAll()
