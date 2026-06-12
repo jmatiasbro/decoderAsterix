@@ -173,6 +173,12 @@ class AsterixRouter:
                         plot['rho_render'] = rho
                         plot['theta_render'] = theta
 
+                    # Bytes crudos del bloque ASTERIX (CAT + LEN + registros) para el
+                    # inspector de bajo nivel. Es el bloque completo: si trae varios
+                    # registros, comparten estos bytes (el desglose por-registro llega
+                    # con el deep-decode más adelante).
+                    plot['raw_bytes'] = bytes(bloque_asterix)
+
                     plots_normalizados.append(plot)
 
             pointer += msg_len

@@ -70,6 +70,7 @@ class AsterixPlot:
     pcap_time: Optional[float] = None  # PCAP packet arrival timestamp (epoch seconds)
     garbled: bool = False
     vertical_rate_ftmin: Optional[float] = None
+    raw_bytes: Optional[bytes] = None  # bloque ASTERIX crudo (inspector de bajo nivel)
 
     def to_dict(self) -> Dict[str, Any]:
         """Retorna el diccionario para la señal new_plot_batch."""
@@ -95,6 +96,7 @@ class AsterixPlot:
             'pcap_time': self.pcap_time,
             'garbled': self.garbled,
             'vertical_rate_ftmin': self.vertical_rate_ftmin,
+            'raw_bytes': getattr(self, 'raw_bytes', None),
         }
 
 class IndraRDCUReader:
@@ -1099,6 +1101,7 @@ class DataEngine:
                 pcap_time=rec.get('pcap_time'),
                 garbled=rec.get('garbled', False),
                 vertical_rate_ftmin=vertical_rate_ftmin,
+                raw_bytes=rec.get('raw_bytes'),
             )
         except Exception as e:
             return None

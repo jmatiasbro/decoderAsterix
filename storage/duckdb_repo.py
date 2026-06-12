@@ -63,7 +63,8 @@ class DuckDBRepository:
                 ground_speed DOUBLE,
                 track_angle DOUBLE,
                 vertical_rate DOUBLE,
-                plot_id VARCHAR
+                plot_id VARCHAR,
+                raw_bytes BLOB
             )
         ''')
 
@@ -168,6 +169,8 @@ class DuckDBRepository:
                 ta_val = plot.get('track_angle')
                 vr_val = plot.get('vertical_rate_ftmin')
                 plot_id_val = str(plot.get('id') or '')
+                rb = plot.get('raw_bytes')
+                raw_bytes_val = bytes(rb) if rb else None
 
                 lote.append((
                     float(time_val),
@@ -189,12 +192,13 @@ class DuckDBRepository:
                     None if ta_val is None else float(ta_val),
                     None if vr_val is None else float(vr_val),
                     plot_id_val,
+                    raw_bytes_val,
                 ))
 
                 # Batch Insert de DuckDB
                 if len(lote) >= 200 or self.cola_insercion.empty():
                     hilo_conn.executemany(
-                        "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         lote
                     )
                     lote = []
@@ -204,7 +208,7 @@ class DuckDBRepository:
                 if lote:
                     try:
                         hilo_conn.executemany(
-                            "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                             lote
                         )
                         lote = []
@@ -222,7 +226,7 @@ class DuckDBRepository:
         if lote:
             try:
                 hilo_conn.executemany(
-                    "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     lote
                 )
             except Exception:
