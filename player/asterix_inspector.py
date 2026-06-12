@@ -13,7 +13,9 @@ EUROCONTROL) llega en el Paso 3.
 from typing import Optional, List, Tuple
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QStandardItemModel, QStandardItem
+from PyQt6.QtGui import (
+    QFont, QStandardItemModel, QStandardItem, QTextCursor, QColor, QTextCharFormat,
+)
 from PyQt6.QtWidgets import (
     QDialog, QHBoxLayout, QVBoxLayout, QSplitter, QTreeView, QTextEdit,
     QLabel, QWidget, QHeaderView,
@@ -123,6 +125,25 @@ def _fmt_campo(clave: str, val) -> str:
     return str(val)
 
 
+def deep_offsets(category, raw_bytes) -> List[Tuple[str, int, int]]:
+    """Re-decodifica el registro y devuelve [(código_item, byte_ini, byte_fin)] del
+    primer Data Record. Lista vacía si la categoría aún no tiene deep-decode.
+    Usa el decoder real (sin tocar su camino normal) para que los offsets coincidan
+    exactamente con lo que la app decodifica."""
+    if not raw_bytes or len(raw_bytes) < 4:
+        return []
+    try:
+        cat = int(category)
+        if cat == 48:
+            from decoder.decoders import cat048
+            acc: list = []
+            cat048.decode(bytes(raw_bytes), 3, len(raw_bytes), 48, record_offsets=acc)
+            return [(code, s, e) for (ridx, code, s, e) in acc if ridx == 0]
+    except Exception:
+        return []
+    return []
+
+
 def _items_de_registro(info: dict) -> List[Tuple[str, str]]:
     """Lista [(código_item, summary)] del registro según su categoría."""
     cat = info.get("category")
@@ -175,6 +196,7 @@ class AsterixInspectorDialog(QDialog):
         self.tree.setModel(self.tree_model)
         self.tree.setAlternatingRowColors(True)
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.tree.selectionModel().currentChanged.connect(self._on_sel)
         vizq.addWidget(self.tree)
         splitter.addWidget(izq)
 
@@ -219,22 +241,68 @@ class AsterixInspectorDialog(QDialog):
         nodo_record.setData(cat)
         nodo_block.appendRow([nodo_record, QStandardItem(f"CAT{cat:03d}" if cat else "")])
 
-        items = _items_de_registro(self.info)
         filas_txt = []
-        for code, summary in items:
-            nodo_record.appendRow([
-                QStandardItem(f"Data Item {code}"),
-                QStandardItem(summary),
-            ])
-            filas_txt.append(f"{code:<10} {summary}")
+        summ_map = {code: summ for code, summ in _items_de_registro(self.info)}
+        items_off = deep_offsets(cat, self.raw_bytes)
 
-        if not items:
-            nodo_record.appendRow([
-                QStandardItem("(sin desglose para esta categoría)"),
-                QStandardItem(""),
-            ])
+        if items_off:
+            # Set completo de Items del FSPEC, con rango de bytes (resaltado al clickear).
+            for code, start, end in items_off:
+                summary = summ_map.get(code) or self._hex_rango(start, end)
+                n_item = QStandardItem(f"Data Item {code}")
+                n_item.setData((start, end), Qt.ItemDataRole.UserRole)
+                nodo_record.appendRow([n_item, QStandardItem(summary)])
+                filas_txt.append(f"{code:<10} [{start:>3}:{end:<3}]  {summary}")
+        else:
+            # Fallback (categorías sin deep-decode todavía): solo campos decodificados.
+            for code, summary in _items_de_registro(self.info):
+                nodo_record.appendRow([
+                    QStandardItem(f"Data Item {code}"), QStandardItem(summary)])
+                filas_txt.append(f"{code:<10} {summary}")
+            if not filas_txt:
+                nodo_record.appendRow([
+                    QStandardItem("(sin desglose para esta categoría)"), QStandardItem("")])
 
         self.tree.expandAll()
         self.tree.resizeColumnToContents(0)
         self.ascii_viewer.setText(
             "\n".join(filas_txt) if filas_txt else "(sin campos decodificados)")
+
+    def _hex_rango(self, start: int, end: int) -> str:
+        return " ".join(f"{b:02X}" for b in self.raw_bytes[start:end])
+
+    def _on_sel(self, current, previous):
+        if not current.isValid():
+            self.hex_viewer.setExtraSelections([])
+            return
+        idx0 = current.sibling(current.row(), 0)
+        item = self.tree_model.itemFromIndex(idx0)
+        rng = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        if rng:
+            self._resaltar(int(rng[0]), int(rng[1]))
+        else:
+            self.hex_viewer.setExtraSelections([])
+
+    def _resaltar(self, start: int, end: int):
+        """Pinta en el hex viewer los bytes [start, end) del Item seleccionado."""
+        fmt = QTextCharFormat()
+        fmt.setBackground(QColor("#E91E63"))
+        fmt.setForeground(QColor("white"))
+        doc = self.hex_viewer.document()
+        sels = []
+        for i in range(start, end):
+            line, col = divmod(i, 16)
+            block = doc.findBlockByNumber(line)
+            if not block.isValid():
+                continue
+            pos = block.position() + 6 + col * 3  # "AAAA  " = 6 chars; cada par = 3
+            cur = QTextCursor(doc)
+            cur.setPosition(pos)
+            cur.setPosition(pos + 2, QTextCursor.MoveMode.KeepAnchor)
+            sel = QTextEdit.ExtraSelection()
+            sel.cursor = cur
+            sel.format = fmt
+            sels.append(sel)
+        self.hex_viewer.setExtraSelections(sels)
+        if sels:
+            self.hex_viewer.setTextCursor(sels[0].cursor)

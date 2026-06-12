@@ -15,7 +15,20 @@ def _skip_variable_field(payload: bytes, offset: int) -> int:
     return offset
 
 
-def decode(payload: bytes, offset: int, block_length: int, category: int) -> List[Dict[str, Any]]:
+# Mapeo FRN → código de Item (UAP CAT048, EUROCONTROL-SPEC-0149-4). Usado por el
+# inspector de bajo nivel para etiquetar los rangos de bytes de cada Item.
+FRN_ITEM = {
+    1: "I048/010", 2: "I048/140", 3: "I048/020", 4: "I048/040", 5: "I048/070",
+    6: "I048/090", 7: "I048/130", 8: "I048/220", 9: "I048/240", 10: "I048/250",
+    11: "I048/161", 12: "I048/042", 13: "I048/200", 14: "I048/170", 15: "I048/210",
+    16: "I048/030", 17: "I048/080", 18: "I048/100", 19: "I048/110", 20: "I048/120",
+    21: "I048/230", 22: "I048/260", 23: "I048/055", 24: "I048/050", 25: "I048/065",
+    26: "I048/060",
+}
+
+
+def decode(payload: bytes, offset: int, block_length: int, category: int,
+           record_offsets=None) -> List[Dict[str, Any]]:
     """
     Decodifica un bloque de datos ASTERIX CAT048.
 
@@ -45,8 +58,10 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
         # FRNs 27-35 son para RE y SP, manejados explícitamente
     }
 
+    _rec_idx = -1
     while offset < end_offset:
         offset_previo = offset
+        _rec_idx += 1
         plot = {'category': cat}
 
         fspec, fspec_offset = read_fspec(payload, offset)
@@ -60,6 +75,7 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                 continue
 
             try:
+                _ofs_ini = offset  # inicio de los datos de este Item (para el inspector)
                 # Decodificación de campos principales
                 if frn == 1:  # I048/010 Data Source Identifier
                     plot['sac'] = payload[offset]
@@ -172,6 +188,11 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                         offset += field_len
                     else:
                         offset += 1
+
+                # Registrar el rango de bytes del Item (solo si lo pide el inspector)
+                if record_offsets is not None:
+                    record_offsets.append(
+                        (_rec_idx, FRN_ITEM.get(frn, f"FRN{frn}"), _ofs_ini, offset))
 
             except (IndexError, struct.error) as e:
                 print(f"[CAT 48 Error] Error de decodificación en FRN {frn}: {e}. Abortando plot.")
