@@ -112,6 +112,21 @@ class PlaybackWorker(QThread):
             self.tod_updated.emit(self._plots[self._play_index].time)
         self._mutex.unlock()
 
+    def seek_to_time(self, t: float):
+        """Reposiciona el playback al primer plot con time >= t (los plots están
+        ordenados temporalmente). Usado por el analizador de paquetes para
+        'teletransportar' la pantalla táctica al instante de una fila."""
+        self._mutex.lock()
+        if self._plots:
+            idx = len(self._plots) - 1
+            for i, p in enumerate(self._plots):
+                if p.time >= t:
+                    idx = i
+                    break
+            self._play_index = max(0, min(len(self._plots) - 1, idx))
+            self.tod_updated.emit(self._plots[self._play_index].time)
+        self._mutex.unlock()
+
     @property
     def total_frames(self) -> int:
         self._mutex.lock()
