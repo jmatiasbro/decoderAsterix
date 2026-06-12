@@ -15,7 +15,19 @@ def _skip_variable_field(payload: bytes, offset: int) -> int:
     return offset
 
 
-def decode(payload: bytes, offset: int, block_length: int, category: int) -> List[Dict[str, Any]]:
+# Mapeo FRN → código de Item para el inspector (depende del UAP plot/track).
+FRN_ITEM_PLOT = {
+    1: "I001/010", 2: "I001/020", 3: "I001/040", 4: "I001/070", 5: "I001/090",
+    6: "I001/130", 7: "I001/141", 8: "I001/131", 14: "I001/030",
+}
+FRN_ITEM_TRACK = {
+    1: "I001/010", 2: "I001/020", 3: "I001/161", 4: "I001/040", 5: "I001/042",
+    6: "I001/200", 7: "I001/070", 8: "I001/090", 9: "I001/141", 10: "I001/130",
+}
+
+
+def decode(payload: bytes, offset: int, block_length: int, category: int,
+           record_offsets=None) -> List[Dict[str, Any]]:
     """
     Decodifica un bloque de datos ASTERIX CAT001 (Monoradar).
 
@@ -35,8 +47,10 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
         8: 2, 9: 2, 10: -1, 11: 1, 12: 1, 13: -1, 14: -1
     }
 
+    _rec_idx = -1
     while offset < end_offset:
         offset_previo = offset
+        _rec_idx += 1
         plot = {'category': cat}
 
         fspec, fspec_offset = read_fspec(payload, offset)
@@ -65,6 +79,7 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                 continue
 
             try:
+                _ofs_ini = offset  # inicio de los datos de este Item (inspector)
                 # Decodificación de campos principales
                 if frn == 1:  # I001/010 Data Source Identifier
                     plot['sac'] = payload[offset]
@@ -148,6 +163,11 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                             offset += field_len
                     else:
                         offset += 1
+
+                if record_offsets is not None:
+                    mapa = FRN_ITEM_TRACK if is_track else FRN_ITEM_PLOT
+                    record_offsets.append(
+                        (_rec_idx, mapa.get(frn, f"FRN{frn}"), _ofs_ini, offset))
 
             except (IndexError, struct.error) as e:
                 print(f"[CAT 01 Error] Error de decodificación en FRN {frn}: {e}. Abortando plot.")
