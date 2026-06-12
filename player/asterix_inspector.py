@@ -240,6 +240,8 @@ def deep_records(category, raw_bytes):
             from decoder.decoders import cat048 as decoder
         elif cat == 21:
             from decoder.decoders import cat021 as decoder
+        elif cat == 1:
+            from decoder.decoders import cat001 as decoder
         if decoder is None:
             return []
         acc: list = []
