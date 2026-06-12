@@ -8,14 +8,14 @@ from typing import Dict, Tuple, List, Optional, Set, Any
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
-    QHBoxLayout, QFileDialog, QGroupBox, QSizePolicy,
+    QHBoxLayout, QGridLayout, QFileDialog, QGroupBox, QSizePolicy,
     QListWidget, QListWidgetItem, QPushButton, QLabel, QSlider, QComboBox,
     QSpinBox, QCheckBox, QLineEdit, QMessageBox, QProgressDialog,
     QMenuBar, QToolBar, QDockWidget, QScrollArea, QMenu,
     QDialog, QDialogButtonBox, QFormLayout
 )
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QThread, pyqtSignal, QEvent
-from PyQt6.QtGui import QFont, QColor, QPainterPath, QPixmap, QIcon, QBrush, QPainter
+from PyQt6.QtGui import QFont, QColor, QPainterPath, QPixmap, QIcon, QBrush, QPainter, QPen
 
 import qtawesome as qta
 
@@ -344,6 +344,234 @@ class RadarSensorItemWidget(QWidget):
     def _on_toggled(self, checked: bool):
         self.toggled.emit(self.text_label, checked)
 
+
+class PanelSensoresFlotante(QWidget):
+    """Panel flotante 'Sensores' arrastrable sobre el PPI.
+
+    Grilla horizontal de radares. Cada celda tiene dos controles independientes:
+      - CHECKBOX de color (cuadro): activa/desactiva el HISTÓRICO (estela) de ese
+        radar. Clic izquierdo alterna; clic derecho elige el color.
+      - Botón ON/OFF: prende/apaga la PRESENTACIÓN del radar (símbolos/plots).
+    Emite señales que el MainWindow conecta a sus handlers.
+    """
+    presentacionToggled = pyqtSignal(str, bool)   # botón ON/OFF (símbolos)
+    historicoToggled = pyqtSignal(str, bool)       # checkbox color (estela)
+    colorClicked = pyqtSignal(str)
+
+    N_COLS = 2          # columnas de la grilla
+    CELL_W = 162        # ancho de cada celda (checkbox + nombre + ON/OFF)
+    ROW_H = 22
+    ROW_SPACING = 4
+    HEADER_H = 28       # título + botones Todos/Ninguno
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("panelSensores")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("""
+            QWidget#panelSensores { background-color: rgba(11, 14, 20, 230);
+                border: 1px solid rgba(0, 229, 255, 110); border-radius: 6px; }
+            QLabel { background: transparent; border: none; }
+        """)
+        self._rows: Dict[str, dict] = {}
+        self._drag_offset = None
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(8, 6, 8, 8)
+        root.setSpacing(6)
+
+        # Barra de título (zona de arrastre)
+        header = QHBoxLayout()
+        titulo = QLabel("Sensores")
+        titulo.setStyleSheet("color:#00E5FF; font-weight:bold; font-size:9pt;")
+        header.addWidget(titulo)
+        header.addStretch()
+        btn_todos = QPushButton("Todos")
+        btn_ninguno = QPushButton("Ninguno")
+        for b in (btn_todos, btn_ninguno):
+            b.setFixedHeight(18)
+            b.setStyleSheet("font-size:7pt; padding:1px 6px;")
+        btn_todos.clicked.connect(lambda: self._set_all(True))
+        btn_ninguno.clicked.connect(lambda: self._set_all(False))
+        header.addWidget(btn_todos)
+        header.addWidget(btn_ninguno)
+        root.addLayout(header)
+
+        self._grid = QGridLayout()
+        self._grid.setHorizontalSpacing(10)
+        self._grid.setVerticalSpacing(self.ROW_SPACING)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        root.addLayout(self._grid)
+
+        self.lbl_vacio = QLabel("— sin sensores —")
+        self.lbl_vacio.setStyleSheet("color:#6B7A8D; font-size:8pt;")
+        self._grid.addWidget(self.lbl_vacio, 0, 0)
+        self._refrescar_tamano()
+
+    def agregar_sensor(self, text_label: str, color: QColor,
+                       presentacion: bool = True, historico: bool = True):
+        if text_label in self._rows:
+            return
+        self.lbl_vacio.setVisible(False)
+
+        cell = QWidget()
+        cell.setFixedHeight(self.ROW_H)
+        cell.setFixedWidth(self.CELL_W)
+        h = QHBoxLayout(cell)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(6)
+
+        swatch = QLabel()
+        swatch.setFixedSize(16, 16)
+        swatch.setCursor(Qt.CursorShape.PointingHandCursor)
+        swatch.setToolTip("Histórico/estela — Izq: activar/desactivar · Der: color")
+        swatch.mousePressEvent = lambda e, t=text_label: self._on_swatch_click(e, t)
+        h.addWidget(swatch)
+
+        lbl = QLabel(self._short_name(text_label))
+        lbl.setStyleSheet("color:#E0E6ED; font-size:8pt; font-weight:bold;")
+        h.addWidget(lbl)
+        h.addStretch()
+
+        btn = QPushButton("ON" if presentacion else "OFF")
+        btn.setFixedSize(52, 22)
+        btn.setToolTip("Presentación del radar (símbolos/plots)")
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.clicked.connect(lambda _=False, t=text_label: self._on_btn_click(t))
+        h.addWidget(btn)
+
+        idx = len(self._rows)
+        self._grid.addWidget(cell, idx // self.N_COLS, idx % self.N_COLS)
+        self._rows[text_label] = {"cell": cell, "swatch": swatch, "label": lbl,
+                                  "btn": btn, "color": QColor(color),
+                                  "historico": historico, "presentacion": presentacion}
+        self._render_swatch(swatch, color, historico)
+        self._style_btn(btn, presentacion)
+        self._refrescar_tamano()
+
+    def _refrescar_tamano(self):
+        """Fija el tamaño del panel manualmente. Con el panel ya visible, el
+        sizeHint del layout anidado no propaga, así que adjustSize() colapsaría
+        las celdas. Calculamos ancho/alto nosotros según la grilla."""
+        n = len(self._rows)
+        ncols = min(self.N_COLS, n) if n else 1
+        nrows = (n + self.N_COLS - 1) // self.N_COLS if n else 0
+        ancho = 16 + ncols * self.CELL_W + (ncols - 1) * 10
+        if n == 0:
+            alto = self.HEADER_H + 26
+        else:
+            alto = self.HEADER_H + nrows * self.ROW_H + (nrows - 1) * self.ROW_SPACING + 14
+        self.setFixedWidth(max(ancho, 230))
+        self.setFixedHeight(alto)
+        lay = self.layout()
+        if lay is not None:
+            lay.invalidate()
+            lay.activate()
+
+    def actualizar_color(self, text_label: str, color: QColor):
+        r = self._rows.get(text_label)
+        if r:
+            r["color"] = QColor(color)
+            self._render_swatch(r["swatch"], color, r["historico"])
+
+    def set_presentacion(self, text_label: str, activo: bool):
+        r = self._rows.get(text_label)
+        if r:
+            r["presentacion"] = activo
+            r["btn"].setText("ON" if activo else "OFF")
+            self._style_btn(r["btn"], activo)
+
+    def set_historico(self, text_label: str, activo: bool):
+        r = self._rows.get(text_label)
+        if r:
+            r["historico"] = activo
+            self._render_swatch(r["swatch"], r["color"], activo)
+
+    def limpiar(self):
+        for r in self._rows.values():
+            r["cell"].setParent(None)
+            r["cell"].deleteLater()
+        self._rows.clear()
+        self.lbl_vacio.setVisible(True)
+        self._refrescar_tamano()
+
+    def _on_swatch_click(self, event, text: str):
+        if event.button() == Qt.MouseButton.LeftButton:
+            r = self._rows.get(text)
+            if r:
+                nuevo = not r["historico"]
+                r["historico"] = nuevo
+                self._render_swatch(r["swatch"], r["color"], nuevo)
+                self.historicoToggled.emit(text, nuevo)
+        elif event.button() == Qt.MouseButton.RightButton:
+            self.colorClicked.emit(text)
+
+    def _on_btn_click(self, text: str):
+        r = self._rows.get(text)
+        if r:
+            nuevo = not r["presentacion"]
+            r["presentacion"] = nuevo
+            r["btn"].setText("ON" if nuevo else "OFF")
+            self._style_btn(r["btn"], nuevo)
+            self.presentacionToggled.emit(text, nuevo)
+
+    def _set_all(self, activo: bool):
+        for text, r in self._rows.items():
+            if r["presentacion"] != activo:
+                r["presentacion"] = activo
+                r["btn"].setText("ON" if activo else "OFF")
+                self._style_btn(r["btn"], activo)
+                self.presentacionToggled.emit(text, activo)
+
+    def _style_btn(self, btn: QPushButton, on: bool):
+        if on:
+            btn.setStyleSheet("QPushButton{background:#1f7a1f; border:1px solid #39FF14;"
+                              "color:#CFFFCF; font-weight:bold; font-size:8pt; border-radius:3px;}")
+        else:
+            btn.setStyleSheet("QPushButton{background:#5a1c1c; border:1px solid #FF4040;"
+                              "color:#FFD0D0; font-weight:bold; font-size:8pt; border-radius:3px;}")
+
+    def _render_swatch(self, lbl: QLabel, color: QColor, activo: bool = True):
+        pm = QPixmap(16, 16)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if activo:
+            # Cuadro relleno con el color de la estela (histórico activo)
+            p.setBrush(QBrush(color))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(0, 0, 15, 15, 3, 3)
+        else:
+            # Histórico desactivado: solo contorno gris
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(QColor("#5A6472"), 1.5))
+            p.drawRoundedRect(1, 1, 13, 13, 3, 3)
+        p.end()
+        lbl.setPixmap(pm)
+
+    @staticmethod
+    def _short_name(text_label: str) -> str:
+        m = re.match(r'^\[\d+/\d+\]\s*(.+)$', text_label)
+        return (m.group(1) if m else text_label).strip()[:11]
+
+    # --- arrastre (las áreas vacías mueven el panel; los cuadros consumen su clic) ---
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = event.position().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if self._drag_offset is not None:
+            nueva = self.mapToParent(event.position().toPoint() - self._drag_offset)
+            if self.parent() is not None:
+                r = self.parent().rect()
+                nueva.setX(max(0, min(nueva.x(), r.width() - self.width())))
+                nueva.setY(max(0, min(nueva.y(), r.height() - self.height())))
+            self.move(nueva)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_offset = None
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -502,7 +730,8 @@ class MainWindow(QMainWindow):
         site_params_dir = os.path.join(base_dir, "default-site-params")
         self.sensores = cargar_sensores(site_params_dir)
         self.sensores_conocidos: Set[str] = set()
-        self.sensores_activos: Set[str] = set()
+        self.sensores_activos: Set[str] = set()      # presentación (símbolos/plots)
+        self.estelas_activas: Set[str] = set()       # histórico/estela por radar
         self.autocentered_on_first_sensor = False
         self._sensor_rpms: Dict[Tuple[int, int], float] = {}
         self._sensor_categories: Dict[Tuple[int, int], Set[int]] = {}
@@ -600,6 +829,15 @@ class MainWindow(QMainWindow):
         self._reposicionar_reloj()
         self.reloj_utc.show()
         self.reloj_utc.raise_()
+
+        # 6b. Panel flotante 'Sensores' (arrastrable, ON/OFF + color de estela)
+        self.panel_sensores = PanelSensoresFlotante(self.radar)
+        self.panel_sensores.presentacionToggled.connect(self._on_custom_sensor_toggled)
+        self.panel_sensores.historicoToggled.connect(self._on_historico_toggled)
+        self.panel_sensores.colorClicked.connect(self._on_sensor_color_clicked)
+        self.panel_sensores.move(20, 20)
+        self.panel_sensores.show()
+        self.panel_sensores.raise_()
         # Reubicar el reloj cuando cambia el ancho del radar (ej. al ensanchar el
         # dock lateral, que no dispara el resizeEvent de la ventana).
         self.radar.installEventFilter(self)
@@ -663,6 +901,11 @@ class MainWindow(QMainWindow):
         self.act_toggle_reloj.setCheckable(True)
         self.act_toggle_reloj.setChecked(True)
         self.act_toggle_reloj.toggled.connect(self._toggle_reloj_utc)
+        self.act_toggle_panel_sensores = menu_ver.addAction("Panel Sensores Flotante")
+        self.act_toggle_panel_sensores.setCheckable(True)
+        self.act_toggle_panel_sensores.setChecked(True)
+        self.act_toggle_panel_sensores.toggled.connect(
+            lambda v: self.panel_sensores.setVisible(v) or (self.panel_sensores.raise_() if v else None))
         self.act_toggle_incumbencia = menu_ver.addAction("Vista de Incumbencia (Jurisdicción)")
         self.act_toggle_incumbencia.setCheckable(True)
         self.act_toggle_incumbencia.setChecked(False)
@@ -698,8 +941,6 @@ class MainWindow(QMainWindow):
 
         # Menú Mapas
         self.menu_mapas = menu_bar.addMenu("Mapas")
-        self.act_map_editor = self.menu_mapas.addAction("Gestor de Capas del Sector...", self._abrir_map_editor)
-        self.menu_mapas.addSeparator()
         submenu_inf = self.menu_mapas.addMenu("Rutas Inferiores")
         
         for name, path in [
@@ -972,7 +1213,11 @@ class MainWindow(QMainWindow):
         self.list_sensores.setFixedHeight(120)
         self.list_sensores.itemChanged.connect(self._on_sensor_check_changed)
         v_s.addWidget(self.list_sensores)
-        v_layout.addWidget(grupo_sacsic)
+        # El control de radares activos ahora vive en el panel flotante 'Sensores'
+        # (menú Ver). Mantenemos este grupo oculto como respaldo de estado/sync
+        # interno (list_sensores lo usan el registro de sensores y _sync_panel_sensores).
+        grupo_sacsic.setParent(container)
+        grupo_sacsic.setVisible(False)
 
         # C. Grupo Entrada UDP en Vivo
         grupo_udp = QGroupBox("Entrada UDP en Vivo")
@@ -1276,6 +1521,34 @@ class MainWindow(QMainWindow):
             self.radar.sensores_visibles = self.sensores_activos.copy()
             self.radar.update()
 
+            # Mantener sincronizados lista lateral y panel flotante
+            if hasattr(self, 'panel_sensores'):
+                self.panel_sensores.set_presentacion(text, checked)
+            for i in range(self.list_sensores.count()):
+                w = self.list_sensores.itemWidget(self.list_sensores.item(i))
+                if w and getattr(w, 'text_label', None) == text and w.checkbox.isChecked() != checked:
+                    w.checkbox.blockSignals(True)
+                    w.checkbox.setChecked(checked)
+                    w.checkbox.blockSignals(False)
+                    break
+
+    def _on_historico_toggled(self, text: str, checked: bool):
+        """Activa/desactiva el histórico (estela) de un radar puntual.
+        Independiente de la presentación (ON/OFF)."""
+        match = re.match(r'^\[(\d+)/(\d+)\]', text)
+        if not match:
+            return
+        sac, sic = map(int, match.groups())
+        sensor_id = f"{sac}/{sic}"
+        if not hasattr(self, 'estelas_activas'):
+            self.estelas_activas = set(self.sensores_conocidos)
+        if checked:
+            self.estelas_activas.add(sensor_id)
+        else:
+            self.estelas_activas.discard(sensor_id)
+        self.radar.estelas_visibles = self.estelas_activas.copy()
+        self.radar.update()
+
     def _on_sensor_color_clicked(self, text: str):
         """Abre un selector de color para cambiar el color de un sensor en vivo."""
         from PyQt6.QtWidgets import QColorDialog
@@ -1294,6 +1567,9 @@ class MainWindow(QMainWindow):
             if widget and getattr(widget, 'text_label', None) == text:
                 widget.set_color(nuevo)
                 break
+        # Reflejar el cambio en el panel flotante
+        if hasattr(self, 'panel_sensores'):
+            self.panel_sensores.actualizar_color(text, nuevo)
 
     def _on_sensor_check_changed(self, item):
         pass
@@ -1506,10 +1782,13 @@ class MainWindow(QMainWindow):
         self.list_sensores.blockSignals(True)
         self.list_sensores.clear()
         self.list_sensores.blockSignals(False)
-        
+        if hasattr(self, 'panel_sensores'):
+            self.panel_sensores.limpiar()
+
         self.radar.limpiar_pantalla()
         self.sensores_conocidos.clear()
         self.sensores_activos.clear()
+        self.estelas_activas.clear()
         self.autocentered_on_first_sensor = False
         self._sensor_categories.clear()
         self._sensor_rpms.clear()
@@ -1616,9 +1895,34 @@ class MainWindow(QMainWindow):
             self.worker.stop()
             self.worker = None
 
+    def _sync_panel_sensores(self):
+        """Reconstruye el panel flotante a partir de la lista lateral (red de seguridad
+        ante cualquier desfase de orden en la detección de sensores)."""
+        if not hasattr(self, 'panel_sensores'):
+            return
+        self.panel_sensores.limpiar()
+        for i in range(self.list_sensores.count()):
+            w = self.list_sensores.itemWidget(self.list_sensores.item(i))
+            if not w:
+                continue
+            text_label = getattr(w, 'text_label', None)
+            if not text_label:
+                continue
+            m = re.match(r'^\[(\d+)/(\d+)\]', text_label)
+            if not m:
+                continue
+            sac, sic = map(int, m.groups())
+            sensor_id = f"{sac}/{sic}"
+            color = self.radar._get_sensor_color(sac, sic)
+            present = sensor_id in self.sensores_activos
+            histo = sensor_id in getattr(self, 'estelas_activas', self.sensores_conocidos)
+            self.panel_sensores.agregar_sensor(text_label, color,
+                                               presentacion=present, historico=histo)
+
     def _on_scan_complete(self, success: bool):
         self.btn_cargar.setEnabled(True)
         self.btn_cargar.setText(" Modo Playback")
+        self._sync_panel_sensores()
         if self.worker:
             self.worker.wait() # Asegurar que el hilo de escaneo termine y se una completamente
         if success:
@@ -1680,10 +1984,16 @@ class MainWindow(QMainWindow):
             self.sensores_conocidos.add(sensor_id)
         if sensor_id not in self.sensores_activos:
             self.sensores_activos.add(sensor_id)
-            
+        if not hasattr(self, 'estelas_activas'):
+            self.estelas_activas = set()
+        self.estelas_activas.add(sensor_id)
+
         if hasattr(self, 'radar') and self.radar is not None:
             if hasattr(self.radar, 'sensores_visibles'):
                 self.radar.sensores_visibles.add(sensor_id)
+            if getattr(self.radar, 'estelas_visibles', None) is None:
+                self.radar.estelas_visibles = set()
+            self.radar.estelas_visibles.add(sensor_id)
 
         # 2. Evitar agregar duplicados al combo box
         exists_in_combo = False
@@ -1730,6 +2040,11 @@ class MainWindow(QMainWindow):
 
             self.list_sensores.blockSignals(False)
             self._ajustar_alto_lista_sensores()
+
+            # Reflejar el sensor en el panel flotante 'Sensores'
+            if hasattr(self, 'panel_sensores'):
+                self.panel_sensores.agregar_sensor(text_label, color_sensor,
+                                                   presentacion=True, historico=True)
 
         # 4. Autocenter en el primer sensor detectado (una única vez para evitar re-proyectar el mapa DXF constantemente)
         if not getattr(self, 'autocentered_on_first_sensor', False) and len(self.sensores_conocidos) == 1:
@@ -2997,6 +3312,7 @@ class MainWindow(QMainWindow):
             self.radar.limpiar_pantalla()
             self.sensores_conocidos.clear()
             self.sensores_activos.clear()
+            self.estelas_activas.clear()
             self._modo_manual = False  # permitir default automático por nº de sensores
             self._auto_modo_estado = None
             self.autocentered_on_first_sensor = False
@@ -3008,6 +3324,8 @@ class MainWindow(QMainWindow):
             self.list_sensores.blockSignals(True)
             self.list_sensores.clear()
             self.list_sensores.blockSignals(False)
+            if hasattr(self, 'panel_sensores'):
+                self.panel_sensores.limpiar()
 
             self.combo_sensor.blockSignals(True)
             self.combo_sensor.clear()

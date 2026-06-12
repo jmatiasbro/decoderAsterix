@@ -2927,6 +2927,10 @@ class RadarWidget(QWidget):
                         is_active = (cx * cx + cy * cy) < 1000.0 * 1000.0
                         
                         if is_active:
+                            # El radar activo se ancla al origen de proyección (0,0) para
+                            # que el círculo/etiqueta coincidan con el símbolo 'Y' del sensor.
+                            # La coord. del .map difiere <1km de la de site-params y causaba desfase.
+                            cx, cy = 0.0, 0.0
                             # Highlighted active radar coverage
                             pen_active = QPen(QColor(0, 229, 255, 100))
                             pen_active.setWidthF(inv_z * 1.2)
@@ -3133,11 +3137,13 @@ class RadarWidget(QWidget):
                     if self.plot_filter_fn and not self.plot_filter_fn(plot):
                         continue
 
-                    # Filtro de sensores múltiples para historial
+                    # Filtro de HISTÓRICO por radar (estela). Independiente de la
+                    # presentación (ON/OFF): el checkbox de color de cada radar
+                    # activa/desactiva solo su estela.
                     if plot.category != 62:
                         sensor_id = getattr(plot, 'sac_sic', f"UNK_CAT{plot.category}")
-                        visibles = getattr(self, 'sensores_visibles', None)
-                        if visibles is not None and sensor_id not in visibles:
+                        est_vis = getattr(self, 'estelas_visibles', None)
+                        if est_vis is not None and sensor_id not in est_vis:
                             continue
 
                     try:
@@ -3248,8 +3254,8 @@ class RadarWidget(QWidget):
                                 if pt.raw_x is not None and pt.raw_y is not None and is_valid_coord(pt.raw_x, pt.raw_y):
                                     if pt.sac is not None and pt.sic is not None:
                                         sensor_id_pt = f"{pt.sac}/{pt.sic}"
-                                        visibles = getattr(self, 'sensores_visibles', None)
-                                        if visibles is not None and sensor_id_pt not in visibles:
+                                        est_vis = getattr(self, 'estelas_visibles', None)
+                                        if est_vis is not None and sensor_id_pt not in est_vis:
                                             continue
                                         raw_color = self._get_sensor_color(pt.sac, pt.sic)
                                     else:

@@ -67,6 +67,17 @@ class STCA_Engine:
 
                 # 1. EVALUACIÓN ACTUAL (Fase de Violación)
                 dist_actual = self.haversine_nm(lat1, lon1, lat2, lon2)
+
+                # Supresión de DUPLICADOS de la misma aeronave: el mismo avión
+                # visto por dos radares y no fusionado (uno suele venir sin Mode
+                # 3/A ni Mode S, por lo que la supresión por identidad de arriba
+                # no lo atrapa). Si están prácticamente superpuestos y a la misma
+                # altitud, no es un conflicto real sino dos representaciones del
+                # mismo blanco. Umbral conservador: dos aeronaves distintas nunca
+                # vuelan a <0.5 NM co-altitud (sería colisión) → no oculta STCA real.
+                if dist_actual < 0.5 and diff_vertical_ft < 200:
+                    continue
+
                 if dist_actual < self.min_horizontal_nm:
                     conflictos.append((t1_id, t2_id, 'VIOLATION', 0, dist_actual, diff_vertical_ft))
                     continue
