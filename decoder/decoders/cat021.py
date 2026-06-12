@@ -12,7 +12,33 @@ def _skip_variable_field(payload: bytes, offset: int) -> int:
         if (byte & 1) == 0:  # FX bit is 0
             break
     return offset
-def decode_cat021_v026(payload: bytes, offset: int, block_length: int, category: int) -> List[Dict[str, Any]]:
+
+
+# Mapeo FRN → código de Item para el inspector de bajo nivel.
+# CAT021 Ed 2.x (UAP estándar EUROCONTROL-SPEC-0149-12).
+FRN_ITEM_V24 = {
+    1: "I021/010", 2: "I021/040", 3: "I021/161", 4: "I021/015", 5: "I021/071",
+    6: "I021/130", 7: "I021/131", 8: "I021/072", 9: "I021/150", 10: "I021/151",
+    11: "I021/080", 12: "I021/073", 13: "I021/074", 14: "I021/075", 15: "I021/076",
+    16: "I021/140", 17: "I021/090", 18: "I021/210", 19: "I021/070", 20: "I021/230",
+    21: "I021/145", 22: "I021/152", 23: "I021/200", 24: "I021/155", 25: "I021/157",
+    26: "I021/160", 27: "I021/165", 28: "I021/077", 29: "I021/170", 30: "I021/020",
+    31: "I021/220", 32: "I021/146", 33: "I021/148", 34: "I021/110", 35: "I021/271",
+    36: "I021/280", 38: "I021/SP", 39: "I021/RE", 42: "I021/250",
+}
+# CAT021 v0.26 (UAP heredado, según los comentarios de uap_lengths_v026).
+FRN_ITEM_V026 = {
+    1: "I021/010", 2: "I021/040", 3: "I021/030", 4: "I021/130", 5: "I021/080",
+    6: "I021/140", 7: "I021/090", 8: "I021/210", 9: "I021/230", 10: "I021/145",
+    11: "I021/150", 12: "I021/151", 13: "I021/152", 14: "I021/155", 15: "I021/157",
+    16: "I021/160", 17: "I021/165", 18: "I021/170", 19: "I021/095", 20: "I021/032",
+    21: "I021/200", 22: "I021/020", 23: "I021/220", 24: "I021/146", 25: "I021/148",
+    26: "I021/110", 27: "I021/070", 28: "I021/131", 34: "I021/RE", 35: "I021/SP",
+}
+
+
+def decode_cat021_v026(payload: bytes, offset: int, block_length: int, category: int,
+                       record_offsets=None) -> List[Dict[str, Any]]:
     """
     Decodifica un bloque de datos ASTERIX CAT021 v0.26 (ADS-B heredado para Paraná 226/103).
     """
@@ -54,8 +80,10 @@ def decode_cat021_v026(payload: bytes, offset: int, block_length: int, category:
         35: -2, # SP (Special Purpose Field)
     }
 
+    _rec_idx = -1
     while offset < end_offset:
         offset_previo = offset
+        _rec_idx += 1
         plot = {'category': cat}
         plot_salvado = False
 
@@ -70,6 +98,7 @@ def decode_cat021_v026(payload: bytes, offset: int, block_length: int, category:
                 continue
 
             try:
+                _ofs_ini = offset  # inicio de los datos de este Item (inspector)
                 # Decodificación de campos principales v0.26
                 if frn == 1:  # I021/010 Data Source Identifier
                     plot['sac'] = payload[offset]
@@ -124,6 +153,10 @@ def decode_cat021_v026(payload: bytes, offset: int, block_length: int, category:
                         field_len = payload[offset]
                         offset += field_len
 
+                if record_offsets is not None:
+                    record_offsets.append(
+                        (_rec_idx, FRN_ITEM_V026.get(frn, f"FRN{frn}"), _ofs_ini, offset))
+
             except (IndexError, struct.error):
                 if plot and ('latitude' in plot or 'mode_s' in plot or 'callsign' in plot):
                     plot['category'] = 21
@@ -142,7 +175,8 @@ def decode_cat021_v026(payload: bytes, offset: int, block_length: int, category:
     return plots_locales
 
 
-def decode(payload: bytes, offset: int, block_length: int, category: int) -> List[Dict[str, Any]]:
+def decode(payload: bytes, offset: int, block_length: int, category: int,
+           record_offsets=None) -> List[Dict[str, Any]]:
     """
     Decodifica un bloque de datos ASTERIX CAT021 (ADS-B).
 
@@ -158,7 +192,8 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
             sac = payload[temp_fspec_offset]
             sic = payload[temp_fspec_offset + 1]
             if sac == 226 and sic == 103:
-                return decode_cat021_v026(payload, offset, block_length, category)
+                return decode_cat021_v026(payload, offset, block_length, category,
+                                          record_offsets=record_offsets)
     except Exception:
         pass
     # -------------------------------------------------------------
@@ -190,8 +225,10 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
         42: -3,     # FIX: I021/250 Mode S MB Data
     }
 
+    _rec_idx = -1
     while offset < end_offset:
         offset_previo = offset
+        _rec_idx += 1
         plot = {'category': cat}
         plot_salvado = False  # FASE 1: Bandera de salvataje parcial
 
@@ -206,6 +243,7 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                 continue
 
             try:
+                _ofs_ini = offset  # inicio de los datos de este Item (inspector)
                 # Decodificación de campos principales
                 if frn == 1:  # I021/010 Data Source Identifier
                     plot['sac'] = payload[offset]
@@ -277,6 +315,10 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                     if frn == 42 and offset < len(payload):
                         rep = payload[offset]
                         offset += 1 + (rep * 7) # REP + N * (7 bytes de datos)
+
+                if record_offsets is not None:
+                    record_offsets.append(
+                        (_rec_idx, FRN_ITEM_V24.get(frn, f"FRN{frn}"), _ofs_ini, offset))
 
             except (IndexError, struct.error) as e:
                 # FASE 1: SALVATAJE PARCIAL ANTES DE ABORTAR POR ERROR
