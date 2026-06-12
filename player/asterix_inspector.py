@@ -18,7 +18,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QDialog, QHBoxLayout, QVBoxLayout, QSplitter, QTreeView, QTextEdit,
-    QLabel, QWidget, QHeaderView,
+    QLabel, QWidget, QHeaderView, QTextBrowser,
 )
 
 
@@ -105,6 +105,17 @@ _SPEC = {
         ("I062/185", [("GS", "ground_speed"), ("HDG", "track_angle")]),
         ("I062/220", [("V/R", "vertical_rate")]),
         ("I062/245", [("ID", "callsign")]),
+    ],
+    34: [
+        ("I034/010", [("SAC", "sac"), ("SIC", "sic")]),
+        ("I034/000", [("TYPE", "msg_type")]),
+        ("I034/030", [("TOD", "timestamp")]),
+        ("I034/020", [("SEC", "sector_number"), ("AZI", "azimuth")]),
+        ("I034/041", [("PERIOD", "rotation_period"), ("RPM", "antenna_rpm")]),
+    ],
+    23: [
+        ("I023/010", [("SAC", "sac"), ("SIC", "sic")]),
+        ("I023/020", [("STATE", "system_state"), ("UPS", "ups_active")]),
     ],
 }
 
@@ -196,6 +207,8 @@ ITEM_NAMES = {
     "I034/041": "Antenna Rotation Speed",
     "I034/050": "System Configuration and Status",
     "I034/060": "System Processing Mode", "I034/070": "Message Count Values",
+    # CAT023
+    "I023/010": "Data Source Identifier", "I023/020": "System Status",
 }
 
 
@@ -224,6 +237,9 @@ def _plot_a_info(p: dict) -> dict:
         info["ground_speed"] = ed["ground_speed_nms"] * 3600.0
     if ed.get("track_angle") is not None:
         info["track_angle"] = ed["track_angle"]
+    # Copiar llaves de extra_data directamente al info
+    for k, v in ed.items():
+        info.setdefault(k, v)
     return info
 
 
@@ -242,6 +258,10 @@ def deep_records(category, raw_bytes):
             from decoder.decoders import cat021 as decoder
         elif cat == 1:
             from decoder.decoders import cat001 as decoder
+        elif cat == 34:
+            from decoder.decoders import cat034 as decoder
+        elif cat == 23:
+            from decoder.decoders import cat023 as decoder
         if decoder is None:
             return []
         acc: list = []
@@ -277,6 +297,83 @@ def _items_de_registro(info: dict) -> List[Tuple[str, str]]:
         if partes:
             salida.append((code, "  ".join(partes)))
     return salida
+
+
+def _u(data: bytes, a: int, b: int) -> int:
+    return int.from_bytes(data[a:b], "big")
+
+
+def _sf_sacsic(d):
+    return [("SAC (System Area Code)", d[0]), ("SIC (System Id Code)", d[1])]
+
+
+def _sf_048_140(d):
+    tod = _u(d, 0, 3) / 128.0
+    return [("Time of Day (s) LSB=1/128", f"{tod:.3f}"), ("ToD HH:MM:SS.mmm", _fmt_tod(tod))]
+
+
+def _sf_048_040(d):
+    rho = _u(d, 0, 2) / 256.0
+    theta = _u(d, 2, 4) * 360.0 / 65536.0
+    return [("RHO (NM) LSB=1/256", f"{rho:.4f}"),
+            ("THETA (deg) LSB=360/2^16", f"{theta:.4f}")]
+
+
+def _sf_048_070(d):
+    raw = _u(d, 0, 2)
+    return [("V (1=Validated)", 0 if raw & 0x8000 else 1),
+            ("G (1=Garbled)", 1 if raw & 0x4000 else 0),
+            ("L (1=Smoothed)", 1 if raw & 0x2000 else 0),
+            ("Mode-3/A code (octal)", f"{raw & 0x0FFF:04o}")]
+
+
+def _sf_048_090(d):
+    raw = _u(d, 0, 2)
+    fl = raw & 0x3FFF
+    if fl & 0x2000:
+        fl -= 0x4000
+    return [("V (1=Validated)", 0 if raw & 0x8000 else 1),
+            ("G (1=Garbled)", 1 if raw & 0x4000 else 0),
+            ("Flight Level LSB=1/4", f"{fl * 0.25:.2f}")]
+
+
+def _sf_048_220(d):
+    return [("Aircraft Address (ICAO 24-bit)", d[:3].hex().upper())]
+
+
+def _sf_048_240(d):
+    from decoder.asterix_utils import _decode_callsign
+    return [("Aircraft Identification", _decode_callsign(d[:6]))]
+
+
+def _sf_048_161(d):
+    return [("Track Number", _u(d, 0, 2))]
+
+
+def _sf_034_020(d):
+    raw = d[0]
+    return [("Sector Number (raw)", raw),
+            ("Antenna Azimuth (deg) LSB=360/256", f"{raw * 360.0 / 256.0:.4f}")]
+
+
+# Decodificadores de subcampos por Item (Detailed Description). Se amplían de a poco.
+SUBFIELD_DECODERS = {
+    "I048/010": _sf_sacsic, "I021/010": _sf_sacsic, "I062/010": _sf_sacsic,
+    "I001/010": _sf_sacsic, "I034/010": _sf_sacsic,
+    "I048/140": _sf_048_140, "I048/040": _sf_048_040, "I048/070": _sf_048_070,
+    "I048/090": _sf_048_090, "I048/220": _sf_048_220, "I048/240": _sf_048_240,
+    "I048/161": _sf_048_161, "I034/020": _sf_034_020,
+}
+
+
+def _subfields(code: str, data: bytes):
+    fn = SUBFIELD_DECODERS.get(code)
+    if not fn:
+        return []
+    try:
+        return [(n, str(v)) for n, v in fn(data)]
+    except Exception:
+        return []
 
 
 class AsterixInspectorDialog(QDialog):
@@ -330,18 +427,18 @@ class AsterixInspectorDialog(QDialog):
         vhex.addWidget(self.hex_viewer)
         der.addWidget(cont_hex)
 
-        cont_asc = QWidget()
-        vasc = QVBoxLayout(cont_asc)
-        vasc.setContentsMargins(0, 0, 0, 0)
-        vasc.addWidget(QLabel("Datos de ingeniería decodificados:"))
-        self.ascii_viewer = QTextEdit()
-        self.ascii_viewer.setReadOnly(True)
-        self.ascii_viewer.setFont(QFont("Consolas", 10))
-        vasc.addWidget(self.ascii_viewer)
-        der.addWidget(cont_asc)
+        cont_det = QWidget()
+        vdet = QVBoxLayout(cont_det)
+        vdet.setContentsMargins(0, 0, 0, 0)
+        vdet.addWidget(QLabel("Detalle del campo seleccionado:"))
+        self.detail = QTextBrowser()
+        self.detail.setOpenExternalLinks(True)
+        vdet.addWidget(self.detail)
+        der.addWidget(cont_det)
 
         splitter.addWidget(der)
         splitter.setSizes([460, 520])
+        der.setSizes([200, 400])
         layout.addWidget(splitter)
 
     def _etiqueta_item(self, code: str) -> str:
@@ -371,7 +468,7 @@ class AsterixInspectorDialog(QDialog):
                 for code, start, end in items:
                     summary = summ_map.get(code) or self._hex_rango(start, end)
                     n_item = QStandardItem(self._etiqueta_item(code))
-                    n_item.setData((start, end), Qt.ItemDataRole.UserRole)
+                    n_item.setData((code, start, end, summary), Qt.ItemDataRole.UserRole)
                     nodo_rec.appendRow([n_item, QStandardItem(summary)])
                     filas_txt.append(f"{code:<10} [{start:>3}:{end:<3}]  {summary}")
         else:
@@ -389,8 +486,9 @@ class AsterixInspectorDialog(QDialog):
 
         self.tree.expandAll()
         self.tree.resizeColumnToContents(0)
-        self.ascii_viewer.setText(
-            "\n".join(filas_txt) if filas_txt else "(sin campos decodificados)")
+        self.detail.setHtml(
+            "<p style='color:#666'>Seleccioná un <b>Data Item</b> en el árbol para ver "
+            "sus bytes (hex y binario) y su desglose.</p>")
 
     def _hex_rango(self, start: int, end: int) -> str:
         return " ".join(f"{b:02X}" for b in self.raw_bytes[start:end])
@@ -401,11 +499,62 @@ class AsterixInspectorDialog(QDialog):
             return
         idx0 = current.sibling(current.row(), 0)
         item = self.tree_model.itemFromIndex(idx0)
-        rng = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
-        if rng:
-            self._resaltar(int(rng[0]), int(rng[1]))
+        data = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        if data:
+            code, start, end, summary = data
+            self._resaltar(int(start), int(end))
+            self.detail.setHtml(self._html_detalle_item(code, int(start), int(end), summary))
         else:
             self.hex_viewer.setExtraSelections([])
+            self.detail.setHtml(
+                "<p style='color:#666'>(seleccioná un Data Item para ver su detalle)</p>")
+
+    def _html_detalle_item(self, code: str, start: int, end: int, summary: str) -> str:
+        nombre = _item_name(code)
+        data = self.raw_bytes[start:end]
+
+        # Raw Data en Hexadecimal + ASCII: una columna por octeto
+        oct_hdr = "<td bgcolor='#eef3e2'></td>" + "".join(
+            f"<td align='center' bgcolor='#eef3e2'><b>Octet {i + 1}</b></td>"
+            for i in range(len(data)))
+        hex_cells = "<td><b>Hex</b></td>" + "".join(
+            f"<td align='center'>{b:02X}</td>" for b in data)
+        ascii_cells = "<td><b>ASCII</b></td>" + "".join(
+            f"<td align='center'>{(chr(b) if 32 <= b < 127 else '.')}</td>" for b in data)
+        hex_table = (
+            "<table border='1' cellspacing='0' cellpadding='4'>"
+            f"<tr>{oct_hdr}</tr><tr>{hex_cells}</tr>"
+            f"<tr bgcolor='#fbfbf0'>{ascii_cells}</tr></table>")
+
+        # Raw Data in Binary: una fila por octeto con sus 8 bits
+        bin_rows = ""
+        for i, b in enumerate(data):
+            bits = "".join(f"<td align='center'>{(b >> k) & 1}</td>" for k in range(7, -1, -1))
+            bin_rows += (
+                f"<tr><td bgcolor='#eef3e2'><b>Octet {i + 1} — {b:02X}</b></td>{bits}</tr>")
+        bin_table = f"<table border='1' cellspacing='0' cellpadding='3'>{bin_rows}</table>"
+
+        # Detailed Description: subcampos (si hay decodificador para el Item)
+        subf = _subfields(code, data)
+        if subf:
+            filas = "".join(
+                f"<tr><td>{n}</td><td align='right'>{v}</td></tr>" for n, v in subf)
+            det = ("<table border='1' cellspacing='0' cellpadding='4'>"
+                   "<tr bgcolor='#8db84e'><td><b>Name</b></td><td><b>Value</b></td></tr>"
+                   f"{filas}</table>")
+        else:
+            det = "<i style='color:#888'>(desglose de subcampos pendiente para este Item)</i>"
+
+        titulo = f"Data Item {code}" + (f" - {nombre}" if nombre else "")
+        return (
+            f"<h3>{titulo}</h3>"
+            f"<b>Summary</b><p>{summary or '—'}</p>"
+            f"<b>Raw Data in Hexadecimal</b><br>{hex_table}<br>"
+            f"<b>Raw Data in Binary</b><br>{bin_table}<br>"
+            f"<b>Detailed Description</b><br>{det}<br><br>"
+            "<b>References</b><p>Check Eurocontrol "
+            "(<a href='https://www.eurocontrol.int'>www.eurocontrol.int</a>) "
+            "for more ASTERIX information.</p>")
 
     def _resaltar(self, start: int, end: int):
         """Pinta en el hex viewer los bytes [start, end) del Item seleccionado."""
