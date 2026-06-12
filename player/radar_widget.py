@@ -1294,6 +1294,19 @@ class RadarWidget(QWidget):
             self.zoom_factor = MIN_ZOOM
         self.zoom_factor = max(MIN_ZOOM, min(self.zoom_factor, MAX_ZOOM))
 
+    def centrar_en_objetivo(self, lat: float, lon: float, range_nm: float = 0.0,
+                            sensor_name: str = "Filtrado"):
+        """Recentra la proyección en (lat, lon) y ajusta el zoom para encuadrar un
+        radio de `range_nm` millas náuticas (con margen). Usado por la reproducción
+        filtrada para que la(s) aeronave(s) entren en la pantalla."""
+        self.reset_origin_for_new_file(lat, lon, 0, 0, sensor_name)
+        widget_radius_px = min(self.width(), self.height()) / 2.0
+        rng = max(15.0, float(range_nm) * 1.15)  # margen del 15 % y piso de 15 NM
+        if widget_radius_px > 0 and rng > 0:
+            self.zoom_factor = widget_radius_px / (rng * METERS_PER_NM)
+            self._clamp_zoom()
+        self.update()
+
     # ================================================================
     # FASE 1: MOTOR MATEMÁTICO — Conversión Bimodal a Píxeles de Pantalla
     # ================================================================

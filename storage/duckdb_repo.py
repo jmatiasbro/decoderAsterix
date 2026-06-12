@@ -46,15 +46,24 @@ class DuckDBRepository:
         self.conn.execute('''
             CREATE TABLE asterix_plots (
                 timestamp DOUBLE,
+                rx_time DOUBLE,
                 category INTEGER,
                 sac_sic VARCHAR,
                 track_id VARCHAR,
                 callsign VARCHAR,
+                mode3a VARCHAR,
                 lat DOUBLE,
                 lon DOUBLE,
                 flight_level VARCHAR,
                 raw_azimuth DOUBLE,
-                raw_range DOUBLE
+                raw_range DOUBLE,
+                track_number INTEGER,
+                mode_s VARCHAR,
+                altitude_ft DOUBLE,
+                ground_speed DOUBLE,
+                track_angle DOUBLE,
+                vertical_rate DOUBLE,
+                plot_id VARCHAR
             )
         ''')
 
@@ -118,7 +127,8 @@ class DuckDBRepository:
                     break
 
                 # Extraer robustamente campos tanto del diccionario bruto como de AsterixPlot.to_dict()
-                time_val = plot.get('time') or plot.get('timestamp') or 0.0
+                time_val = plot.get('time') or plot.get('timestamp') or 0.0   # TX: ToD del mensaje (seg-del-día)
+                rx_val = plot.get('pcap_time') or 0.0                          # RX: llegada del paquete (epoch)
                 cat_val = plot.get('category') or 0
                 sac_sic_val = plot.get('sac_sic') or 'UNK'
                 
@@ -133,6 +143,13 @@ class DuckDBRepository:
                 
                 callsign_val = (plot.get('callsign') or '').strip().upper()
 
+                # Squawk / Mode 3-A: el plot lo trae como int octal (ej. 0o2375).
+                m3a_raw = plot.get('mode3a')
+                if isinstance(m3a_raw, int):
+                    mode3a_val = f"{m3a_raw:04o}"
+                else:
+                    mode3a_val = str(m3a_raw).strip() if m3a_raw else ''
+
                 lat_val = plot.get('lat') or plot.get('lat_render') or 0.0
                 lon_val = plot.get('lon') or plot.get('lon_render') or 0.0
 
@@ -142,23 +159,42 @@ class DuckDBRepository:
                 az_val = plot.get('raw_azimuth') or 0.0
                 rg_val = plot.get('raw_range') or 0.0
 
+                # Campos específicos por categoría (se guardan crudos; None => NULL/blanco)
+                tn_raw = plot.get('track_number')
+                track_number_val = int(tn_raw) if tn_raw is not None else None
+                mode_s_val = str(plot.get('mode_s')) if plot.get('mode_s') else ''
+                alt_ft_val = plot.get('altitude_ft')
+                gs_val = plot.get('ground_speed')
+                ta_val = plot.get('track_angle')
+                vr_val = plot.get('vertical_rate_ftmin')
+                plot_id_val = str(plot.get('id') or '')
+
                 lote.append((
                     float(time_val),
+                    float(rx_val),
                     int(cat_val),
                     str(sac_sic_val),
                     track_id,
                     callsign_val,
+                    mode3a_val,
                     float(lat_val),
                     float(lon_val),
                     fl_str,
                     float(az_val),
-                    float(rg_val)
+                    float(rg_val),
+                    track_number_val,
+                    mode_s_val,
+                    None if alt_ft_val is None else float(alt_ft_val),
+                    None if gs_val is None else float(gs_val),
+                    None if ta_val is None else float(ta_val),
+                    None if vr_val is None else float(vr_val),
+                    plot_id_val,
                 ))
 
                 # Batch Insert de DuckDB
                 if len(lote) >= 200 or self.cola_insercion.empty():
                     hilo_conn.executemany(
-                        "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         lote
                     )
                     lote = []
@@ -168,7 +204,7 @@ class DuckDBRepository:
                 if lote:
                     try:
                         hilo_conn.executemany(
-                            "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                             lote
                         )
                         lote = []
@@ -186,7 +222,7 @@ class DuckDBRepository:
         if lote:
             try:
                 hilo_conn.executemany(
-                    "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     lote
                 )
             except Exception:
