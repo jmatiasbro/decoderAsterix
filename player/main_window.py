@@ -906,6 +906,9 @@ class MainWindow(QMainWindow):
         self.act_toggle_panel_sensores.setChecked(True)
         self.act_toggle_panel_sensores.toggled.connect(
             lambda v: self.panel_sensores.setVisible(v) or (self.panel_sensores.raise_() if v else None))
+        menu_ver.addSeparator()
+        self.act_analizador_paquetes = menu_ver.addAction("Analizador de Paquetes…", self._abrir_analizador_paquetes)
+        menu_ver.addSeparator()
         self.act_toggle_incumbencia = menu_ver.addAction("Vista de Incumbencia (Jurisdicción)")
         self.act_toggle_incumbencia.setCheckable(True)
         self.act_toggle_incumbencia.setChecked(False)
@@ -1663,6 +1666,28 @@ class MainWindow(QMainWindow):
 
     def _hide_panel(self):
         pass
+
+    def _abrir_analizador_paquetes(self):
+        """Abre el visor histórico de plots ASTERIX (filtros sobre DuckDB)."""
+        repo_db = None
+        if self.worker is not None and getattr(self.worker, 'engine', None) is not None:
+            repo_db = getattr(self.worker.engine, 'repo_db', None)
+        if repo_db is None:
+            QMessageBox.information(
+                self, "Analizador de Paquetes",
+                "Cargá y escaneá un archivo (Modo Playback) antes de abrir el analizador.")
+            return
+        if getattr(self, '_analizador_win', None) is None:
+            from player.packet_analyzer import AsterixAnalyzerWindow
+            self._analizador_win = AsterixAnalyzerWindow(repo_db, self.worker, self)
+        else:
+            # Reapuntar a la BD/worker vigentes y refrescar
+            self._analizador_win.repo_db = repo_db
+            self._analizador_win.worker = self.worker
+            self._analizador_win.aplicar_filtros_base_datos(None)
+        self._analizador_win.show()
+        self._analizador_win.raise_()
+        self._analizador_win.activateWindow()
 
     def _abrir_log_stca(self):
         import os

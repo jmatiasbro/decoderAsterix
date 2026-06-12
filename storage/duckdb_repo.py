@@ -49,6 +49,7 @@ class DuckDBRepository:
                 category INTEGER,
                 sac_sic VARCHAR,
                 track_id VARCHAR,
+                callsign VARCHAR,
                 lat DOUBLE,
                 lon DOUBLE,
                 flight_level VARCHAR,
@@ -130,12 +131,14 @@ class DuckDBRepository:
                     ''
                 )
                 
+                callsign_val = (plot.get('callsign') or '').strip().upper()
+
                 lat_val = plot.get('lat') or plot.get('lat_render') or 0.0
                 lon_val = plot.get('lon') or plot.get('lon_render') or 0.0
-                
+
                 fl_val = plot.get('flight_level')
                 fl_str = '---' if fl_val is None else str(fl_val)
-                
+
                 az_val = plot.get('raw_azimuth') or 0.0
                 rg_val = plot.get('raw_range') or 0.0
 
@@ -144,6 +147,7 @@ class DuckDBRepository:
                     int(cat_val),
                     str(sac_sic_val),
                     track_id,
+                    callsign_val,
                     float(lat_val),
                     float(lon_val),
                     fl_str,
@@ -154,7 +158,7 @@ class DuckDBRepository:
                 # Batch Insert de DuckDB
                 if len(lote) >= 200 or self.cola_insercion.empty():
                     hilo_conn.executemany(
-                        "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         lote
                     )
                     lote = []
@@ -164,7 +168,7 @@ class DuckDBRepository:
                 if lote:
                     try:
                         hilo_conn.executemany(
-                            "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                             lote
                         )
                         lote = []
@@ -182,7 +186,7 @@ class DuckDBRepository:
         if lote:
             try:
                 hilo_conn.executemany(
-                    "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     lote
                 )
             except Exception:
