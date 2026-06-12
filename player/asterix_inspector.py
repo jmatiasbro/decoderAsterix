@@ -215,6 +215,10 @@ def _plot_a_info(p: dict) -> dict:
     m3a = p.get("mode_3a")
     if isinstance(m3a, int):
         info["mode3a"] = f"{m3a:04o}"
+    if p.get("latitude") is not None:
+        info["lat"] = p["latitude"]
+    if p.get("longitude") is not None:
+        info["lon"] = p["longitude"]
     ed = p.get("extra_data", {}) or {}
     if ed.get("ground_speed_nms") is not None:
         info["ground_speed"] = ed["ground_speed_nms"] * 3600.0
@@ -234,6 +238,8 @@ def deep_records(category, raw_bytes):
         decoder = None
         if cat == 48:
             from decoder.decoders import cat048 as decoder
+        elif cat == 21:
+            from decoder.decoders import cat021 as decoder
         if decoder is None:
             return []
         acc: list = []
