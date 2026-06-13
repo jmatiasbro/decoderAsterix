@@ -3038,8 +3038,11 @@ class MainWindow(QMainWindow):
         rol = str(perfil_data.get("rol", "tecnico")).strip().lower()
         es_controlador = (rol == "controlador")
 
-        # Vista del PPI
-        self.radar.vista_controlador = es_controlador
+        # Vista del PPI (ODS: set_vista_controlador apaga el barrido en controlador)
+        if hasattr(self.radar, 'set_vista_controlador'):
+            self.radar.set_vista_controlador(es_controlador)
+        else:
+            self.radar.vista_controlador = es_controlador
 
         # Panel técnico ATSEP: no se abre por defecto. El controlador no puede
         # mostrarlo; el técnico lo abre manualmente desde Ver → Diagnóstico ATSEP.

@@ -745,6 +745,11 @@ class RadarWidget(_RadarBase):
         self.mostrar_incumbencia = False
         # Vista limpia para rol controlador (sin coberturas/símbolo radar/sweep/anillos de rango)
         self.vista_controlador = False
+        # --- Config ODS (EUROCONTROL) para la vista controlador ---
+        from player.ods import palette as _ods_palette
+        self.ods_enabled = True
+        self.ods_layer_intensity = dict(_ods_palette.LAYER_DEFAULT)
+        self._focused_track_id = getattr(self, '_focused_track_id', None)
         # Gestor de altimetría (impulsado por perfil; QNH manual desde HMI)
         self.altimetry = AltimetryManager()
         self.aeropuerto_lat = -31.31548
@@ -961,6 +966,21 @@ class RadarWidget(_RadarBase):
         self.sweep_enabled = enabled
         if not enabled:
             self._promote_all_pending()
+        self.update()
+
+    def set_vista_controlador(self, on: bool):
+        """Activa la vista controlador ODS. El barrido rotante no es estándar en un
+        ODS de controlador, así que se apaga al entrar."""
+        self.vista_controlador = bool(on)
+        if on:
+            self.sweep_enabled = False
+            self.sweep_visible = False
+            self._promote_all_pending()
+        self.update()
+
+    def set_ods_layer_intensity(self, layer: str, value: float):
+        """Intensidad 0..1 de una capa ODS (map/rings/labels/history/symbols/compass)."""
+        self.ods_layer_intensity[layer] = max(0.0, min(1.0, float(value)))
         self.update()
 
     def _promote_all_pending(self):
