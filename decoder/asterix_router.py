@@ -22,11 +22,12 @@ def extraer_numero(valor):
 #   cat062 — CAT 062 (System Track, futuro)
 # ============================================================
 try:
-    from decoder.decoders import cat001, cat021, cat048, cat062, cat034
+    from decoder.decoders import cat001, cat021, cat048, cat062, cat034, cat023
 except ImportError:
     # Fallback: si alguno no existe (ej. cat062), importamos los disponibles
     from decoder.decoders import cat001, cat021, cat048, cat034
     cat062 = None
+    cat023 = None
 
 
 class AsterixRouter:
@@ -101,6 +102,9 @@ class AsterixRouter:
                 elif cat == 21:
                     # CAT021 — decode(payload, offset, block_length, category)
                     plots_crudos = cat021.decode(bloque_asterix, 3, msg_len, cat)
+                elif cat == 23 and cat023 is not None:
+                    # CAT023 — decode(payload, offset, block_length, category)
+                    plots_crudos = cat023.decode(bloque_asterix, 3, msg_len, cat)
                 elif cat == 34:
                     # CAT034 — decode(payload, offset, block_length, category)
                     plots_crudos = cat034.decode(bloque_asterix, 3, msg_len, cat)

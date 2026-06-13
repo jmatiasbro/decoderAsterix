@@ -11,7 +11,25 @@ def _skip_variable_field(payload: bytes, offset: int) -> int:
             break
     return offset
 
-def decode(payload: bytes, offset: int, block_length: int, category: int) -> List[Dict[str, Any]]:
+# Mapeo FRN → código de Item para el inspector
+FRN_ITEM_34 = {
+    1: "I034/010",
+    2: "I034/000",
+    3: "I034/030",
+    4: "I034/020",
+    5: "I034/041",
+    6: "I034/050",
+    7: "I034/060",
+    8: "I034/070",
+    9: "I034/100",
+    10: "I034/110",
+    11: "I034/120",
+    12: "I034/090",
+    13: "RE",
+    14: "SP"
+}
+
+def decode(payload: bytes, offset: int, block_length: int, category: int, record_offsets=None) -> List[Dict[str, Any]]:
     """
     Decodifica un bloque de datos ASTERIX CAT034.
     """
@@ -36,7 +54,9 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
         14: -3  # SP
     }
 
+    _rec_idx = -1
     while offset < end_offset:
+        _rec_idx += 1
         plot = {'category': category, 'extra_data': {}}
         fspec, fspec_offset = read_fspec(payload, offset)
         if not fspec or not any(fspec):
@@ -56,6 +76,7 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
             if not is_present:
                 continue
 
+            _ofs_ini = offset
             try:
                 if frn == 1:  # I034/010 Data Source Identifier
                     sac = payload[offset]
@@ -83,6 +104,12 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                     if rotation_period > 0:
                         # Convert period (seconds/rotation) to RPM (rotations/minute)
                         plot['extra_data']['antenna_rpm'] = 60.0 / rotation_period
+                elif frn == 6:  # I034/050 System Configuration and Status
+                    status_byte = payload[offset]
+                    plot['com_fault'] = bool(status_byte & 0x80)
+                    plot['ext_fault'] = bool(status_byte & 0x40)
+                    plot['ant_fault'] = bool(status_byte & 0x20)
+                    plot['channel_ab'] = "Channel A" if (status_byte & 0x10) else "Channel B"
 
                 # Avanzar offset
                 length = uap_lengths.get(frn)
@@ -96,6 +123,11 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
                 elif length == -3:  # RE or SP (explicit, starts with length octet)
                     expl_len = payload[offset]
                     offset += expl_len
+
+                if record_offsets is not None:
+                    record_offsets.append(
+                        (_rec_idx, FRN_ITEM_34.get(frn, f"FRN{frn}"), _ofs_ini, offset))
+
             except Exception as e:
                 # En caso de error, avanzar el bloque y romper
                 break

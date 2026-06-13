@@ -17,7 +17,7 @@ from decoder.sensor_registry import SensorRegistry
 # CONSTANTES
 # ============================================================
 SECONDS_PER_DAY = 86400.0
-CATEGORIAS_SOPORTADAS = {1, 2, 21, 34, 48, 62}
+CATEGORIAS_SOPORTADAS = {1, 2, 21, 23, 34, 48, 62}
 
 # FASE 1: Resolución de cuantización para agrupar squitters sin dirección
 QUANTIZE_LAT = 0.01
@@ -183,6 +183,8 @@ class DataEngine:
         self.on_sensor_detected: Optional[Callable[[int, int], None]] = None
         self.on_rotation_speed_detected: Optional[Callable[[int, int, float], None]] = None
         self.on_north_mark_detected: Optional[Callable[[int, int], None]] = None
+        self.radar_health: Dict[Tuple[int, int], Dict] = {}
+        self.on_radar_health_changed: Optional[Callable[[Tuple[int, int], Dict], None]] = None
         
         self._running = True
 
@@ -404,7 +406,7 @@ class DataEngine:
             with open(cache_path, 'rb') as f:
                 cache_data = pickle.load(f)
             
-            CACHE_VERSION = 18
+            CACHE_VERSION = 19
             metadata = cache_data.get('metadata', {})
             if (metadata.get('pcap_size') != pcap_size or
                 metadata.get('pcap_mtime') != pcap_mtime or
@@ -431,7 +433,7 @@ class DataEngine:
                     'pcap_size': pcap_size,
                     'pcap_mtime': pcap_mtime,
                     'cache_time': time.time(),
-                    'cache_version': 18
+                    'cache_version': 19
                 },
                 'plots': plots
             }
@@ -444,7 +446,69 @@ class DataEngine:
         """Procesa un registro ASTERIX individual decodificado y lo guarda/agrega."""
         try:
             cat = rec.get('category')
-            if cat in (2, 34):
+            if cat in (23, 34):
+                import time
+                self.repo_db.guardar_plot(rec)
+                sac, sic = rec.get('sac'), rec.get('sic')
+                if sac is not None and sic is not None:
+                    t_val = rec.get('timestamp') or rec.get('time') or (rec.get('pcap_time') % 86400.0 if rec.get('pcap_time') is not None else time.time())
+                    
+                    data_health = self.radar_health.get((sac, sic), {
+                        "channel_ab": "UNKNOWN",
+                        "antenna_azimuth": None,
+                        "com_fault": False,
+                        "ext_fault": False,
+                        "ant_fault": False,
+                        "system_state": None,
+                        "ups_active": False
+                    }).copy()
+                    
+                    data_health["local_time"] = t_val
+                    
+                    if cat == 34:
+                        extra = rec.get('extra_data', {})
+                        if extra.get('is_north_mark') and self.on_north_mark_detected:
+                            self.on_north_mark_detected(sac, sic)
+                        if 'antenna_rpm' in extra and self.on_rotation_speed_detected:
+                            self.on_rotation_speed_detected(sac, sic, extra['antenna_rpm'])
+                            
+                        # Extraer telemetría de CAT 34
+                        data_health["channel_ab"] = rec.get("channel_ab", "UNKNOWN")
+                        data_health["antenna_azimuth"] = rec.get("azimuth")
+                        data_health["com_fault"] = rec.get("com_fault", False)
+                        data_health["ext_fault"] = rec.get("ext_fault", False)
+                        data_health["ant_fault"] = rec.get("ant_fault", False)
+                    
+                    elif cat == 23:
+                        # Extraer telemetría de CAT 23
+                        data_health["system_state"] = rec.get("system_state")
+                        data_health["ups_active"] = rec.get("ups_active", False)
+                        
+                    self.radar_health[(sac, sic)] = data_health
+                    if self.on_radar_health_changed:
+                        self.on_radar_health_changed((sac, sic), data_health)
+                    
+                    # Generar un plot técnico ficticio para la línea de tiempo de reproducción
+                    plot_id = f"TECH_{cat}_{sac}_{sic}_{t_val}"
+                    dummy_plot = AsterixPlot(
+                        id=plot_id,
+                        sac_sic=f"{sac}/{sic}",
+                        category=cat,
+                        time=t_val,
+                        lat=0.0,
+                        lon=0.0,
+                        mode3a="",
+                        callsign="",
+                        flight_level=None,
+                        altitude_ft=None,
+                        is_track=False,
+                        raw_bytes=rec.get("raw_bytes")
+                    )
+                    dummy_plot.bds_data = data_health.copy()
+                    plots_file.append(dummy_plot)
+                return
+
+            if cat == 2:
                 sac, sic = rec.get('sac'), rec.get('sic')
                 extra = rec.get('extra_data', {})
                 if sac is not None and sic is not None:

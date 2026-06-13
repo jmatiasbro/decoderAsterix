@@ -8,5 +8,7 @@ from .cat001 import decode as decode_cat001
 from .cat021 import decode as decode_cat021
 from .cat048 import decode as decode_cat048
 from .cat062 import decode as decode_cat062
+from .cat034 import decode as decode_cat034
+from .cat023 import decode as decode_cat023
 
-__all__ = ["decode_cat001", "decode_cat021", "decode_cat048", "decode_cat062"]
+__all__ = ["decode_cat001", "decode_cat021", "decode_cat048", "decode_cat062", "decode_cat034", "decode_cat023"]

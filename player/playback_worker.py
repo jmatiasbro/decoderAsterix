@@ -23,6 +23,7 @@ class PlaybackWorker(QThread):
     north_mark_detected = pyqtSignal(int, int)       # sac, sic
     rotation_speed_detected = pyqtSignal(int, int, float) # sac, sic, rpm
     scan_complete = pyqtSignal(bool)
+    radar_health_changed = pyqtSignal(tuple, dict)        # (sac, sic), health_data
 
     def __init__(
         self,
@@ -60,6 +61,7 @@ class PlaybackWorker(QThread):
         self.engine.on_sensor_detected = self.sensor_detected.emit
         self.engine.on_north_mark_detected = self.north_mark_detected.emit
         self.engine.on_rotation_speed_detected = self.rotation_speed_detected.emit
+        self.engine.on_radar_health_changed = self._on_radar_health_changed
         
         # Control de reproducción
         self.playback_speed = playback_speed
@@ -93,6 +95,9 @@ class PlaybackWorker(QThread):
                 pass
         self._mutex.unlock()
         self.wait()
+
+    def _on_radar_health_changed(self, key: tuple, data: dict):
+        self.radar_health_changed.emit(key, data)
 
     def set_paused(self, paused: bool):
         self._mutex.lock()
