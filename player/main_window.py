@@ -816,6 +816,7 @@ class MainWindow(QMainWindow):
 
         # 2. Panel Lateral Acoplable (QDockWidget)
         self._setup_dock_widget()
+        self._setup_technical_monitor_dock()
 
         # 3. Barra de Menú (QMenuBar)
         self._setup_menu_bar()
@@ -899,6 +900,11 @@ class MainWindow(QMainWindow):
         self.act_toggle_dock = self.dock_lateral.toggleViewAction()
         self.act_toggle_dock.setText("Panel Lateral de Controles")
         menu_ver.addAction(self.act_toggle_dock)
+        
+        self.act_toggle_tech_dock = self.dock_technical.toggleViewAction()
+        self.act_toggle_tech_dock.setText("Diagnóstico Técnico ATSEP")
+        menu_ver.addAction(self.act_toggle_tech_dock)
+        
         self.act_toggle_reloj = menu_ver.addAction("Reloj UTC Flotante")
         self.act_toggle_reloj.setCheckable(True)
         self.act_toggle_reloj.setChecked(True)
@@ -1508,6 +1514,16 @@ class MainWindow(QMainWindow):
         self.dock_lateral.setVisible(True)
         self.dock_lateral.raise_()
 
+    def _setup_technical_monitor_dock(self):
+        from player.technical_monitor import TechnicalMonitorWidget
+        self.dock_technical = QDockWidget("Diagnóstico Técnico ATSEP (CAT 034 / 023)", self)
+        self.tech_monitor = TechnicalMonitorWidget(self)
+        self.dock_technical.setWidget(self.tech_monitor)
+        self.dock_technical.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.dock_technical)
+        self.dock_technical.setFloating(False)
+        self.dock_technical.setVisible(True)
+
     def _on_custom_sensor_toggled(self, text: str, checked: bool):
         """Maneja la selección individual de un sensor desde su checkbox personalizado."""
         match = re.match(r'^\[(\d+)/(\d+)\]', text)
@@ -1894,6 +1910,7 @@ class MainWindow(QMainWindow):
         self.worker.playback_finished.connect(self._on_playback_finished)
         self.worker.sensor_detected.connect(self._on_sensor_detected)
         self.worker.rotation_speed_detected.connect(self._on_rotation_speed_detected)
+        self.worker.radar_health_changed.connect(self.tech_monitor.update_sensor_status)
         
         self.worker.start()
 
@@ -2393,6 +2410,39 @@ class MainWindow(QMainWindow):
         return True
 
     def _on_new_plot_batch(self, batch: List[Dict]):
+        # Separar plots técnicos (CAT 23 y 34) de los plots cinemáticos de radar
+        tech_plots = []
+        radar_plots = []
+        for p in batch:
+            cat = p.get('category')
+            if cat in (23, 34):
+                tech_plots.append(p)
+            else:
+                radar_plots.append(p)
+
+        # Procesar los plots de telemetría técnica (actualizar HMI en caliente)
+        for p in tech_plots:
+            plot_time = p.get('time')
+            if plot_time is not None:
+                from player.radar_widget import SimulationTime
+                SimulationTime.instance().set_time(plot_time)
+            
+            sid = p.get('sac_sic')
+            if sid:
+                try:
+                    parts = sid.split('/')
+                    key = (int(parts[0]), int(parts[1]))
+                    telemetria = p.get('bds_data')
+                    if telemetria:
+                        self.tech_monitor.update_sensor_status(key, telemetria)
+                except Exception:
+                    pass
+
+        # Continuar solo si quedan plots de radar
+        batch = radar_plots
+        if not batch:
+            return
+
         # Registrar las categorías vistas para cada sensor en tiempo real
         for plot in batch:
             # Sincronizar el reloj de simulación con cada plot procesado en el lote (usar TOD del mensaje ASTERIX)
@@ -2919,6 +2969,12 @@ class MainWindow(QMainWindow):
 
         # Vista del PPI
         self.radar.vista_controlador = es_controlador
+
+        # Habilitar/Deshabilitar panel técnico según el rol
+        if hasattr(self, 'dock_technical'):
+            self.dock_technical.setVisible(not es_controlador)
+        if hasattr(self, 'act_toggle_tech_dock'):
+            self.act_toggle_tech_dock.setVisible(not es_controlador)
 
         # Bloqueo de controles de playback (solo técnico configura el playback).
         # Visibles solo si hay un archivo cargado y el rol no es controlador.
@@ -3454,6 +3510,7 @@ class MainWindow(QMainWindow):
             self.worker.north_mark_detected.connect(self._on_north_mark_detected)
             self.worker.error_occurred.connect(self._on_udp_error)
             self.worker.playback_finished.connect(self._on_udp_finished)
+            self.worker.radar_health_changed.connect(self.tech_monitor.update_sensor_status)
 
             # 5. Deshabilitar controles históricos conflictivos
             self.btn_cargar.setEnabled(False)
