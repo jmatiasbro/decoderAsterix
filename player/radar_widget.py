@@ -4201,11 +4201,50 @@ class RadarWidget(_RadarBase):
     # DOUBLE CLICK — INSPECCIÓN POR DATA BLOCK (HITBOX EN TEXTO)
     # ================================================================
 
+    def _estimar_vrate(self, plot):
+        """ft/min: usa vertical_rate del mensaje, o lo estima del historial de FL."""
+        rate = None
+        if plot.raw_dict:
+            rate = plot.raw_dict.get('vertical_rate_ftmin')
+            if rate is None and 'extra_data' in plot.raw_dict:
+                rate = plot.raw_dict['extra_data'].get('vertical_rate_ftmin')
+        if rate is not None:
+            return rate
+        if plot.id in self.history and plot.flight_level is not None:
+            hist = list(self.history[plot.id])
+            curr_fl, curr_time = plot.flight_level, plot.timestamp
+            past_pt = None
+            for pt in reversed(hist):
+                if pt.timestamp > 0 and pt.fl and pt.timestamp < curr_time - 2.0:
+                    past_pt = pt
+                    if pt.timestamp < curr_time - 5.0:
+                        break
+            if past_pt is not None:
+                try:
+                    if past_pt.fl.startswith("FL"):
+                        past_fl = float(past_pt.fl[2:])
+                        dt = curr_time - past_pt.timestamp
+                        if dt > 0:
+                            return ((curr_fl - past_fl) * 100.0 / dt) * 60.0
+                except Exception:
+                    pass
+        return 0.0
+
     def _build_plot_label_lines(self, plot: 'RadarPlot') -> List[str]:
         cfg = getattr(self, 'label_filter_config', {})
         # Rol controlador: datablock operacional fijo (callsign, SSR, FL, N, ADR);
         # rol técnico: todos los campos disponibles según el filtro de etiquetas.
         es_ctrl = getattr(self, 'vista_controlador', False)
+
+        # ODS: en vista controlador el data block sigue el formato FDB/LDB estándar
+        # (callsign · FL+tendencia · GS), independiente del filtro de etiquetas técnico.
+        if es_ctrl and getattr(self, 'ods_enabled', True):
+            from player.ods import fdb as _fdb
+            try:
+                vr = self._estimar_vrate(plot)
+            except Exception:
+                vr = None
+            return _fdb.build_lines(plot, full=True, vrate=vr)
 
         # 1. Line 1: Identity
         show_id = True if es_ctrl else cfg.get("identific_aeronave", True)

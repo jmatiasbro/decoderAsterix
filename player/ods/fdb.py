@@ -31,10 +31,12 @@ def _squawk(plot) -> str:
     return "" if s in ("", "----", "0000") else s
 
 
-def build_lines(plot, full: bool = True):
+def build_lines(plot, full: bool = True, vrate=None):
     """Devuelve líneas del data block.
 
     L1: callsign (o squawk si no hay). L2: FL+tendencia. L3 (solo FDB): GS.
+    `vrate` (ft/min) permite pasar la tendencia cuando el plot no la expone como
+    atributo (p. ej. RadarPlot con __slots__); si es None se lee del plot.
     """
     callsign = (getattr(plot, "callsign", "") or "").strip()
     squawk = _squawk(plot)
@@ -42,8 +44,8 @@ def build_lines(plot, full: bool = True):
     lines = []
     if l1:
         lines.append(l1)
-    lvl = format_level(getattr(plot, "flight_level", None),
-                       getattr(plot, "vertical_rate_ftmin", None))
+    v = vrate if vrate is not None else getattr(plot, "vertical_rate_ftmin", None)
+    lvl = format_level(getattr(plot, "flight_level", None), v)
     if lvl:
         lines.append(lvl)
     if full:
