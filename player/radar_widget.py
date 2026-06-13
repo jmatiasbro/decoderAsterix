@@ -50,6 +50,16 @@ from PyQt6.QtWidgets import (
 from utils.geo import METERS_PER_NM, StereographicLocal, WGS84_GEOD
 from decoder.altimetry import AltimetryManager
 
+# Clase base del PPI: QOpenGLWidget si hay GPU utilizable (acelera el QPainter del
+# paintEvent), QWidget en software. El flag lo fija main.detectar_gpu() al arrancar.
+from player import gpu as _gpu
+try:
+    from PyQt6.QtOpenGLWidgets import QOpenGLWidget as _RadarBase
+    if not _gpu.USAR_GL:
+        _RadarBase = QWidget
+except Exception:
+    _RadarBase = QWidget
+
 
 # ============================================================
 # FASE 3: SINGLETON DE TIEMPO (PROHIBICIÓN DE SALTOS ERRÁTICOS)
@@ -474,7 +484,8 @@ class TargetInspectionDialog(QDialog):
         self.asterix_version = asterix_version
         callsign = plot.callsign if plot.callsign else plot.mode3a
         self.setWindowTitle(f"Detalle de Blanco ASTERIX - {callsign}")
-        self.resize(680, 520)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 680, 520, centrar=False)
         self.setStyleSheet("""
             QDialog {
                 background-color: #0E131F;
@@ -669,7 +680,7 @@ def _filter_mode3a(value):
     return value
 
 
-class RadarWidget(QWidget):
+class RadarWidget(_RadarBase):
 
     """
     Widget PPI con sincronización de barrido e historial de trayectoria.

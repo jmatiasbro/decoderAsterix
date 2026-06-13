@@ -68,7 +68,8 @@ class CalibrationDialog(QDialog):
             self.pcap_paths = []
         self._thread = None
         self.setWindowTitle("Análisis y Calibración")
-        self.resize(820, 560)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 820, 560, centrar=False)
         self._build()
 
     QSS = """

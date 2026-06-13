@@ -576,7 +576,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ASTERIX Radar Decoder - Reproductor Multi-Sensor")
-        self.resize(1280, 800)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 1280, 800)
         
         # Estilo Global Premium: Cyber Radar Theme
         self.setStyleSheet("""

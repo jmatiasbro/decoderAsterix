@@ -1,7 +1,24 @@
 import sys
-from player.main_window import MainWindow
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QPalette, QColor
+from PyQt6.QtGui import QPalette, QColor, QSurfaceFormat, QGuiApplication
+from PyQt6.QtCore import Qt
+
+
+def configurar_aceleracion() -> None:
+    """High-DPI responsivo + backend OpenGL para los widgets acelerados.
+
+    Debe llamarse ANTES de instanciar QApplication. La escala fraccional sin
+    redondeo mantiene texto/íconos nítidos en cualquier resolución; el formato
+    de superficie por defecto habilita MSAA cuando la GPU lo soporta.
+    """
+    QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    # Contextos GL compartidos: requerido al usar QOpenGLWidget en varias ventanas.
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
+    fmt = QSurfaceFormat()
+    fmt.setSwapInterval(1)
+    fmt.setSamples(4)
+    QSurfaceFormat.setDefaultFormat(fmt)
 
 
 def aplicar_tema_oscuro(app: QApplication) -> None:
@@ -44,8 +61,13 @@ def aplicar_tema_oscuro(app: QApplication) -> None:
 
 
 def main():
+    configurar_aceleracion()
     app = QApplication(sys.argv)
     aplicar_tema_oscuro(app)
+    # Detectar GPU con la app ya creada; el radar lee el flag al importarse.
+    from player import gpu
+    gpu.detectar_gpu()
+    from player.main_window import MainWindow
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

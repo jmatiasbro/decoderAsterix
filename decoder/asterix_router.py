@@ -22,12 +22,13 @@ def extraer_numero(valor):
 #   cat062 — CAT 062 (System Track, futuro)
 # ============================================================
 try:
-    from decoder.decoders import cat001, cat021, cat048, cat062, cat034, cat023
+    from decoder.decoders import cat001, cat021, cat048, cat062, cat034, cat023, cat065
 except ImportError:
     # Fallback: si alguno no existe (ej. cat062), importamos los disponibles
     from decoder.decoders import cat001, cat021, cat048, cat034
     cat062 = None
     cat023 = None
+    cat065 = None
 
 
 class AsterixRouter:
@@ -114,6 +115,9 @@ class AsterixRouter:
                 elif cat == 62 and cat062 is not None:
                     # CAT062 — decodificador futuro
                     plots_crudos = cat062.decode(bloque_asterix, 3, msg_len, cat)
+                elif cat == 65 and cat065 is not None:
+                    # CAT065 — SDPS Service Status Reports
+                    plots_crudos = cat065.decode(bloque_asterix, 3, msg_len, cat)
                 else:
                     # Modo Debug para categorías no soportadas
                     if cat not in self._cat_warned:

@@ -12,7 +12,8 @@ class QualityFilterDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Configuración DQF — Calidad de Datos")
         self.qm = quality_manager
-        self.resize(380, 220)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 380, 220, centrar=False)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         # Aplicar estilo Dark-Cyber Premium coherente con el RadarWidget

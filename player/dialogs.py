@@ -23,7 +23,8 @@ class LabelFilterDialog(QDialog):
         self.available_fields = available_fields
         
         self.setWindowTitle("Filtro de Etiquetas")
-        self.resize(460, 320)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 460, 320, centrar=False)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         
         self._setup_style()
@@ -249,7 +250,8 @@ class RadarDataFilterDialog(QDialog):
         self.sensors_list = sensors_list or []  # [(sac, sic, name), ...]
         
         self.setWindowTitle("Filtro de Datos Radar")
-        self.resize(560, 560)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 560, 560, centrar=False)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         
         self._setup_style()

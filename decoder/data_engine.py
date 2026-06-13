@@ -103,7 +103,7 @@ class IndraRDCUReader:
     def __init__(self, filepath):
         self.filepath = filepath
         # Categorías ASTERIX tácticas más comunes esperadas en el entorno
-        self.categorias_validas = {1, 2, 21, 34, 48, 62} 
+        self.categorias_validas = {1, 2, 21, 34, 48, 62, 65}
         self.last_timestamp = 1762858800.0  # Default initial timestamp
 
     def extraer_bloques(self, router=None):
@@ -446,6 +446,25 @@ class DataEngine:
         """Procesa un registro ASTERIX individual decodificado y lo guarda/agrega."""
         try:
             cat = rec.get('category')
+            if cat == 65:
+                # CAT065 SDPS Service Status Reports: mensaje de estado, sin track.
+                # Se persiste para el analizador/inspector y se marca en la timeline.
+                import time
+                self.repo_db.guardar_plot(rec)
+                sac, sic = rec.get('sac'), rec.get('sic')
+                if sac is not None and sic is not None:
+                    t_val = rec.get('timestamp') or rec.get('time') or (
+                        rec.get('pcap_time') % 86400.0
+                        if rec.get('pcap_time') is not None else time.time())
+                    dummy_plot = AsterixPlot(
+                        id=f"TECH_65_{sac}_{sic}_{t_val}",
+                        sac_sic=f"{sac}/{sic}", category=cat, time=t_val,
+                        lat=0.0, lon=0.0, mode3a="", callsign="",
+                        flight_level=None, altitude_ft=None, is_track=False,
+                        raw_bytes=rec.get("raw_bytes"))
+                    plots_file.append(dummy_plot)
+                return
+
             if cat in (23, 34):
                 import time
                 self.repo_db.guardar_plot(rec)
@@ -583,7 +602,7 @@ class DataEngine:
                                 if len(payload) == payload_len:
                                     cat = payload[0]
                                     asterix_len = (payload[1] << 8) | payload[2]
-                                    if cat in (1, 2, 21, 34, 48, 62) and asterix_len == payload_len:
+                                    if cat in (1, 2, 21, 34, 48, 62, 65) and asterix_len == payload_len:
                                         return "wrapped"
         except Exception:
             pass

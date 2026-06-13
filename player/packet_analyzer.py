@@ -371,7 +371,8 @@ class AsterixAnalyzerWindow(QDialog):
         self.repo_db = repo_db
         self.worker = worker
         self.setWindowTitle("Analizador de Paquetes ASTERIX")
-        self.resize(1080, 600)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 1080, 600)
         self.setModal(False)
         self._init_ui()
         self.aplicar_filtros_base_datos(None)  # carga inicial sin filtros
@@ -559,11 +560,25 @@ class AsterixAnalyzerWindow(QDialog):
             self._abrir_inspector(index)
 
     def _abrir_inspector(self, index: QModelIndex):
-        src_row = self.proxy.mapToSource(index).row()
-        rb = self.modelo_tabla.raw_bytes_at(src_row)
-        info = self.modelo_tabla.info_at(src_row)
+        # Todas las filas seleccionadas (multi-selección) → un Data Block por paquete.
+        sel = self.tabla.selectionModel().selectedRows()
+        filas = sorted(sel, key=lambda i: i.row()) if sel else []
+        if index.isValid() and all(i.row() != index.row() for i in filas):
+            filas = [index]  # clic derecho fuera de la selección: solo esa fila
+        paquetes = []
+        vistas = set()
+        for pi in filas:
+            src_row = self.proxy.mapToSource(pi).row()
+            if src_row in vistas:
+                continue
+            vistas.add(src_row)
+            rb = self.modelo_tabla.raw_bytes_at(src_row)
+            info = self.modelo_tabla.info_at(src_row)
+            paquetes.append((rb or b"", info))
+        if not paquetes:
+            return
         from player.asterix_inspector import AsterixInspectorDialog
-        dlg = AsterixInspectorDialog(rb or b"", info, self)
+        dlg = AsterixInspectorDialog(paquetes=paquetes, parent=self)
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
