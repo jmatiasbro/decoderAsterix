@@ -87,7 +87,8 @@ class ProfileAdminDialog(QDialog):
         self.aeropuertos_data = {}
         
         self.setWindowTitle("Administrador de Perfiles Operativos")
-        self.resize(500, 550)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 500, 550, centrar=False)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         
         self._setup_style()

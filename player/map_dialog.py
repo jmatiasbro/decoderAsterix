@@ -84,7 +84,8 @@ class LMG_Dialog(QDialog):
         self.setWindowTitle("Herramienta de Dibujo")
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
         self.setMinimumSize(360, 620)
-        self.resize(380, 680)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 380, 680, centrar=False)
         
         # State variables
         self.completed_shapes = []

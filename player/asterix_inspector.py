@@ -15,10 +15,12 @@ from typing import Optional, List, Tuple
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import (
     QFont, QStandardItemModel, QStandardItem, QTextCursor, QColor, QTextCharFormat,
+    QPen,
 )
 from PyQt6.QtWidgets import (
     QDialog, QHBoxLayout, QVBoxLayout, QSplitter, QTreeView, QTextEdit,
-    QLabel, QWidget, QHeaderView, QTextBrowser,
+    QLabel, QWidget, QHeaderView, QTextBrowser, QTableWidget, QTableWidgetItem,
+    QAbstractItemView, QStyledItemDelegate,
 )
 
 
@@ -117,6 +119,15 @@ _SPEC = {
         ("I023/010", [("SAC", "sac"), ("SIC", "sic")]),
         ("I023/020", [("STATE", "system_state"), ("UPS", "ups_active")]),
     ],
+    65: [
+        ("I065/010", [("SAC", "sac"), ("SIC", "sic")]),
+        ("I065/000", [("TYPE", "msg_type")]),
+        ("I065/015", [("SVC", "service_id")]),
+        ("I065/030", [("TOD", "timestamp")]),
+        ("I065/020", [("BATCH", "batch_number")]),
+        ("I065/040", [("NOGO", "sdps_nogo")]),
+        ("I065/050", [("REPORT", "service_report")]),
+    ],
 }
 
 
@@ -209,6 +220,11 @@ ITEM_NAMES = {
     "I034/060": "System Processing Mode", "I034/070": "Message Count Values",
     # CAT023
     "I023/010": "Data Source Identifier", "I023/020": "System Status",
+    # CAT065 (SDPS Service Status Reports)
+    "I065/010": "Data Source Identifier", "I065/000": "Message Type",
+    "I065/015": "Service Identification", "I065/030": "Time of Message",
+    "I065/020": "Batch Number", "I065/040": "SDPS Configuration and Status",
+    "I065/050": "Service Status Report",
 }
 
 
@@ -268,6 +284,8 @@ def deep_records(category, raw_bytes):
             from decoder.decoders import cat023 as decoder
         elif cat == 62:
             from decoder.decoders import cat062 as decoder
+        elif cat == 65:
+            from decoder.decoders import cat065 as decoder
         if decoder is None:
             return []
         acc: list = []
@@ -596,6 +614,52 @@ def _sf_generic(d):
     return out
 
 
+def _sf_065_000(d):
+    tipos = {1: "SDPS Status", 2: "End of Batch", 3: "Service Status Report"}
+    t = d[0]
+    return [("Message Type", f"{t} ({tipos.get(t, '?')})")]
+
+
+def _sf_065_015(d):
+    return [("Service Identification", d[0])]
+
+
+def _sf_065_020(d):
+    return [("Batch Number", d[0])]
+
+
+def _sf_065_040(d):
+    """I065/040 SDPS Configuration and Status (1 byte)."""
+    b = d[0]
+    nogo = {0: "Operational", 1: "Degraded", 2: "Not currently connected", 3: "Unknown"}
+    pss = {0: "Not applicable", 1: "SDPS-1 selected", 2: "SDPS-2 selected",
+           3: "SDPS-3 selected"}
+    ng = (b >> 6) & 0x03
+    ps = (b >> 2) & 0x03
+    return [("NOGO (bits 8-7)", f"{ng} ({nogo.get(ng, '?')})"),
+            ("OVL Overload (bit 6)", 1 if b & 0x20 else 0),
+            ("TSV Time Source Invalid (bit 5)", 1 if b & 0x10 else 0),
+            ("PSS (bits 4-3)", f"{ps} ({pss.get(ps, '?')})"),
+            ("STTN Track Re-numbering (bit 2)", 1 if b & 0x02 else 0)]
+
+
+def _sf_065_050(d):
+    """I065/050 Service Status Report (1 byte)."""
+    rep = {1: "Service degradation", 2: "Service degradation ended",
+           3: "Main radar out of service", 4: "Service interrupted by the operator",
+           5: "Service interrupted due to contingency",
+           6: "Ready for service restart after contingency",
+           7: "Service ended by the operator", 8: "Failure of user main radar",
+           9: "Service restarted by the operator", 10: "Main radar becoming operational",
+           11: "Main radar becoming degraded",
+           12: "Service continuity interrupted (disconnection with adjacent unit)",
+           13: "Service continuity restarted", 14: "Service synchronised on backup radar",
+           15: "Service synchronised on main radar",
+           16: "Main and backup radar, if any, failed"}
+    r = d[0]
+    return [("Report", f"{r} ({rep.get(r, '?')})")]
+
+
 def _sf_023_020(d):
     """I023/020 System Status (1 byte): estado del sistema + bits de servicio."""
     b = d[0]
@@ -635,6 +699,10 @@ SUBFIELD_DECODERS = {
     # CAT034 / CAT023
     "I034/020": _sf_034_020, "I034/000": _sf_034_000, "I034/030": _sf_tod3,
     "I034/041": _sf_034_041, "I023/020": _sf_023_020,
+    # CAT065
+    "I065/010": _sf_sacsic, "I065/000": _sf_065_000, "I065/015": _sf_065_015,
+    "I065/030": _sf_tod3, "I065/020": _sf_065_020, "I065/040": _sf_065_040,
+    "I065/050": _sf_065_050,
 }
 
 
@@ -650,21 +718,45 @@ def _subfields(code: str, data: bytes):
             return []
 
 
+class _SepBloquesDelegate(QStyledItemDelegate):
+    """Dibuja una línea separadora arriba de cada Data Block (nodos de nivel raíz)."""
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        if not index.parent().isValid() and index.row() > 0:
+            painter.save()
+            pen = QPen(QColor("#00E5FF"))
+            pen.setWidth(1)
+            painter.setPen(pen)
+            r = option.rect
+            painter.drawLine(r.left(), r.top(), r.right(), r.top())
+            painter.restore()
+
+
 class AsterixInspectorDialog(QDialog):
     """Diálogo no-modal de inspección de un registro ASTERIX."""
 
-    def __init__(self, raw_bytes: bytes = b"", info: Optional[dict] = None, parent=None):
+    def __init__(self, raw_bytes: bytes = b"", info: Optional[dict] = None, parent=None,
+                 paquetes: Optional[List[Tuple[bytes, dict]]] = None):
         super().__init__(parent)
-        self.raw_bytes = raw_bytes or b""
-        self.info = dict(info or {})
-        # Derivar SAC/SIC numéricos a partir de "sac/sic"
-        ss = str(self.info.get("sac_sic") or "")
-        if "/" in ss:
-            sac, sic = ss.split("/", 1)
-            self.info.setdefault("sac", sac.strip())
-            self.info.setdefault("sic", sic.strip())
+        # `paquetes`: lista de (raw_bytes, info) → un Data Block por elemento.
+        # Compatibilidad: si no se pasa, se arma con (raw_bytes, info) único.
+        if paquetes is None:
+            paquetes = [(raw_bytes or b"", info)]
+        self.paquetes: List[Tuple[bytes, dict]] = []
+        for rb, inf in paquetes:
+            inf = dict(inf or {})
+            ss = str(inf.get("sac_sic") or "")
+            if "/" in ss:
+                sac, sic = ss.split("/", 1)
+                inf.setdefault("sac", sac.strip())
+                inf.setdefault("sic", sic.strip())
+            self.paquetes.append((rb or b"", inf))
+        # Primer paquete como referencia (retrocompatibilidad)
+        self.raw_bytes, self.info = self.paquetes[0]
         self.setWindowTitle("Inspector de Paquete ASTERIX — Bajo Nivel")
-        self.resize(980, 600)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 980, 600)
         self.setModal(False)
         self._init_ui()
         self._cargar()
@@ -673,7 +765,25 @@ class AsterixInspectorDialog(QDialog):
         layout = QHBoxLayout(self)
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # --- Panel izquierdo: árbol Data Block / Data Record / Data Item ---
+        # --- Panel 1: lista de paquetes seleccionados (#, ToD, bytes) ---
+        cont_lista = QWidget()
+        vlst = QVBoxLayout(cont_lista)
+        vlst.setContentsMargins(0, 0, 0, 0)
+        vlst.addWidget(QLabel("Paquetes seleccionados:"))
+        self.lista = QTableWidget(0, 3)
+        self.lista.setHorizontalHeaderLabels(["#", "ToD", "Bytes"])
+        self.lista.verticalHeader().setVisible(False)
+        self.lista.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.lista.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.lista.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.lista.setShowGrid(True)  # líneas de separación entre paquetes
+        self.lista.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents)
+        self.lista.itemSelectionChanged.connect(self._on_lista_sel)
+        vlst.addWidget(self.lista)
+        splitter.addWidget(cont_lista)
+
+        # --- Panel 2: árbol Data Block / Data Record / Data Item ---
         izq = QWidget()
         vizq = QVBoxLayout(izq)
         vizq.setContentsMargins(0, 0, 0, 0)
@@ -682,6 +792,7 @@ class AsterixInspectorDialog(QDialog):
         self.tree_model.setHorizontalHeaderLabels(["Dataitem", "Summary"])
         self.tree.setModel(self.tree_model)
         self.tree.setAlternatingRowColors(True)
+        self.tree.setItemDelegate(_SepBloquesDelegate(self.tree))
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.tree.selectionModel().currentChanged.connect(self._on_sel)
         vizq.addWidget(self.tree)
@@ -711,7 +822,7 @@ class AsterixInspectorDialog(QDialog):
         der.addWidget(cont_det)
 
         splitter.addWidget(der)
-        splitter.setSizes([460, 520])
+        splitter.setSizes([180, 440, 500])
         der.setSizes([200, 400])
         layout.addWidget(splitter)
 
@@ -720,52 +831,89 @@ class AsterixInspectorDialog(QDialog):
         return f"Data Item {code} — {nombre}" if nombre else f"Data Item {code}"
 
     def _cargar(self):
-        self.hex_viewer.setText(generar_hex_dump(self.raw_bytes))
+        # El árbol se construye por paquete; lo dispara la selección en la lista.
+        self._poblar_lista()
+        self.detail.setHtml(
+            "<p style='color:#666'>Seleccioná un <b>Data Item</b> en el árbol para ver "
+            "sus bytes (hex y binario) y su desglose.</p>")
 
+    def _cargar_arbol(self, pi: int):
+        """Construye el árbol con SOLO el Data Block del paquete `pi`."""
         self.tree_model.removeRows(0, self.tree_model.rowCount())
+        if not (0 <= pi < len(self.paquetes)):
+            return
+        raw_bytes, info = self.paquetes[pi]
         root = self.tree_model.invisibleRootItem()
-        cat = self.info.get("category")
-
-        nodo_block = QStandardItem("Data Block 1")
+        cat = info.get("category")
+        nodo_block = QStandardItem(f"Data Block {pi + 1}")
+        nodo_block.setData(("blk", pi), Qt.ItemDataRole.UserRole)
         root.appendRow([nodo_block, QStandardItem(f"CAT{cat:03d}" if cat else "")])
 
-        filas_txt = []
-        records = deep_records(cat, self.raw_bytes)
-
+        records = deep_records(cat, raw_bytes)
         if records:
             # Deep-decode: todos los Data Records del bloque, con offsets y nombres.
-            for ridx, (info, items) in enumerate(records):
+            for ridx, (rinfo, items) in enumerate(records):
                 nodo_rec = QStandardItem(f"Data Record {ridx + 1}")
+                nodo_rec.setData(("blk", pi), Qt.ItemDataRole.UserRole)
                 nodo_block.appendRow([nodo_rec, QStandardItem("")])
-                summ_map = {c: s for c, s in _items_de_registro(info)}
-                filas_txt.append(f"--- Data Record {ridx + 1} ---")
+                summ_map = {c: s for c, s in _items_de_registro(rinfo)}
                 for code, start, end in items:
-                    summary = summ_map.get(code) or self._hex_rango(start, end)
+                    summary = summ_map.get(code) or self._hex_rango(raw_bytes, start, end)
                     n_item = QStandardItem(self._etiqueta_item(code))
-                    n_item.setData((code, start, end, summary), Qt.ItemDataRole.UserRole)
+                    n_item.setData(("item", pi, code, start, end, summary),
+                                   Qt.ItemDataRole.UserRole)
                     nodo_rec.appendRow([n_item, QStandardItem(summary)])
-                    filas_txt.append(f"{code:<10} [{start:>3}:{end:<3}]  {summary}")
         else:
             # Fallback (categorías sin deep-decode todavía): solo campos decodificados
-            # del registro clickeado, sin offsets/resaltado.
+            # del registro, sin offsets/resaltado.
             nodo_rec = QStandardItem("Data Record 1")
+            nodo_rec.setData(("blk", pi), Qt.ItemDataRole.UserRole)
             nodo_block.appendRow([nodo_rec, QStandardItem("")])
-            for code, summary in _items_de_registro(self.info):
+            items = _items_de_registro(info)
+            for code, summary in items:
                 nodo_rec.appendRow([
                     QStandardItem(self._etiqueta_item(code)), QStandardItem(summary)])
-                filas_txt.append(f"{code:<10} {summary}")
-            if not filas_txt:
+            if not items:
                 nodo_rec.appendRow([
                     QStandardItem("(sin desglose para esta categoría)"), QStandardItem("")])
 
         self.tree.expandAll()
         self.tree.resizeColumnToContents(0)
-        self.detail.setHtml(
-            "<p style='color:#666'>Seleccioná un <b>Data Item</b> en el árbol para ver "
-            "sus bytes (hex y binario) y su desglose.</p>")
 
-    def _hex_rango(self, start: int, end: int) -> str:
-        return " ".join(f"{b:02X}" for b in self.raw_bytes[start:end])
+    def _poblar_lista(self):
+        """Llena la tabla de paquetes seleccionados (#, ToD, bytes)."""
+        self.lista.setRowCount(len(self.paquetes))
+        for pi, (rb, info) in enumerate(self.paquetes):
+            tod = info.get("timestamp")
+            celdas = [
+                QTableWidgetItem(str(pi + 1)),
+                QTableWidgetItem(_fmt_tod(tod) if tod is not None else "—"),
+                QTableWidgetItem(str(len(rb))),
+            ]
+            for c, celda in enumerate(celdas):
+                celda.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.lista.setItem(pi, c, celda)
+        if self.paquetes:
+            self.lista.selectRow(0)
+
+    def _on_lista_sel(self):
+        filas = self.lista.selectionModel().selectedRows()
+        if filas:
+            self._ir_a_paquete(filas[0].row())
+
+    def _ir_a_paquete(self, pi: int):
+        """Muestra en el árbol y el hex SOLO el paquete `pi` de la lista."""
+        self._mostrar_hex(pi)
+        self._cargar_arbol(pi)
+
+    def _mostrar_hex(self, pi: int):
+        """Vuelca en el hex viewer los bytes crudos del paquete `pi`."""
+        if 0 <= pi < len(self.paquetes):
+            self._hex_pi = pi
+            self.hex_viewer.setText(generar_hex_dump(self.paquetes[pi][0]))
+
+    def _hex_rango(self, raw_bytes: bytes, start: int, end: int) -> str:
+        return " ".join(f"{b:02X}" for b in raw_bytes[start:end])
 
     def _on_sel(self, current, previous):
         if not current.isValid():
@@ -774,18 +922,25 @@ class AsterixInspectorDialog(QDialog):
         idx0 = current.sibling(current.row(), 0)
         item = self.tree_model.itemFromIndex(idx0)
         data = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
-        if data:
-            code, start, end, summary = data
-            self._resaltar(int(start), int(end))
-            self.detail.setHtml(self._html_detalle_item(code, int(start), int(end), summary))
+        if data and data[0] == "item":
+            _, pi, code, start, end, summary = data
+            if pi != getattr(self, "_hex_pi", -1):
+                self._mostrar_hex(pi)
+            self._resaltar(pi, int(start), int(end))
+            self.detail.setHtml(
+                self._html_detalle_item(pi, code, int(start), int(end), summary))
         else:
+            # Nodo Data Block / Data Record: muestra el hex de su paquete sin resaltar.
+            if data and data[0] == "blk" and data[1] != getattr(self, "_hex_pi", -1):
+                self._mostrar_hex(data[1])
             self.hex_viewer.setExtraSelections([])
             self.detail.setHtml(
                 "<p style='color:#666'>(seleccioná un Data Item para ver su detalle)</p>")
 
-    def _html_detalle_item(self, code: str, start: int, end: int, summary: str) -> str:
+    def _html_detalle_item(self, pi: int, code: str, start: int, end: int,
+                           summary: str) -> str:
         nombre = _item_name(code)
-        data = self.raw_bytes[start:end]
+        data = self.paquetes[pi][0][start:end]
 
         # Raw Data en Hexadecimal + ASCII: una columna por octeto
         oct_hdr = "<td bgcolor='#eef3e2'></td>" + "".join(
@@ -830,7 +985,7 @@ class AsterixInspectorDialog(QDialog):
             "(<a href='https://www.eurocontrol.int'>www.eurocontrol.int</a>) "
             "for more ASTERIX information.</p>")
 
-    def _resaltar(self, start: int, end: int):
+    def _resaltar(self, pi: int, start: int, end: int):
         """Pinta en el hex viewer los bytes [start, end) del Item seleccionado."""
         fmt = QTextCharFormat()
         fmt.setBackground(QColor("#E91E63"))

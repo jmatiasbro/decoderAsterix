@@ -135,7 +135,8 @@ class PassDashboardDialog(QDialog):
         self.results = dict(self.all_results)
         
         self.setWindowTitle("Evaluación de Prestaciones Radar — Sistema PASS (SASS-C)")
-        self.resize(1180, 780)
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 1180, 780)
         self.setStyleSheet(self._get_cyber_stylesheet())
         
         self._setup_ui()
