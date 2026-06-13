@@ -171,6 +171,8 @@ def decode(payload: bytes, offset: int, block_length: int, category: int,
                                         bds['mag_heading'] = float(fields['Magnetic Heading (deg)'])
                                     if code == '5,0' and 'Ground Speed (kt)' in fields:
                                         bds['ground_speed_bds'] = float(fields['Ground Speed (kt)'])
+                                    if code == '6,0' and 'Mach' in fields:
+                                        bds['mach_bds'] = float(fields['Mach'])
                         except Exception:
                             pass
                         offset += 1 + (rep * 8)
