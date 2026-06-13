@@ -356,13 +356,23 @@ def _sf_034_020(d):
             ("Antenna Azimuth (deg) LSB=360/256", f"{raw * 360.0 / 256.0:.4f}")]
 
 
+def _sf_023_020(d):
+    """I023/020 System Status (1 byte): estado del sistema + bits de servicio."""
+    b = d[0]
+    estados = {0: "Running", 1: "Failed", 2: "Degraded", 3: "Undefined"}
+    st = (b >> 6) & 0x03
+    return [("System State (bits 8-7)", f"{st} ({estados.get(st, '?')})"),
+            ("UPS active (bit 3)", 1 if b & 0x04 else 0),
+            ("Byte (hex)", f"{b:02X}")]
+
+
 # Decodificadores de subcampos por Item (Detailed Description). Se amplían de a poco.
 SUBFIELD_DECODERS = {
     "I048/010": _sf_sacsic, "I021/010": _sf_sacsic, "I062/010": _sf_sacsic,
-    "I001/010": _sf_sacsic, "I034/010": _sf_sacsic,
+    "I001/010": _sf_sacsic, "I034/010": _sf_sacsic, "I023/010": _sf_sacsic,
     "I048/140": _sf_048_140, "I048/040": _sf_048_040, "I048/070": _sf_048_070,
     "I048/090": _sf_048_090, "I048/220": _sf_048_220, "I048/240": _sf_048_240,
-    "I048/161": _sf_048_161, "I034/020": _sf_034_020,
+    "I048/161": _sf_048_161, "I034/020": _sf_034_020, "I023/020": _sf_023_020,
 }
 
 
