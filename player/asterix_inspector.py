@@ -461,6 +461,71 @@ def _sf_062_220(d):
     return [("Rate of Climb/Descent (ft/min) LSB=6.25", f"{_s(d, 0, 2) * 6.25:.0f}")]
 
 
+def _sf_062_100(d):
+    return [("X (m) LSB=0.5", f"{_s(d, 0, 3) * 0.5:.1f}"),
+            ("Y (m) LSB=0.5", f"{_s(d, 3, 6) * 0.5:.1f}")]
+
+
+def _sf_062_130(d):
+    return [("Geometric Altitude (ft) LSB=6.25", f"{_s(d, 0, 2) * 6.25:.1f}")]
+
+
+def _sf_048_042(d):
+    return [("X (NM) LSB=1/128", f"{_s(d, 0, 2) / 128.0:.4f}"),
+            ("Y (NM) LSB=1/128", f"{_s(d, 2, 4) / 128.0:.4f}")]
+
+
+def _sf_048_200(d):
+    gs = _u(d, 0, 2) * (2 ** -14) * 3600.0
+    hdg = _u(d, 2, 4) * 360.0 / 65536.0
+    return [("Ground Speed (kt) LSB=2^-14 NM/s", f"{gs:.1f}"),
+            ("Heading (deg) LSB=360/2^16", f"{hdg:.2f}")]
+
+
+def _sf_048_110(d):
+    h = _u(d, 0, 2) & 0x3FFF
+    if h & 0x2000:
+        h -= 0x4000
+    return [("Height 3D (ft) LSB=25", f"{h * 25}")]
+
+
+def _sf_021_040(d):
+    b = d[0]
+    return [("ATP (address type, bits 7-5)", (b >> 5) & 0x07),
+            ("ARC (alt resolution, bits 4-3)", (b >> 3) & 0x03),
+            ("RC (range check)", 1 if b & 0x04 else 0),
+            ("RAB (1=field monitor)", 1 if b & 0x02 else 0),
+            ("FX (extensión)", 1 if b & 0x01 else 0)]
+
+
+def _sf_021_140(d):
+    return [("Geometric Height (ft) LSB=6.25", f"{_s(d, 0, 2) * 6.25:.1f}")]
+
+
+def _sf_034_000(d):
+    tipos = {1: "North marker", 2: "Sector crossing", 3: "Geographical filtering",
+             4: "Jamming strobe", 5: "Solar storm", 6: "SSR jamming", 7: "Mode S jamming"}
+    t = d[0]
+    return [("Message Type", f"{t} ({tipos.get(t, '?')})")]
+
+
+def _sf_034_041(d):
+    period = _u(d, 0, 2) / 128.0
+    rpm = (60.0 / period) if period else 0.0
+    return [("Antenna Rotation Period (s) LSB=1/128", f"{period:.3f}"),
+            ("RPM", f"{rpm:.2f}")]
+
+
+def _sf_generic(d):
+    """Desglose genérico para Items sin decodificador específico: valor entero +
+    interpretación por octeto (decimal / hex / binario)."""
+    out = [("Raw value (uint, big-endian)", int.from_bytes(d, "big") if d else 0),
+           ("Length (bytes)", len(d))]
+    for i, b in enumerate(d[:12]):
+        out.append((f"Octet {i + 1}", f"{b} = 0x{b:02X} = {b:08b}b"))
+    return out
+
+
 def _sf_023_020(d):
     """I023/020 System Status (1 byte): estado del sistema + bits de servicio."""
     b = d[0]
@@ -484,26 +549,33 @@ SUBFIELD_DECODERS = {
     "I021/130": _sf_021_130, "I021/080": _sf_icao3, "I021/070": _sf_mode3a,
     "I021/145": _sf_fl2, "I021/160": _sf_021_160, "I021/170": _sf_callsign,
     "I021/071": _sf_tod3, "I021/073": _sf_tod3, "I021/075": _sf_tod3,
+    "I048/042": _sf_048_042, "I048/200": _sf_048_200, "I048/110": _sf_048_110,
     # CAT062
     "I062/070": _sf_tod3, "I062/105": _sf_062_105, "I062/060": _sf_mode3a,
     "I062/040": _sf_track2, "I062/136": _sf_062_136, "I062/185": _sf_062_185,
-    "I062/220": _sf_062_220, "I062/245": _sf_callsign,
+    "I062/220": _sf_062_220, "I062/245": _sf_callsign, "I062/100": _sf_062_100,
+    "I062/130": _sf_062_130,
+    # CAT021
+    "I021/040": _sf_021_040, "I021/140": _sf_021_140,
     # CAT001
     "I001/040": _sf_048_040, "I001/070": _sf_mode3a, "I001/090": _sf_048_090,
     "I001/161": _sf_track2, "I001/141": _sf_tod2,
     # CAT034 / CAT023
-    "I034/020": _sf_034_020, "I023/020": _sf_023_020,
+    "I034/020": _sf_034_020, "I034/000": _sf_034_000, "I034/030": _sf_tod3,
+    "I034/041": _sf_034_041, "I023/020": _sf_023_020,
 }
 
 
 def _subfields(code: str, data: bytes):
-    fn = SUBFIELD_DECODERS.get(code)
-    if not fn:
-        return []
+    # Decodificador específico del Item, o desglose genérico por octeto si no hay.
+    fn = SUBFIELD_DECODERS.get(code, _sf_generic)
     try:
         return [(n, str(v)) for n, v in fn(data)]
     except Exception:
-        return []
+        try:
+            return [(n, str(v)) for n, v in _sf_generic(data)]
+        except Exception:
+            return []
 
 
 class AsterixInspectorDialog(QDialog):
