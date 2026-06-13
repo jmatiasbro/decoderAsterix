@@ -3741,11 +3741,43 @@ class RadarWidget(_RadarBase):
             except Exception as e:
                 print(f"[RadarWidget] Error renderizando RBL: {e}")
 
+            # ODS: rosa de rumbos + leyenda de alcance (encima de todo, en pantalla)
+            if getattr(self, 'vista_controlador', False) and getattr(self, 'ods_enabled', True):
+                try:
+                    self._draw_compass_rose(painter)
+                except Exception:
+                    pass
+
         except Exception as e:
             print(f"[RadarWidget] Error en paintEvent: {e}")
             painter.restore()
         finally:
             painter.end()
+
+    def _draw_compass_rose(self, painter):
+        """Rosa de rumbos en el borde + leyenda de alcance, en píxeles de pantalla."""
+        import math as _m
+        from player.ods import compass as _c, palette as _pal
+        w, h = self.width(), self.height()
+        cx, cy = w / 2.0 + self.pan_x, h / 2.0 + self.pan_y
+        radius = min(w, h) * 0.46
+        intens = getattr(self, 'ods_layer_intensity', _pal.LAYER_DEFAULT)
+        a = _pal.layer_alpha("compass", intens.get("compass", _pal.LAYER_DEFAULT["compass"]))
+        col = QColor(200, 208, 200, a)
+        painter.save()
+        painter.resetTransform()
+        painter.setPen(QPen(col, 1.0))
+        painter.setFont(QFont("Consolas", 7))
+        for t in _c.bearing_ticks():
+            ang = _m.radians(t.deg)  # 0=Norte, horario
+            sin_a, cos_a = _m.sin(ang), -_m.cos(ang)
+            inner = radius - (10 if t.major else 5)
+            painter.drawLine(QPointF(cx + sin_a * inner, cy + cos_a * inner),
+                             QPointF(cx + sin_a * radius, cy + cos_a * radius))
+            if t.major:
+                lr = radius + 10
+                painter.drawText(QPointF(cx + sin_a * lr - 8, cy + cos_a * lr + 4), t.label)
+        painter.restore()
 
     # ================================================================
     # WHEEL — ZOOM
