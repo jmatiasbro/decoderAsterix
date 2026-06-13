@@ -251,6 +251,8 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int,
                             for code, _n, fields, _raw in parse_mb(payload[offset:offset + 1 + rep * 8]):
                                 if fields:
                                     bds[code] = fields
+                                    if code == '6,0' and 'Mach' in fields:
+                                        bds['mach_bds'] = float(fields['Mach'])
                         except Exception:
                             pass
                         offset += 1 + rep * 8

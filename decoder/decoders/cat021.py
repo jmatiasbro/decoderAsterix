@@ -323,6 +323,8 @@ def decode(payload: bytes, offset: int, block_length: int, category: int,
                                     payload[offset:offset + 1 + rep * 8]):
                                 if fields:
                                     bds[code] = fields
+                                    if code == '6,0' and 'Mach' in fields:
+                                        bds['mach_bds'] = float(fields['Mach'])
                         except Exception:
                             pass
                         offset += 1 + (rep * 8) # REP + N × 8 octetos
