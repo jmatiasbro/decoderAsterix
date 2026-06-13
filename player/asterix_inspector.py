@@ -235,8 +235,12 @@ def _plot_a_info(p: dict) -> dict:
     ed = p.get("extra_data", {}) or {}
     if ed.get("ground_speed_nms") is not None:
         info["ground_speed"] = ed["ground_speed_nms"] * 3600.0
+    elif ed.get("ground_speed_kts") is not None:
+        info["ground_speed"] = ed["ground_speed_kts"]
     if ed.get("track_angle") is not None:
         info["track_angle"] = ed["track_angle"]
+    if ed.get("vertical_rate_ftmin") is not None:
+        info["vertical_rate"] = ed["vertical_rate_ftmin"]
     # Copiar llaves de extra_data directamente al info
     for k, v in ed.items():
         info.setdefault(k, v)
@@ -262,6 +266,8 @@ def deep_records(category, raw_bytes):
             from decoder.decoders import cat034 as decoder
         elif cat == 23:
             from decoder.decoders import cat023 as decoder
+        elif cat == 62:
+            from decoder.decoders import cat062 as decoder
         if decoder is None:
             return []
         acc: list = []
@@ -356,6 +362,105 @@ def _sf_034_020(d):
             ("Antenna Azimuth (deg) LSB=360/256", f"{raw * 360.0 / 256.0:.4f}")]
 
 
+def _s(d, a, b):
+    return int.from_bytes(d[a:b], "big", signed=True)
+
+
+# ---- Genéricos reutilizables ----
+def _sf_tod3(d):
+    tod = _u(d, 0, 3) / 128.0
+    return [("Time of Day (s) LSB=1/128", f"{tod:.3f}"), ("ToD HH:MM:SS.mmm", _fmt_tod(tod))]
+
+
+def _sf_tod2(d):
+    tod = _u(d, 0, 2) / 128.0
+    return [("Truncated ToD (s) LSB=1/128", f"{tod:.3f}")]
+
+
+def _sf_icao3(d):
+    return [("Aircraft Address (ICAO 24-bit)", d[:3].hex().upper())]
+
+
+def _sf_mode3a(d):
+    raw = _u(d, 0, 2)
+    return [("V (1=Validated)", 0 if raw & 0x8000 else 1),
+            ("G (1=Garbled)", 1 if raw & 0x4000 else 0),
+            ("L (1=Smoothed)", 1 if raw & 0x2000 else 0),
+            ("Mode-3/A code (octal)", f"{raw & 0x0FFF:04o}")]
+
+
+def _sf_track2(d):
+    return [("Track Number", _u(d, 0, 2))]
+
+
+def _sf_fl2(d):
+    return [("Flight Level LSB=1/4", f"{_s(d, 0, 2) * 0.25:.2f}")]
+
+
+def _sf_callsign(d):
+    from decoder.asterix_utils import _decode_callsign
+    n = 6 if len(d) >= 6 else len(d)
+    return [("Aircraft Identification", _decode_callsign(d[:n]))]
+
+
+# ---- CAT048 ----
+def _sf_048_020(d):
+    b = d[0]
+    typ = {0: "No detection", 1: "PSR only", 2: "SSR only", 3: "SSR+PSR (CMB)",
+           4: "Mode S All-Call", 5: "Mode S Roll-Call",
+           6: "All-Call+PSR", 7: "Roll-Call+PSR"}.get((b >> 5) & 0x07, "?")
+    return [("TYP (detección)", f"{(b >> 5) & 0x07} ({typ})"),
+            ("SIM (1=simulado)", 1 if b & 0x10 else 0),
+            ("RDP (cadena)", 1 if b & 0x08 else 0),
+            ("SPI (1=ident)", 1 if b & 0x04 else 0),
+            ("RAB (1=field monitor)", 1 if b & 0x02 else 0),
+            ("FX (extensión)", 1 if b & 0x01 else 0)]
+
+
+# ---- CAT021 ----
+def _sf_021_130(d):
+    # v2.4: 6 bytes (LSB 180/2^23); v0.26: 8 bytes (LSB 180/2^25)
+    if len(d) >= 8:
+        lat = _s(d, 0, 4) * 180.0 / (2 ** 25)
+        lon = _s(d, 4, 8) * 180.0 / (2 ** 25)
+    else:
+        lat = _s(d, 0, 3) * 180.0 / (2 ** 23)
+        lon = _s(d, 3, 6) * 180.0 / (2 ** 23)
+    return [("Latitude (deg)", f"{lat:.6f}"), ("Longitude (deg)", f"{lon:.6f}")]
+
+
+def _sf_021_160(d):
+    val = _u(d, 0, 4)
+    gs = ((val >> 16) & 0x7FFF) * 0.00006103515625 * 3600.0
+    ta = (val & 0xFFFF) * 360.0 / 65536.0
+    return [("Ground Speed (kt)", f"{gs:.1f}"), ("Track Angle (deg)", f"{ta:.2f}")]
+
+
+# ---- CAT062 ----
+def _sf_062_105(d):
+    lat = _s(d, 0, 4) * 180.0 / 33554432.0
+    lon = _s(d, 4, 8) * 180.0 / 33554432.0
+    return [("Latitude (deg)", f"{lat:.6f}"), ("Longitude (deg)", f"{lon:.6f}")]
+
+
+def _sf_062_185(d):
+    vx = _s(d, 0, 2) * 0.25
+    vy = _s(d, 2, 4) * 0.25
+    import math as _m
+    gs = _m.hypot(vx, vy) * 1.94384
+    ta = _m.degrees(_m.atan2(vx, vy)) % 360.0
+    return [("Vx (m/s)", f"{vx:.2f}"), ("Vy (m/s)", f"{vy:.2f}"),
+            ("Ground Speed (kt)", f"{gs:.1f}"), ("Track Angle (deg)", f"{ta:.2f}")]
+
+
+def _sf_062_136(d):
+    return [("Measured Flight Level LSB=1/4", f"{_s(d, 0, 2) * 0.25:.2f}")]
+
+
+def _sf_062_220(d):
+    return [("Rate of Climb/Descent (ft/min) LSB=6.25", f"{_s(d, 0, 2) * 6.25:.0f}")]
+
+
 def _sf_023_020(d):
     """I023/020 System Status (1 byte): estado del sistema + bits de servicio."""
     b = d[0]
@@ -368,11 +473,26 @@ def _sf_023_020(d):
 
 # Decodificadores de subcampos por Item (Detailed Description). Se amplían de a poco.
 SUBFIELD_DECODERS = {
+    # SAC/SIC (todas)
     "I048/010": _sf_sacsic, "I021/010": _sf_sacsic, "I062/010": _sf_sacsic,
     "I001/010": _sf_sacsic, "I034/010": _sf_sacsic, "I023/010": _sf_sacsic,
+    # CAT048
     "I048/140": _sf_048_140, "I048/040": _sf_048_040, "I048/070": _sf_048_070,
     "I048/090": _sf_048_090, "I048/220": _sf_048_220, "I048/240": _sf_048_240,
-    "I048/161": _sf_048_161, "I034/020": _sf_034_020, "I023/020": _sf_023_020,
+    "I048/161": _sf_048_161, "I048/020": _sf_048_020,
+    # CAT021
+    "I021/130": _sf_021_130, "I021/080": _sf_icao3, "I021/070": _sf_mode3a,
+    "I021/145": _sf_fl2, "I021/160": _sf_021_160, "I021/170": _sf_callsign,
+    "I021/071": _sf_tod3, "I021/073": _sf_tod3, "I021/075": _sf_tod3,
+    # CAT062
+    "I062/070": _sf_tod3, "I062/105": _sf_062_105, "I062/060": _sf_mode3a,
+    "I062/040": _sf_track2, "I062/136": _sf_062_136, "I062/185": _sf_062_185,
+    "I062/220": _sf_062_220, "I062/245": _sf_callsign,
+    # CAT001
+    "I001/040": _sf_048_040, "I001/070": _sf_mode3a, "I001/090": _sf_048_090,
+    "I001/161": _sf_track2, "I001/141": _sf_tod2,
+    # CAT034 / CAT023
+    "I034/020": _sf_034_020, "I023/020": _sf_023_020,
 }
 
 

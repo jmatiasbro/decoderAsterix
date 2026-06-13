@@ -9,7 +9,8 @@ from typing import List, Dict, Any
 from decoder.native_asterix import decode_cat062 as _decode_cat062
 
 
-def decode(payload: bytes, offset: int, block_length: int, category: int) -> List[Dict[str, Any]]:
+def decode(payload: bytes, offset: int, block_length: int, category: int,
+           record_offsets=None) -> List[Dict[str, Any]]:
     """
     Decodifica un bloque de datos ASTERIX CAT062 (SDPS Track).
 
@@ -22,4 +23,5 @@ def decode(payload: bytes, offset: int, block_length: int, category: int) -> Lis
     Returns:
         Lista de diccionarios con los registros decodificados.
     """
-    return _decode_cat062(payload, offset, block_length, category)
+    return _decode_cat062(payload, offset, block_length, category,
+                          record_offsets=record_offsets)
