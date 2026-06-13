@@ -909,6 +909,10 @@ class RadarWidget(_RadarBase):
         self._get_sensor_color(226, 110)
 
     def _get_sensor_color(self, sac: int, sic: int) -> QColor:
+        # ODS: la vista controlador no codifica por sensor; las estelas van en gris
+        # neutro (el color del símbolo lo decide _draw_oaci_track por estado de track).
+        if getattr(self, 'vista_controlador', False) and getattr(self, 'ods_enabled', True):
+            return QColor(150, 158, 150)
         key = (sac, sic)
         if key not in self.sensor_colors:
             idx = self.color_palette_index
@@ -3443,42 +3447,12 @@ class RadarWidget(_RadarBase):
                         
                     default_centers[track_id] = (sx_sy.x() + dx, sx_sy.y() + dy, max_w)
                 
-                # Relajación iterativa de colisiones (2 pasadas de repulsión de fuerzas)
-                for _ in range(2):
-                    active_tids = list(default_centers.keys())
-                    for i in range(len(active_tids)):
-                        tid1 = active_tids[i]
-                        c1_x, c1_y, w1 = default_centers[tid1]
-                        s1_x, s1_y = label_shifts[tid1]
-                        curr1_x = c1_x + s1_x
-                        curr1_y = c1_y + s1_y
-                        
-                        for j in range(i + 1, len(active_tids)):
-                            tid2 = active_tids[j]
-                            c2_x, c2_y, w2 = default_centers[tid2]
-                            s2_x, s2_y = label_shifts[tid2]
-                            curr2_x = c2_x + s2_x
-                            curr2_y = c2_y + s2_y
-                            
-                            # Distancia en píxeles
-                            dx_px = curr1_x - curr2_x
-                            dy_px = curr1_y - curr2_y
-                            dist_px = math.sqrt(dx_px**2 + dy_px**2)
-                            
-                            # Umbral de legibilidad de 50 píxeles
-                            if dist_px < 50.0:
-                                if dist_px < 1.0:
-                                    dist_px = 1.0
-                                angle = math.atan2(dy_px, dx_px)
-                                force = (50.0 - dist_px) * 0.5
-                                rep_x = force * math.cos(angle)
-                                rep_y = force * math.sin(angle)
-                                
-                                # Aplicar desplazamientos opuestos
-                                label_shifts[tid1][0] += rep_x
-                                label_shifts[tid1][1] += rep_y
-                                label_shifts[tid2][0] -= rep_x
-                                label_shifts[tid2][1] -= rep_y
+                # Relajación de colisiones (función pura testeada en player.ods.declutter)
+                from player.ods.declutter import resolve_shifts
+                _res = resolve_shifts(default_centers, min_dist=50.0, passes=2)
+                for _tid, (_dx, _dy) in _res.items():
+                    label_shifts[_tid][0] += _dx
+                    label_shifts[_tid][1] += _dy
 
             # Store label shifts in cache for use in drawing methods
             self._label_shifts_cache = label_shifts
