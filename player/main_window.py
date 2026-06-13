@@ -1007,14 +1007,12 @@ class MainWindow(QMainWindow):
             w.stop_requested.connect(self._stop)
             w.speed_changed.connect(self._modo_playback_velocidad)
             w.seek_requested.connect(self._modo_playback_seek)
+            w.range_changed.connect(self._modo_playback_rango)
             self._playback_player = w
-        self._playback_player.set_enabled_transport(self.worker is not None)
+        self._playback_player.set_enabled_transport(self.worker is not None and self.worker.scanned)
         self._playback_player.show()
         self._playback_player.raise_()
         self._playback_player.activateWindow()
-        # Si todavía no hay archivo cargado, abrir el selector directamente
-        if self.worker is None:
-            self._cargar_pcap()
 
     def _modo_playback_velocidad(self, texto: str):
         i = self.combo_vel.findText(texto)
@@ -1024,6 +1022,14 @@ class MainWindow(QMainWindow):
     def _modo_playback_seek(self, pct: int):
         self.slider_tiempo.setValue(int(pct))
         self._seek()
+
+    def _modo_playback_rango(self, t0: int, t1: int):
+        """Aplica el tramo horario al worker. -1 = sin límite en ese extremo."""
+        if self.worker is None:
+            return
+        a = None if t0 < 0 else float(t0)
+        b = None if t1 < 0 else float(t1)
+        self.worker.set_time_range(a, b)
 
     def _abrir_modo_consola(self):
         """Abre el diálogo para conectar por IP y puerto (entrada UDP en vivo)."""
@@ -1251,6 +1257,20 @@ class MainWindow(QMainWindow):
         grupo_rep.setLayout(l_rep)
         v_layout.addWidget(grupo_rep)
 
+        # Grupo Proyección (debajo de Centrar Mapa)
+        self.grupo_proy = QGroupBox("Proyección")
+        l_sensor = QVBoxLayout()
+        l_sensor.setContentsMargins(6, 12, 6, 6)
+        l_sensor.setSpacing(4)
+        self.combo_sensor = QComboBox()
+        self.combo_sensor.addItem("Autocentrado")
+        self.combo_sensor.setToolTip("Seleccionar sensor para centrar y proyectar la vista")
+        self.combo_sensor.currentIndexChanged.connect(self._on_sensor_combo_changed)
+        self.combo_sensor.setStyleSheet("background-color: #2D313C; color: white;")
+        l_sensor.addWidget(self.combo_sensor)
+        self.grupo_proy.setLayout(l_sensor)
+        v_layout.addWidget(self.grupo_proy)
+
         # B. Grupo Radares Activos (SAC/SIC)
         grupo_sacsic = QGroupBox("Radares Activos (SAC/SIC)")
         v_s = QVBoxLayout(grupo_sacsic)
@@ -1459,20 +1479,6 @@ class MainWindow(QMainWindow):
         grupo_hist.setLayout(l_hist)
         v_layout.addWidget(grupo_hist)
 
-        # E. Grupo Proyección
-        self.grupo_proy = QGroupBox("Proyección")
-        l_sensor = QVBoxLayout()
-        l_sensor.setContentsMargins(6, 12, 6, 6)
-        l_sensor.setSpacing(4)
-        self.combo_sensor = QComboBox()
-        self.combo_sensor.addItem("Autocentrado")
-        self.combo_sensor.setToolTip("Seleccionar sensor para centrar y proyectar la vista")
-        self.combo_sensor.currentIndexChanged.connect(self._on_sensor_combo_changed)
-        self.combo_sensor.setStyleSheet("background-color: #2D313C; color: white;")
-        l_sensor.addWidget(self.combo_sensor)
-        self.grupo_proy.setLayout(l_sensor)
-        v_layout.addWidget(self.grupo_proy)
-
         # F. Grupo Filtros Tácticos
         grupo_filtros = QGroupBox("Filtros Avanzados")
         l_filtros = QVBoxLayout()
@@ -1574,7 +1580,7 @@ class MainWindow(QMainWindow):
         self.dock_technical.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.dock_technical)
         self.dock_technical.setFloating(False)
-        self.dock_technical.setVisible(True)
+        self.dock_technical.setVisible(False)  # oculto por defecto; se abre desde Ver → Diagnóstico ATSEP
 
     def _on_custom_sensor_toggled(self, text: str, checked: bool):
         """Maneja la selección individual de un sensor desde su checkbox personalizado."""
@@ -2107,11 +2113,14 @@ class MainWindow(QMainWindow):
             self.slider_tiempo.setMaximum(100)
             if getattr(self, '_playback_player', None) is not None:
                 self._playback_player.set_enabled_transport(True)
+                self._playback_player.set_loading_progress(100)  # oculta la barra
+                self._playback_player.set_time_bounds(
+                    int(self.worker.t_min), int(self.worker.t_max))
 
-            # Mostrar los controles de reproducción ahora que hay un archivo cargado
+            # El reproductor vive ahora en el widget flotante (menú Modo → Playback);
+            # la barra de transporte bajo el menú queda retirada.
             self._playback_disponible = True
-            if not getattr(self.radar, 'vista_controlador', False):
-                self.toolbar.setVisible(True)
+            self.toolbar.setVisible(False)
             
             # Asegurar que todos los sensores detectados sean visibles en el widget del radar
             self.radar.sensores_visibles = self.sensores_activos.copy()
@@ -3031,15 +3040,15 @@ class MainWindow(QMainWindow):
         # Vista del PPI
         self.radar.vista_controlador = es_controlador
 
-        # Habilitar/Deshabilitar panel técnico según el rol
-        if hasattr(self, 'dock_technical'):
-            self.dock_technical.setVisible(not es_controlador)
+        # Panel técnico ATSEP: no se abre por defecto. El controlador no puede
+        # mostrarlo; el técnico lo abre manualmente desde Ver → Diagnóstico ATSEP.
+        if hasattr(self, 'dock_technical') and es_controlador:
+            self.dock_technical.setVisible(False)
         if hasattr(self, 'act_toggle_tech_dock'):
             self.act_toggle_tech_dock.setVisible(not es_controlador)
 
-        # Bloqueo de controles de playback (solo técnico configura el playback).
-        # Visibles solo si hay un archivo cargado y el rol no es controlador.
-        self.toolbar.setVisible(getattr(self, '_playback_disponible', False) and not es_controlador)
+        # Barra de transporte retirada: el reproductor es el widget flotante (menú Modo).
+        self.toolbar.setVisible(False)
         if hasattr(self, 'btn_cargar'):
             self.btn_cargar.setEnabled(not es_controlador)
             self.btn_cargar.setVisible(not es_controlador)
@@ -3145,6 +3154,8 @@ class MainWindow(QMainWindow):
         if total > 0:
             pct = int((current / total) * 100)
             self.btn_cargar.setText(f" Cargando... {pct}%")
+            if getattr(self, '_playback_player', None) is not None:
+                self._playback_player.set_loading_progress(pct)
 
     def _on_tod_update(self, tod: float):
         from player.radar_widget import SimulationTime
