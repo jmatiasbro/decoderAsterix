@@ -76,6 +76,8 @@ class PlaybackWorker(QThread):
         self._play_index = 0
         self._duration = 0.0
         self._scanned = False
+        self._t_start: Optional[float] = None   # límite inferior del tramo (ToD seg) o None
+        self._t_end: Optional[float] = None     # límite superior del tramo (ToD seg) o None
         self._udp_socket = None
         self._udp_sockets = []
 
@@ -117,6 +119,38 @@ class PlaybackWorker(QThread):
             # Resync tiempo UI
             self.tod_updated.emit(self._plots[self._play_index].time)
         self._mutex.unlock()
+
+    def set_time_range(self, t0: Optional[float], t1: Optional[float]):
+        """Acota la reproducción al tramo [t0, t1] en segundos de ToD. None = sin
+        límite en ese extremo. Reposiciona el índice al primer plot >= t0."""
+        self._mutex.lock()
+        self._t_start = t0
+        self._t_end = t1
+        if self._plots and t0 is not None:
+            idx = 0
+            for i, p in enumerate(self._plots):
+                if p.time >= t0:
+                    idx = i
+                    break
+            else:
+                idx = len(self._plots) - 1
+            self._play_index = max(0, min(len(self._plots) - 1, idx))
+            self.tod_updated.emit(self._plots[self._play_index].time)
+        self._mutex.unlock()
+
+    @property
+    def t_min(self) -> float:
+        self._mutex.lock()
+        t = self._plots[0].time if self._plots else 0.0
+        self._mutex.unlock()
+        return t
+
+    @property
+    def t_max(self) -> float:
+        self._mutex.lock()
+        t = self._plots[-1].time if self._plots else 0.0
+        self._mutex.unlock()
+        return t
 
     def set_target_filter(self, claves):
         """Restringe la reproducción a un conjunto de aeronaves (no a plots sueltos).
@@ -447,11 +481,16 @@ class PlaybackWorker(QThread):
             speed = self.playback_speed
             idx = self._play_index
             ftargets = self._filter_targets
+            t_end = self._t_end
             self._mutex.unlock()
 
             if not running: break
-            
+
             if idx >= total_plots:
+                break
+
+            # Corte por tramo horario: detener al superar el límite superior
+            if t_end is not None and self._plots[idx].time > t_end:
                 break
             
             if paused:
