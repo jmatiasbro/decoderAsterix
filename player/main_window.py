@@ -1384,10 +1384,6 @@ class MainWindow(QMainWindow):
         self.chk_show_history = self._make_toggle_button("Mostrar Estela", "#00F5FF", checked=True)
         self.chk_show_history.toggled.connect(self._on_show_history_toggled)
 
-        # Checkbox para colorear estelas por radar (distinto color por sensor)
-        self.chk_trail_color = self._make_toggle_button("Estelas a Color (por Radar)", "#00E5FF", checked=True)
-        self.chk_trail_color.toggled.connect(self._on_trail_color_toggled)
-
         # Fila 1: Modo de visualización
         l_modo = QHBoxLayout()
         lbl_modo = QLabel("Modo:")
@@ -1465,17 +1461,26 @@ class MainWindow(QMainWindow):
         l_qnh.addWidget(self.sb_qnh)
 
         l_hist.addWidget(self.chk_show_history)
-        l_hist.addWidget(self.chk_trail_color)
         l_hist.addLayout(l_qnh)
         l_hist.addLayout(l_modo)
         l_hist.addLayout(l_cant)
         l_hist.addWidget(self.btn_clear_hist)
-        l_hist.addWidget(self.chk_sweep)
-        l_hist.addWidget(self.chk_silence_cone)
-        l_hist.addWidget(self.chk_modo_integrado)
-        l_hist.addWidget(self.chk_modo_crudo)
-        l_hist.addWidget(self.chk_show_mtr)
-        l_hist.addWidget(self.chk_ocultar_parrot)
+        # Grilla 2 columnas × 3 filas con los 6 toggles tácticos (más grandes)
+        grid_toggles = QGridLayout()
+        grid_toggles.setHorizontalSpacing(6)
+        grid_toggles.setVerticalSpacing(6)
+        _toggles_grid = [
+            self.chk_sweep, self.chk_silence_cone,
+            self.chk_modo_integrado, self.chk_modo_crudo,
+            self.chk_show_mtr, self.chk_ocultar_parrot,
+        ]
+        for i, btn in enumerate(_toggles_grid):
+            btn.setFixedHeight(44)  # reemplaza el fijo de 24 de _make_toggle_button
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            grid_toggles.addWidget(btn, i // 2, i % 2)
+        grid_toggles.setColumnStretch(0, 1)
+        grid_toggles.setColumnStretch(1, 1)
+        l_hist.addLayout(grid_toggles)
         grupo_hist.setLayout(l_hist)
         v_layout.addWidget(grupo_hist)
 
@@ -1704,11 +1709,6 @@ class MainWindow(QMainWindow):
         """Muestra u oculta la estela histórica del radar."""
         if hasattr(self, 'radar') and self.radar is not None:
             self.radar.set_history_visible(checked)
-
-    def _on_trail_color_toggled(self, checked: bool):
-        """Activa/desactiva el color por radar de las estelas (off = verde uniforme)."""
-        if hasattr(self, 'radar') and self.radar is not None:
-            self.radar.set_trail_colored(checked)
 
     def _ajustar_alto_lista_sensores(self):
         """Ajusta el alto de la lista de radares a su contenido (hasta 16 filas) para que
