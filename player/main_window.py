@@ -785,6 +785,7 @@ class MainWindow(QMainWindow):
         # Centro/zoom previos a una reproducción filtrada (para restaurar al detener)
         self._centro_pre_filtrado = None
         self.udp_active = False
+        self._playback_player = None
 
         # Aplicar el perfil guardado en disco
         self._aplicar_perfil(self.profile_manager.profile)
@@ -990,6 +991,57 @@ class MainWindow(QMainWindow):
         
         self.menu_mapas.addSeparator()
         self.menu_mapas.addAction("Cargar Mapa Personalizado (.geojson)...", self._cargar_mapa_personalizado)
+
+        # Menú Modo (Playback / Consola)
+        menu_modo = menu_bar.addMenu("Modo")
+        menu_modo.addAction(_icon("fa5s.play-circle"), "Modo Playback", self._abrir_modo_playback)
+        menu_modo.addAction(_icon("fa5s.network-wired"), "Modo Consola", self._abrir_modo_consola)
+
+    def _abrir_modo_playback(self):
+        """Abre el reproductor flotante y permite elegir el archivo a reproducir."""
+        from player.playback_player_widget import PlaybackPlayerWidget
+        if getattr(self, '_playback_player', None) is None:
+            w = PlaybackPlayerWidget(self)
+            w.open_requested.connect(self._cargar_pcap)
+            w.playpause_requested.connect(self._toggle_play)
+            w.stop_requested.connect(self._stop)
+            w.speed_changed.connect(self._modo_playback_velocidad)
+            w.seek_requested.connect(self._modo_playback_seek)
+            self._playback_player = w
+        self._playback_player.set_enabled_transport(self.worker is not None)
+        self._playback_player.show()
+        self._playback_player.raise_()
+        self._playback_player.activateWindow()
+        # Si todavía no hay archivo cargado, abrir el selector directamente
+        if self.worker is None:
+            self._cargar_pcap()
+
+    def _modo_playback_velocidad(self, texto: str):
+        i = self.combo_vel.findText(texto)
+        if i >= 0:
+            self.combo_vel.setCurrentIndex(i)  # dispara _cambiar_velocidad
+
+    def _modo_playback_seek(self, pct: int):
+        self.slider_tiempo.setValue(int(pct))
+        self._seek()
+
+    def _abrir_modo_consola(self):
+        """Abre el diálogo para conectar por IP y puerto (entrada UDP en vivo)."""
+        if self.udp_active:
+            QMessageBox.information(self, "Modo Consola",
+                                    "Ya hay una conexión UDP activa.")
+            return
+        datos = self._dialogo_conexion_udp(
+            ip=self.txt_udp_ip.text().strip(),
+            puerto=self.txt_udp_port.text().strip())
+        if not datos:
+            return
+        _nombre, ip, puerto = datos
+        if not ip or not puerto:
+            return
+        self.txt_udp_ip.setText(ip)
+        self.txt_udp_port.setText(puerto)
+        self._toggle_udp()
 
     def _setup_tool_bar(self):
         self.toolbar = QToolBar("Controles de Reproducción")
@@ -1853,6 +1905,11 @@ class MainWindow(QMainWindow):
                 names_str += f" (+{len(file_paths) - 3})"
             self.setWindowTitle(f"ASTERIX Radar Decoder - [Múltiples PCAP: {names_str}]")
         
+        if getattr(self, '_playback_player', None) is not None:
+            self._playback_player.set_filename(
+                os.path.basename(file_paths[0]) if len(file_paths) == 1
+                else f"{len(file_paths)} archivos")
+
         # Iniciar fase de decodificación/carga inmediatamente
         self.btn_play.setEnabled(False)
         self.btn_cargar.setEnabled(False)
@@ -1922,6 +1979,8 @@ class MainWindow(QMainWindow):
         else:
             self.btn_play.setIcon(_icon("fa5s.play"))
             self.btn_play.setText(" Reproducir")
+        if getattr(self, '_playback_player', None) is not None:
+            self._playback_player.set_playing(playing)
 
     def _toggle_play(self):
         if self.worker is not None:
@@ -2046,6 +2105,8 @@ class MainWindow(QMainWindow):
             self.btn_pass.setEnabled(True)
             self.slider_tiempo.setEnabled(True)
             self.slider_tiempo.setMaximum(100)
+            if getattr(self, '_playback_player', None) is not None:
+                self._playback_player.set_enabled_transport(True)
 
             # Mostrar los controles de reproducción ahora que hay un archivo cargado
             self._playback_disponible = True
@@ -3077,6 +3138,8 @@ class MainWindow(QMainWindow):
             self.slider_tiempo.blockSignals(True)
             self.slider_tiempo.setValue(pct)
             self.slider_tiempo.blockSignals(False)
+            if getattr(self, '_playback_player', None) is not None:
+                self._playback_player.set_progress(pct)
 
     def _on_decoding_progress(self, current: int, total: int):
         if total > 0:
@@ -3092,6 +3155,8 @@ class MainWindow(QMainWindow):
         self.lbl_tiempo.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
         if hasattr(self, 'lbl_hud_utc'):
             self.lbl_hud_utc.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+        if getattr(self, '_playback_player', None) is not None:
+            self._playback_player.set_time_label(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
 
     def evaluar_stca(self):
         """Redirige la evaluación al widget de radar central."""
