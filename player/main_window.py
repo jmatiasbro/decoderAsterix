@@ -997,6 +997,44 @@ class MainWindow(QMainWindow):
         menu_modo = menu_bar.addMenu("Modo")
         menu_modo.addAction(_icon("fa5s.play-circle"), "Modo Playback", self._abrir_modo_playback)
         menu_modo.addAction(_icon("fa5s.network-wired"), "Modo Consola", self._abrir_modo_consola)
+        menu_modo.addSeparator()
+        # --- Vista EUROCONTROL ODS (controlador) ---
+        self.act_ods = menu_modo.addAction(_icon("fa5s.satellite-dish"), "Vista ODS (controlador)")
+        self.act_ods.setCheckable(True)
+        self.act_ods.setChecked(bool(getattr(getattr(self, 'radar', None), 'ods_enabled', True)))
+        self.act_ods.toggled.connect(self._toggle_ods)
+        menu_modo.addAction(_icon("fa5s.sliders-h"), "Intensidad ODS…", self._abrir_ods_intensidad)
+
+    def _toggle_ods(self, on: bool):
+        if hasattr(self.radar, 'ods_enabled'):
+            self.radar.ods_enabled = bool(on)
+            self.radar.update()
+
+    def _abrir_ods_intensidad(self):
+        """Diálogo con sliders de intensidad por capa ODS (0–100%)."""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSlider
+        from PyQt6.QtCore import Qt
+        from player.ui_scaling import escalar_ventana
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Intensidad de capas ODS")
+        v = QVBoxLayout(dlg)
+        capas = [("map", "Mapa"), ("rings", "Anillos"), ("labels", "Etiquetas"),
+                 ("history", "Historial"), ("compass", "Rosa de rumbos")]
+        intens = getattr(self.radar, 'ods_layer_intensity', {})
+        for key, lbl in capas:
+            row = QHBoxLayout()
+            etq = QLabel(lbl)
+            etq.setMinimumWidth(110)
+            row.addWidget(etq)
+            s = QSlider(Qt.Orientation.Horizontal)
+            s.setRange(0, 100)
+            s.setValue(int(intens.get(key, 0.5) * 100))
+            s.valueChanged.connect(
+                lambda val, k=key: self.radar.set_ods_layer_intensity(k, val / 100.0))
+            row.addWidget(s)
+            v.addLayout(row)
+        escalar_ventana(dlg, 380, 240, centrar=False)
+        dlg.show()
 
     def _abrir_modo_playback(self):
         """Abre el reproductor flotante y permite elegir el archivo a reproducir."""
