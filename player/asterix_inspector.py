@@ -530,6 +530,62 @@ def _sf_048_250(d):
     return out
 
 
+def _sf_062_380(d):
+    """I062/380 Aircraft Derived Data (compuesto): lista los subcampos presentes,
+    decodificando ADR (ICAO), ID (callsign) y MB (registros BDS)."""
+    from decoder.asterix_utils import read_fspec, _decode_callsign
+    from decoder.bds import parse_mb
+    nombres = {
+        0: "ADR Target Address", 1: "ID Target Identification", 2: "MHG Magnetic Heading",
+        3: "IAS Indicated Airspeed", 4: "TAS True Airspeed", 5: "SAL Selected Altitude",
+        6: "FSS Final State Sel Alt", 7: "TIS Trajectory Intent Status",
+        8: "TID Trajectory Intent Data", 9: "COM ACAS Comms", 10: "SAB Status",
+        11: "ACS ACAS Res Advisory", 12: "BVR Baro Vert Rate", 13: "GVR Geo Vert Rate",
+        14: "RAN Roll Angle", 15: "TAR Track Angle Rate", 16: "TAN Track Angle",
+        17: "GSP Ground Speed", 18: "VUN Vel Uncertainty", 19: "MET Meteorological",
+        20: "EMC Emitter Category", 21: "POS Position", 22: "GAL Geo Altitude",
+        23: "PUN Pos Uncertainty", 24: "MB Mode S MB Data", 25: "IAR Indicated Airspeed",
+        26: "MAC Mach Number", 27: "BPS Baro Pressure",
+    }
+    fijos = {2: 2, 3: 2, 4: 2, 5: 2, 6: 2, 9: 2, 10: 2, 11: 7, 12: 2, 13: 2, 14: 2,
+             15: 2, 16: 2, 17: 2, 18: 1, 19: 8, 20: 1, 21: 6, 22: 2, 23: 1, 25: 2,
+             26: 2, 27: 2}
+    out = []
+    try:
+        sub, off = read_fspec(d, 0)
+        for i in range(len(sub)):
+            if not sub[i]:
+                continue
+            nm = nombres.get(i, f"sub #{i + 1}")
+            if i == 0:
+                out.append((nm + " (ICAO)", d[off:off + 3].hex().upper())); off += 3
+            elif i == 1:
+                out.append((nm, _decode_callsign(d[off:off + 6]))); off += 6
+            elif i == 7:  # TIS variable (FX)
+                s = off
+                while off < len(d):
+                    b = d[off]; off += 1
+                    if not (b & 0x01):
+                        break
+                out.append((nm, d[s:off].hex().upper()))
+            elif i == 8:  # TID repetitivo 15B
+                rep = d[off]; off += 1; out.append((nm, f"{rep} reg")); off += rep * 15
+            elif i == 24:  # MB → registros BDS
+                rep = d[off]
+                blk = d[off:off + 1 + rep * 8]; off += 1 + rep * 8
+                out.append((nm, f"{rep} reporte(s)"))
+                for code, nombre, fields, raw in parse_mb(blk):
+                    out.append((f"  BDS {code}", nombre))
+                    for k, v in fields.items():
+                        out.append((f"    {k}", v))
+            else:
+                ln = fijos.get(i, 1)
+                out.append((nm, d[off:off + ln].hex().upper())); off += ln
+        return out
+    except Exception:
+        return _sf_generic(d)
+
+
 def _sf_generic(d):
     """Desglose genérico para Items sin decodificador específico: valor entero +
     interpretación por octeto (decimal / hex / binario)."""
@@ -569,7 +625,7 @@ SUBFIELD_DECODERS = {
     "I062/070": _sf_tod3, "I062/105": _sf_062_105, "I062/060": _sf_mode3a,
     "I062/040": _sf_track2, "I062/136": _sf_062_136, "I062/185": _sf_062_185,
     "I062/220": _sf_062_220, "I062/245": _sf_callsign, "I062/100": _sf_062_100,
-    "I062/130": _sf_062_130,
+    "I062/130": _sf_062_130, "I062/380": _sf_062_380,
     # CAT021
     "I021/040": _sf_021_040, "I021/140": _sf_021_140,
     # CAT001

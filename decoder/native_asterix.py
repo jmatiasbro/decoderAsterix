@@ -242,9 +242,18 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int,
                         offset += rep * 15
                     elif i == 24:  # MB - Mode S MB Data (Repetitive 8B)
                         if offset + 1 > len(payload): raise IndexError("I062/380 MB rep")
-                        rep = payload[offset]; offset += 1
-                        if offset + rep * 8 > len(payload): raise IndexError(f"I062/380 MB ({rep}x8B)")
-                        offset += rep * 8
+                        rep = payload[offset]
+                        if offset + 1 + rep * 8 > len(payload): raise IndexError(f"I062/380 MB ({rep}x8B)")
+                        # Decodificar registros BDS sin alterar el avance
+                        try:
+                            from decoder.bds import parse_mb
+                            bds = record.setdefault('bds_data', {})
+                            for code, _n, fields, _raw in parse_mb(payload[offset:offset + 1 + rep * 8]):
+                                if fields:
+                                    bds[code] = fields
+                        except Exception:
+                            pass
+                        offset += 1 + rep * 8
                     else:
                         skip_len = _380_fixed.get(i, 1)
                         if offset + skip_len > len(payload):
