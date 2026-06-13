@@ -5,9 +5,34 @@ from decoder.asterix_utils import read_fspec, _decode_callsign
 from decoder.decoders.cat001 import decode as decode_cat001
 from decoder.decoders.cat002 import decode as decode_cat002
 from decoder.decoders.cat021 import decode as decode_cat021
+from decoder.decoders.cat023 import decode as decode_cat023
 from decoder.decoders.cat034 import decode as decode_cat034
 from decoder.decoders.cat048 import decode as decode_cat048
-def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> List[Dict[str, Any]]:
+
+# Mapeo FRN → código de Item (UAP CAT062 v1.18) para el inspector de bajo nivel.
+CAT062_FRN_ITEM = {
+    1: "I062/010", 3: "I062/015", 4: "I062/070", 5: "I062/105", 6: "I062/100",
+    7: "I062/185", 8: "I062/210", 9: "I062/060", 10: "I062/245", 11: "I062/380",
+    12: "I062/040", 13: "I062/080", 14: "I062/290", 15: "I062/200", 16: "I062/295",
+    17: "I062/136", 18: "I062/130", 19: "I062/135", 20: "I062/220", 21: "I062/390",
+    22: "I062/270", 23: "I062/300", 24: "I062/110", 25: "I062/120", 26: "I062/510",
+    27: "I062/500", 28: "I062/340", 34: "I062/RE", 35: "I062/SP",
+}
+
+
+def _emit_cat062_marks(marks, offset_final, rec_idx, record_offsets):
+    """Deriva el rango [ini, fin] de cada Item a partir de los snapshots (frn, offset)
+    tomados en cada `current_frn = N`. Un Item está presente si consumió bytes
+    (delta > 0). Cierra con el offset final del registro."""
+    seq = list(marks) + [(None, offset_final)]
+    for (frn, o0), (_, o1) in zip(seq, seq[1:]):
+        if frn and o1 > o0:
+            record_offsets.append(
+                (rec_idx, CAT062_FRN_ITEM.get(frn, f"FRN{frn}"), o0, o1))
+
+
+def decode_cat062(payload: bytes, offset: int, length: int, category: int,
+                  record_offsets=None) -> List[Dict[str, Any]]:
     """
     Decodifica CAT 062 (SDPS Track Messages) v1.18 según UAP del XML asterix_cat062_1_18.xml.
     
@@ -51,8 +76,11 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
     """
     records = []
     end_offset = offset + length - 3
+    _rec_idx = -1
     while offset < end_offset:
         start_offset = offset
+        _rec_idx += 1
+        _marks = []  # snapshots (frn, offset) para derivar rangos por Item (inspector)
         record = {
             'category': category,
             'sac': None, 'sic': None,
@@ -67,12 +95,14 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             'extra_data': {}
         }
         current_frn = 0
+        if record_offsets is not None: _marks.append((0, offset))
 
         try:
             fspec, offset = read_fspec(payload, offset)
             
             # === FRN 1 (fspec[0]): I062/010 Data Source Identifier (2B) ===
             current_frn = 1
+            if record_offsets is not None: _marks.append((1, offset))
             if len(fspec) > 0 and fspec[0]:
                 if offset + 2 > len(payload): raise IndexError("Buffer too small for I062/010")
                 record['sac'] = payload[offset]
@@ -81,10 +111,12 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 2 (fspec[1]): Spare ===
             current_frn = 2
+            if record_offsets is not None: _marks.append((2, offset))
             # No data - just recognized as present
             
             # === FRN 3 (fspec[2]): I062/015 Service Identification (1B) ===
             current_frn = 3
+            if record_offsets is not None: _marks.append((3, offset))
             if len(fspec) > 2 and fspec[2]:
                 if offset + 1 > len(payload): raise IndexError("Buffer too small for I062/015")
                 record['extra_data']['service_id'] = payload[offset]
@@ -92,6 +124,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 4 (fspec[3]): I062/070 Time of Track Information (3B) ===
             current_frn = 4
+            if record_offsets is not None: _marks.append((4, offset))
             if len(fspec) > 3 and fspec[3]:
                 if offset + 3 > len(payload): raise IndexError("Buffer too small for I062/070")
                 tod_raw = struct.unpack('>I', b'\x00' + payload[offset:offset+3])[0]
@@ -100,6 +133,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 5 (fspec[4]): I062/105 Calculated Position WGS-84 (8B) ===
             current_frn = 5
+            if record_offsets is not None: _marks.append((5, offset))
             if len(fspec) > 4 and fspec[4]:
                 if offset + 8 > len(payload): raise IndexError("Buffer too small for I062/105")
                 lat_raw, lon_raw = struct.unpack('>ii', payload[offset:offset+8])
@@ -111,6 +145,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 6 (fspec[5]): I062/100 Calculated Track Position Cartesian (6B) ===
             current_frn = 6
+            if record_offsets is not None: _marks.append((6, offset))
             if len(fspec) > 5 and fspec[5]:
                 if offset + 6 > len(payload): raise IndexError("Buffer too small for I062/100")
                 x_raw = int.from_bytes(payload[offset:offset+3], 'big', signed=True)
@@ -121,6 +156,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 7 (fspec[6]): I062/185 Calculated Track Velocity Cartesian (4B) ===
             current_frn = 7
+            if record_offsets is not None: _marks.append((7, offset))
             if len(fspec) > 6 and fspec[6]:
                 if offset + 4 > len(payload): raise IndexError("Buffer too small for I062/185")
                 vx_raw, vy_raw = struct.unpack('>hh', payload[offset:offset+4])
@@ -135,12 +171,14 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 8 (fspec[7]): I062/210 Calculated Acceleration (2B) ===
             current_frn = 8
+            if record_offsets is not None: _marks.append((8, offset))
             if len(fspec) > 7 and fspec[7]:
                 if offset + 2 > len(payload): raise IndexError("Buffer too small for I062/210")
                 offset += 2
             
             # === FRN 9 (fspec[8]): I062/060 Track Mode 3/A Code (2B) ===
             current_frn = 9
+            if record_offsets is not None: _marks.append((9, offset))
             if len(fspec) > 8 and fspec[8]:
                 if offset + 2 > len(payload): raise IndexError("Buffer too small for I062/060")
                 raw_val = struct.unpack('>H', payload[offset:offset+2])[0]
@@ -149,6 +187,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 10 (fspec[9]): I062/245 Target Identification (7B) ===
             current_frn = 10
+            if record_offsets is not None: _marks.append((10, offset))
             if len(fspec) > 9 and fspec[9]:
                 if offset + 7 > len(payload): raise IndexError("Buffer too small for I062/245")
                 record['callsign'] = _decode_callsign(payload[offset+1:offset+7])
@@ -164,6 +203,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             # i=21:POS 6B  i=22:GAL 2B  i=23:PUN 1B  i=24:MB Rep8B  i=25:IAR 2B
             # i=26:MAC 2B  i=27:BPS 2B
             current_frn = 11
+            if record_offsets is not None: _marks.append((11, offset))
             if len(fspec) > 10 and fspec[10]:
                 if offset >= len(payload): raise IndexError("Buffer too small for I062/380 FSPEC")
                 sub_fspec, offset = read_fspec(payload, offset)
@@ -213,6 +253,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 12 (fspec[11]): I062/040 Track Number (2B) ===
             current_frn = 12
+            if record_offsets is not None: _marks.append((12, offset))
             if len(fspec) > 11 and fspec[11]:
                 if offset + 2 > len(payload): raise IndexError("Buffer too small for I062/040")
                 record['track_number'] = struct.unpack('>H', payload[offset:offset+2])[0]
@@ -220,6 +261,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 13 (fspec[12]): I062/080 Track Status (Variable, 1+) ===
             current_frn = 13
+            if record_offsets is not None: _marks.append((13, offset))
             if len(fspec) > 12 and fspec[12]:
                 while offset < len(payload):
                     sb = payload[offset]
@@ -229,6 +271,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 14 (fspec[13]): I062/290 System Track Update Ages (Compound, 1+) ===
             current_frn = 14
+            if record_offsets is not None: _marks.append((14, offset))
             if len(fspec) > 13 and fspec[13]:
                 if offset + 1 > len(payload): raise IndexError("Buffer too small for I062/290")
                 sub_byte = payload[offset]
@@ -247,12 +290,14 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 15 (fspec[14]): I062/200 Mode of Movement (1B) ===
             current_frn = 15
+            if record_offsets is not None: _marks.append((15, offset))
             if len(fspec) > 14 and fspec[14]:
                 if offset + 1 > len(payload): raise IndexError("Buffer too small for I062/200")
                 offset += 1
             
             # === FRN 16 (fspec[15]): I062/295 Track Data Ages (Compound, 1+) ===
             current_frn = 16
+            if record_offsets is not None: _marks.append((16, offset))
             if len(fspec) > 15 and fspec[15]:
                 if offset + 1 > len(payload): raise IndexError("Buffer too small for I062/295")
                 sub_byte = payload[offset]
@@ -271,6 +316,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 17 (fspec[16]): I062/136 Measured Flight Level (2B) ===
             current_frn = 17
+            if record_offsets is not None: _marks.append((17, offset))
             if len(fspec) > 16 and fspec[16]:
                 if offset + 2 > len(payload): raise IndexError("Buffer too small for I062/136")
                 fl_raw = struct.unpack('>h', payload[offset:offset+2])[0]
@@ -279,6 +325,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 18 (fspec[17]): I062/130 Calculated Track Geometric Altitude (2B) ===
             current_frn = 18
+            if record_offsets is not None: _marks.append((18, offset))
             if len(fspec) > 17 and fspec[17]:
                 if offset + 2 > len(payload): raise IndexError("Buffer too small for I062/130")
                 alt_raw = struct.unpack('>h', payload[offset:offset+2])[0]
@@ -287,6 +334,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 19 (fspec[18]): I062/135 Calculated Track Barometric Altitude (2B) ===
             current_frn = 19
+            if record_offsets is not None: _marks.append((19, offset))
             if len(fspec) > 18 and fspec[18]:
                 if offset + 2 > len(payload): raise IndexError("Buffer too small for I062/135")
                 alt_raw = struct.unpack('>H', payload[offset:offset+2])[0]
@@ -299,6 +347,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 20 (fspec[19]): I062/220 Calculated Rate of Climb/Descent (2B) ===
             current_frn = 20
+            if record_offsets is not None: _marks.append((20, offset))
             if len(fspec) > 19 and fspec[19]:
                 if offset + 2 > len(payload): raise IndexError("Buffer too small for I062/220")
                 roc_raw = struct.unpack('>h', payload[offset:offset+2])[0]
@@ -307,6 +356,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 21 (fspec[20]): I062/390 Flight Plan Related Data (Compound, 1+) ===
             current_frn = 21
+            if record_offsets is not None: _marks.append((21, offset))
             if len(fspec) > 20 and fspec[20]:
                 # Step 1: Leer indicador primario (primary subfield) con FX
                 if offset >= len(payload): raise IndexError("Buffer too small for I062/390")
@@ -379,6 +429,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 22 (fspec[21]): I062/270 Target Size and Orientation (Variable, 1+) ===
             current_frn = 22
+            if record_offsets is not None: _marks.append((22, offset))
             if len(fspec) > 21 and fspec[21]:
                 while offset < len(payload):
                     sb = payload[offset]
@@ -388,12 +439,14 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 23 (fspec[22]): I062/300 Vehicle Fleet Identification (1B) ===
             current_frn = 23
+            if record_offsets is not None: _marks.append((23, offset))
             if len(fspec) > 22 and fspec[22]:
                 if offset + 1 > len(payload): raise IndexError("Buffer too small for I062/300")
                 offset += 1
             
             # === FRN 24 (fspec[23]): I062/110 Mode 5 Data (Compound, 1+) ===
             current_frn = 24
+            if record_offsets is not None: _marks.append((24, offset))
             if len(fspec) > 23 and fspec[23]:
                 if offset + 1 > len(payload): raise IndexError("Buffer too small for I062/110")
                 sub_byte = payload[offset]
@@ -419,12 +472,14 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 25 (fspec[24]): I062/120 Track Mode 2 Code (2B) ===
             current_frn = 25
+            if record_offsets is not None: _marks.append((25, offset))
             if len(fspec) > 24 and fspec[24]:
                 if offset + 2 > len(payload): raise IndexError("Buffer too small for I062/120")
                 offset += 2
             
             # === FRN 26 (fspec[25]): I062/510 Composed Track Number (3+) ===
             current_frn = 26
+            if record_offsets is not None: _marks.append((26, offset))
             if len(fspec) > 25 and fspec[25]:
                 if offset + 3 > len(payload): raise IndexError("Buffer too small for I062/510")
                 # Variable con FX en bit 1 del 3er byte
@@ -438,6 +493,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 27 (fspec[26]): I062/500 Estimated Accuracies (Compound, 1+) ===
             current_frn = 27
+            if record_offsets is not None: _marks.append((27, offset))
             if len(fspec) > 26 and fspec[26]:
                 if offset + 1 > len(payload): raise IndexError("Buffer too small for I062/500")
                 sub_byte = payload[offset]
@@ -456,6 +512,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 28 (fspec[27]): I062/340 Measured In DIF (Compound, 1+) ===
             current_frn = 28
+            if record_offsets is not None: _marks.append((28, offset))
             if len(fspec) > 27 and fspec[27]:
                 if offset + 1 > len(payload): raise IndexError("Buffer too small for I062/340")
                 sub_byte = payload[offset]
@@ -479,6 +536,7 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 34 (fspec[33]): RE - Reserved Expansion Field (Explicit) ===
             current_frn = 34
+            if record_offsets is not None: _marks.append((34, offset))
             if len(fspec) > 33 and fspec[33]:
                 if offset >= len(payload): raise IndexError("Buffer too small for RE")
                 re_len = payload[offset]
@@ -488,17 +546,22 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int) -> Li
             
             # === FRN 35 (fspec[34]): SP - Special Purpose Field (Explicit) ===
             current_frn = 35
+            if record_offsets is not None: _marks.append((35, offset))
             if len(fspec) > 34 and fspec[34]:
                 if offset >= len(payload): raise IndexError("Buffer too small for SP")
                 sp_len = payload[offset]
                 if sp_len < 1: raise IndexError(f"Invalid SP len: {sp_len}")
                 if offset + sp_len > len(payload): raise IndexError(f"SP {sp_len}B exceeds payload")
                 offset += sp_len
-            
+
+            if record_offsets is not None:
+                _emit_cat062_marks(_marks, offset, _rec_idx, record_offsets)
             records.append(record)
 
         except (struct.error, IndexError) as e:
             print(f"⚠️ [CAT 62] Offset Drift FRN {current_frn}: {e}")
+            if record_offsets is not None:
+                _emit_cat062_marks(_marks, offset, _rec_idx, record_offsets)
             records.append(record)
             break
 
@@ -544,6 +607,9 @@ def parse_payload(payload: bytes) -> List[Dict[str, Any]]:
                 if plots_cat: all_records.extend(plots_cat)
             elif category == 21:
                 plots_cat = decode_cat021(payload, offset + 3, block_length, category)
+                if plots_cat: all_records.extend(plots_cat)
+            elif category == 23:
+                plots_cat = decode_cat023(payload, offset + 3, block_length, category)
                 if plots_cat: all_records.extend(plots_cat)
             elif category == 34:
                 plots_cat = decode_cat034(payload, offset + 3, block_length, category)
