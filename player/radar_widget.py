@@ -4756,6 +4756,32 @@ class RadarWidget(_RadarBase):
 
         return None
 
+    def _draw_track_label_ods(self, painter, plot, sp, qcolor):
+        """Etiqueta ODS (FDB) con leader line, en píxeles de pantalla."""
+        from PyQt6.QtCore import QPointF
+        from player.ods import palette as _pal
+        lines = self._build_plot_label_lines(plot)
+        if not lines:
+            return
+        cache = getattr(self, '_label_shifts_cache', {})
+        shift = cache.get(plot.id, [0.0, 0.0])
+        lx, ly = sp.x() + 14 + shift[0], sp.y() - 14 + shift[1]
+        intens = getattr(self, 'ods_layer_intensity', _pal.LAYER_DEFAULT)
+        a = _pal.layer_alpha("labels", intens.get("labels", _pal.LAYER_DEFAULT["labels"]))
+        col = QColor(qcolor)
+        col.setAlpha(int(col.alpha() * a / 255))
+        painter.save()
+        painter.resetTransform()
+        pen = QPen(col)
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+        painter.drawLine(QPointF(sp.x(), sp.y()), QPointF(lx, ly))  # leader line
+        painter.setFont(QFont("Consolas", 8))
+        fm = painter.fontMetrics()
+        for i, ln in enumerate(lines):
+            painter.drawText(QPointF(lx, ly + i * (fm.height() - 1)), str(ln))
+        painter.restore()
+
     def _draw_oaci_track(self, painter: QPainter, plot: 'RadarPlot', z: float, inv_z: float, alertas_dict: dict):
         try:
             # 1. Check emergency (FASE 4)
@@ -4796,7 +4822,25 @@ class RadarWidget(_RadarBase):
             if (self.vista_controlador or getattr(self, 'mostrar_incumbencia', False)) \
                     and not getattr(plot, 'en_jurisdiccion', True):
                 alpha = 70
-            
+
+            # ODS: símbolo por estado de track + color de paleta + FDB con leader line.
+            if self.vista_controlador and getattr(self, 'ods_enabled', True):
+                from player.ods import track_state as _ts, symbology as _sym, palette as _pal
+                sp = self._world_to_screen(plot.x, plot.y)
+                if sp is not None:
+                    coasting = plot.age > 1.5 * scan_time
+                    estado = _ts.classify(plot, coasting)
+                    seleccionado = (getattr(self, '_focused_track_id', None) == plot.id)
+                    rgb = _pal.state_rgb(estado, selected=seleccionado)
+                    col = QColor(rgb[0], rgb[1], rgb[2])
+                    col.setAlpha(int(alpha))
+                    painter.save()
+                    painter.resetTransform()
+                    _sym.draw_symbol(painter, _sym.symbol_spec(estado), sp.x(), sp.y(), col)
+                    painter.restore()
+                    self._draw_track_label_ods(painter, plot, sp, col)
+                return
+
             is_psr = False
             is_ssr = False
             is_combined = False
