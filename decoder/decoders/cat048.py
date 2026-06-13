@@ -159,6 +159,20 @@ def decode(payload: bytes, offset: int, block_length: int, category: int,
                         offset = new_offset_after_fspec + num_present_subfields
                     elif frn == 10: # I048/250 Mode S MB Data
                         rep = payload[offset]
+                        # Decodificar registros BDS (4,0 / 5,0 / 6,0) sin alterar el avance
+                        try:
+                            from decoder.bds import parse_mb
+                            bloque_mb = payload[offset:offset + 1 + rep * 8]
+                            bds = plot.setdefault('bds_data', {})
+                            for code, _nombre, fields, _raw in parse_mb(bloque_mb):
+                                if fields:
+                                    bds[code] = fields
+                                    if code == '6,0' and 'Magnetic Heading (deg)' in fields:
+                                        bds['mag_heading'] = float(fields['Magnetic Heading (deg)'])
+                                    if code == '5,0' and 'Ground Speed (kt)' in fields:
+                                        bds['ground_speed_bds'] = float(fields['Ground Speed (kt)'])
+                        except Exception:
+                            pass
                         offset += 1 + (rep * 8)
                     elif frn == 14: # I048/170 Track Status
                         offset = _skip_variable_field(payload, offset)

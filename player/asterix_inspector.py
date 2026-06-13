@@ -516,6 +516,20 @@ def _sf_034_041(d):
             ("RPM", f"{rpm:.2f}")]
 
 
+def _sf_048_250(d):
+    """I048/250 Mode S MB Data: REP + registros BDS (4,0/5,0/6,0)."""
+    from decoder.bds import parse_mb
+    out = [("REP (cantidad de reportes)", d[0] if d else 0)]
+    for code, nombre, fields, raw in parse_mb(d):
+        out.append((f"BDS {code} — {nombre}", ""))
+        if fields:
+            for k, v in fields.items():
+                out.append((f"    {k}", v))
+        else:
+            out.append(("    registro (hex)", raw))
+    return out
+
+
 def _sf_generic(d):
     """Desglose genérico para Items sin decodificador específico: valor entero +
     interpretación por octeto (decimal / hex / binario)."""
@@ -550,6 +564,7 @@ SUBFIELD_DECODERS = {
     "I021/145": _sf_fl2, "I021/160": _sf_021_160, "I021/170": _sf_callsign,
     "I021/071": _sf_tod3, "I021/073": _sf_tod3, "I021/075": _sf_tod3,
     "I048/042": _sf_048_042, "I048/200": _sf_048_200, "I048/110": _sf_048_110,
+    "I048/250": _sf_048_250,
     # CAT062
     "I062/070": _sf_tod3, "I062/105": _sf_062_105, "I062/060": _sf_mode3a,
     "I062/040": _sf_track2, "I062/136": _sf_062_136, "I062/185": _sf_062_185,
