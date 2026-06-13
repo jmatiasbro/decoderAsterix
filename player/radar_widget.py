@@ -3529,6 +3529,34 @@ class RadarWidget(_RadarBase):
             except Exception as e:
                 print(f"[RENDER WARNING] Error al dibujar línea de conflicto STCA: {e}")
 
+            # ODS: presentación STCA estándar — halo rojo parpadeante (~1 Hz) en ambos
+            # tracks en conflicto, color reservado de alerta, en píxeles de pantalla.
+            if getattr(self, 'vista_controlador', False) and getattr(self, 'ods_enabled', True):
+                try:
+                    from player.ods import palette as _pal
+                    if int(SimulationTime.time() * 2) % 2 == 0:
+                        rcol = QColor(*_pal.ALERT_STCA)
+                        vistos = set()
+                        for t1_id, t2_id, estado, tiempo in getattr(self, 'conflictos_activos', []):
+                            for tid in (t1_id, t2_id):
+                                if tid in vistos:
+                                    continue
+                                vistos.add(tid)
+                                t = self.tracks.get(tid) or self.pending_tracks.get(tid)
+                                if not t or not t.is_alive():
+                                    continue
+                                sp = self._world_to_screen(t.x, t.y)
+                                if sp is None:
+                                    continue
+                                painter.save()
+                                painter.resetTransform()
+                                painter.setPen(QPen(rcol, 1.6))
+                                painter.setBrush(Qt.BrushStyle.NoBrush)
+                                painter.drawEllipse(sp, 12.0, 12.0)
+                                painter.restore()
+                except Exception as e:
+                    print(f"[RENDER WARNING] Error STCA halo ODS: {e}")
+
             # ---- 5.5. OBSTÁCULOS MTR DETECTADOS (marcador mínimo) ----
             # Solo un triángulo pequeño y estático. El detalle (squawk, rango,
             # plot real reflejado) se registra en quality_events.log, no en pantalla.
