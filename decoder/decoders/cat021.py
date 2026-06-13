@@ -311,10 +311,21 @@ def decode(payload: bytes, offset: int, block_length: int, category: int,
                         field_len = payload[offset]
                         offset += field_len
                 else:
-                    # Campo repetitivo (actualmente solo I021/250)
+                    # Campo repetitivo (actualmente solo I021/250 Mode S MB Data)
                     if frn == 42 and offset < len(payload):
                         rep = payload[offset]
-                        offset += 1 + (rep * 7) # REP + N * (7 bytes de datos)
+                        # Cada reporte BDS = 7 octetos de registro + 1 octeto de código
+                        # BDS (8 en total, según EUROCONTROL-SPEC-0149-12).
+                        try:
+                            from decoder.bds import parse_mb
+                            bds = plot.setdefault('bds_data', {})
+                            for code, _n, fields, _raw in parse_mb(
+                                    payload[offset:offset + 1 + rep * 8]):
+                                if fields:
+                                    bds[code] = fields
+                        except Exception:
+                            pass
+                        offset += 1 + (rep * 8) # REP + N × 8 octetos
 
                 if record_offsets is not None:
                     record_offsets.append(
