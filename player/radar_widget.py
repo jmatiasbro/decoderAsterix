@@ -1838,6 +1838,31 @@ class RadarWidget(QWidget):
                         self._log_quality_event(
                             (track.id, 'FRUIT'), 'FRUIT',
                             f"Track {track.id} | Edad:{track_age:.1f}s Updates:{track._update_count}")
+                        try:
+                            # Formatear el timestamp (ToD) de simulación a HH:MM:SS
+                            t_sec = int(SimulationTime.instance().now())
+                            h = (t_sec // 3600) % 24
+                            m = (t_sec // 60) % 60
+                            s = t_sec % 60
+                            ts_str = f"{h:02d}:{m:02d}:{s:02d}"
+                            
+                            # Obtener el sensor que reportó el plot
+                            sens_str = list(track.reporting_sensors)[0] if track.reporting_sensors else None
+                            if sens_str and '/' in sens_str:
+                                sac, sic = map(int, sens_str.split('/'))
+                                key = (sac, sic)
+                                ssr_val = ""
+                                if track.mode3a is not None:
+                                    if isinstance(track.mode3a, int):
+                                        ssr_val = f"{track.mode3a:04o}"
+                                    else:
+                                        ssr_val = str(track.mode3a).strip()
+                                
+                                main_win = self.window()
+                                if hasattr(main_win, 'tech_monitor'):
+                                    main_win.tech_monitor.registrar_fruit(key, ssr_val, ts_str)
+                        except Exception as e:
+                            print(f"[TECHNICAL MONITOR FRUIT ERROR] {e}")
                     elif razon == 'GARBLING':
                         self._log_quality_event(
                             (track.id, 'GARBLING'), 'GARBLING',
@@ -4293,7 +4318,14 @@ class RadarWidget(QWidget):
                     elif cached is not None:
                         gs_val = cached[0]  # mantener último valor válido
 
-            if gs_val is not None:
+            # Crossover ATC IAS/GS → Mach: en espacio aéreo superior (≥FL260) la
+            # etiqueta muta a Número Mach si el BDS 6,0 lo reporta (≥0.40). El dato
+            # se reevalúa cada frame contra el FL actual, así el cambio es en caliente.
+            mach = plot.bds_data.get('mach_bds') if plot.bds_data else None
+            fl = plot.flight_level
+            if fl is not None and fl >= 260 and mach is not None and mach >= 0.40:
+                speed_str = f"M{int(round(mach * 100)):02d}"
+            elif gs_val is not None:
                 gs_disp = int(round(gs_val / 5.0) * 5)  # redondeo a 5 kt para estabilidad visual
                 speed_str = f"N{gs_disp:03d}"
             else:
