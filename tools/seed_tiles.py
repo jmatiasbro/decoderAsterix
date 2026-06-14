@@ -4,11 +4,11 @@ Fuente por defecto: Sentinel-2 cloudless (EOX IT Services GmbH) — imagery abie
 legal para cache offline. Atribución obligatoria:
   "Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH"
 
-Uso típico:
+Uso típico (¡OJO!: --airport con '=' porque la latitud es negativa):
   # Argentina hasta z12 + alto zoom (z16) en dos aeropuertos
   python tools/seed_tiles.py --out data/firmap/argentina.mbtiles \\
-         --z-nation 12 \\
-         --airport -24.8597,-65.4869,40 --airport -31.31,-64.21,40 --z-airport 16
+         --z-nation 12 --z-airport 16 \\
+         --airport=-24.8597,-65.4869,40 --airport=-31.31,-64.21,40
 
 Reanudable: saltea tiles ya presentes. Respeta un delay entre requests.
 """
