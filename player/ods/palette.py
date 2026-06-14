@@ -24,10 +24,14 @@ ALERT_STCA = (230, 60, 60)    # rojo
 ALERT_MSAW = (235, 170, 40)   # ámbar
 SELECTED = (255, 255, 255)    # blanco puro para el track seleccionado
 
+# Color de herramientas del controlador (RBL): cian apagado, baja saturación,
+# distinguible de tracks (verde-gris) y de alertas (rojo/ámbar).
+TOOL_RBL = (120, 180, 200)
+
 # Intensidad por capa (0..1) por defecto; el controlador la ajusta.
 LAYER_DEFAULT = {
     "map": 0.35, "rings": 0.30, "labels": 0.90, "history": 0.55,
-    "symbols": 1.0, "compass": 0.45,
+    "symbols": 1.0, "compass": 0.45, "tools": 0.85,
 }
 
 
