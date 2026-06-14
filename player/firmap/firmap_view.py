@@ -120,7 +120,7 @@ class FirMapView(QWidget):
         self._cache[key] = pm
         return pm
 
-    def _lonlat_to_screen(self, lon, lat):
+    def _lonlat_to_screen(self, lat, lon):
         cpx, cpy = wm.lonlat_to_pixel(self.center_lon, self.center_lat, self.zoom)
         px, py = wm.lonlat_to_pixel(lon, lat, self.zoom)
         return QPointF(px - cpx + self.width() / 2.0, py - cpy + self.height() / 2.0)
