@@ -785,6 +785,7 @@ class MainWindow(QMainWindow):
         self._loaded_custom_maps = {}
         self._active_map_paths = set()
         self.map_actions = {}
+        self.user_areas = []
 
         # Fusión/Sensores STCA se maneja ahora de forma autocontenida en RadarWidget
         self._setup_ui()
@@ -935,6 +936,17 @@ class MainWindow(QMainWindow):
         self.act_toggle_incumbencia.setChecked(False)
         self.act_toggle_incumbencia.toggled.connect(self._toggle_incumbencia)
 
+        menu_ver.addSeparator()
+        self.act_stca_habilitado = menu_ver.addAction("Habilitar STCA")
+        self.act_stca_habilitado.setCheckable(True)
+        self.act_stca_habilitado.setChecked(self.radar.stca_habilitado if hasattr(self, 'radar') and self.radar else True)
+        self.act_stca_habilitado.toggled.connect(self._toggle_stca_habilitado)
+
+        self.act_apw_habilitado = menu_ver.addAction("Habilitar APW")
+        self.act_apw_habilitado.setCheckable(True)
+        self.act_apw_habilitado.setChecked(self.radar.apw_habilitado if hasattr(self, 'radar') and self.radar else True)
+        self.act_apw_habilitado.toggled.connect(self._toggle_apw_habilitado)
+
         # Submenú: horizonte del vector velocidad (1/2/3 min)
         menu_vector = menu_ver.addMenu("Vector Velocidad")
         from PyQt6.QtGui import QActionGroup
@@ -995,17 +1007,9 @@ class MainWindow(QMainWindow):
 
         # Menú Áreas — restringidas / prohibidas / peligrosas (desde atm.duckdb)
         self.menu_areas = menu_bar.addMenu("Áreas")
-        self.area_actions = {}
-        if atm_db.available():
-            for label, kind in [("Restringidas", "R"), ("Prohibidas", "P"),
-                                 ("Peligrosas", "D")]:
-                act = self.menu_areas.addAction(label)
-                act.setCheckable(True)
-                act.toggled.connect(lambda on, k=kind: self._toggle_area_layer(k, on))
-                self.area_actions[kind] = act
-        else:
-            na = self.menu_areas.addAction("Base ATM no encontrada (data/atm/atm.duckdb)")
-            na.setEnabled(False)
+        self.area_submenus = {}
+        self.individual_area_actions = {}
+        self._rebuild_areas_menu()
 
         # Menú Modo (Playback / Consola)
         menu_modo = menu_bar.addMenu("Modo")
@@ -2005,6 +2009,16 @@ class MainWindow(QMainWindow):
             self.radar.mostrar_incumbencia = activo
             self.radar.update()
 
+    def _toggle_stca_habilitado(self, checked: bool):
+        if hasattr(self, 'radar') and self.radar:
+            self.radar.stca_habilitado = checked
+            self.radar.evaluar_stca()
+
+    def _toggle_apw_habilitado(self, checked: bool):
+        if hasattr(self, 'radar') and self.radar:
+            self.radar.apw_habilitado = checked
+            self.radar.evaluar_stca()
+
     def _abrir_map_editor(self):
         # Toggle: si ya está abierto, cerrarlo desde el mismo botón
         dlg = getattr(self, 'map_editor_dialog', None)
@@ -2170,6 +2184,8 @@ class MainWindow(QMainWindow):
         self.radar.limpiar_pantalla()
         if self.radar is not None and hasattr(self.radar, 'stca_dialog') and self.radar.stca_dialog:
             self.radar.stca_dialog.limpiar()
+        if self.radar is not None and hasattr(self.radar, 'apw_dialog') and self.radar.apw_dialog:
+            self.radar.apw_dialog.limpiar()
         self._show_panel()
 
     def _seek(self):
@@ -3118,6 +3134,11 @@ class MainWindow(QMainWindow):
             
             # 5. Seguridad Operativa
             self.radar.stca_habilitado = bool(perfil_data.get("stca_habilitado", True))
+            self.radar.apw_habilitado = bool(perfil_data.get("apw_habilitado", True))
+            if hasattr(self, 'act_stca_habilitado'):
+                self.act_stca_habilitado.setChecked(self.radar.stca_habilitado)
+            if hasattr(self, 'act_apw_habilitado'):
+                self.act_apw_habilitado.setChecked(self.radar.apw_habilitado)
             
             # 6. Carga de Mapas Preexistentes
             if hasattr(self.radar, 'map_manager') and hasattr(self.radar.map_manager, 'load_profile_maps'):
@@ -3130,13 +3151,16 @@ class MainWindow(QMainWindow):
             # 7.b Aplicar rol operativo (vista limpia + bloqueo playback si es controlador)
             self._aplicar_rol(perfil_data)
 
-            self.radar.update()
-
             # 8. Actualizar título de la ventana
             apt = perfil_data.get("aeropuerto", "")
             nombre = perfil_data.get("name", "")
             fl = perfil_data.get("nivel_incumbencia", 95)
             self.setWindowTitle(f"ASTERIX Decoder — {nombre} [{apt}] — FL{fl}")
+
+            # Cargar áreas de usuario del store
+            self._cargar_areas_usuario(nombre or "Default")
+
+            self.radar.update()
             
             print(f"[HOT SWAP] Perfil '{profile_name}' cargado en caliente con éxito.")
             
@@ -3212,8 +3236,13 @@ class MainWindow(QMainWindow):
         self.radar.aeropuerto_lat = perfil_data.get("center_lat", -31.31548)
         self.radar.aeropuerto_lon = perfil_data.get("center_lon", -64.21545)
         
-        # 3.5. Seguridad operativa STCA
+        # 3.5. Seguridad operativa STCA y APW
         self.radar.stca_habilitado = bool(perfil_data.get("stca_habilitado", True))
+        self.radar.apw_habilitado = bool(perfil_data.get("apw_habilitado", True))
+        if hasattr(self, 'act_stca_habilitado'):
+            self.act_stca_habilitado.setChecked(self.radar.stca_habilitado)
+        if hasattr(self, 'act_apw_habilitado'):
+            self.act_apw_habilitado.setChecked(self.radar.apw_habilitado)
 
         # 4. Recentrar el mapa en el aeropuerto seleccionado
         lat = perfil_data.get("center_lat")
@@ -3241,6 +3270,9 @@ class MainWindow(QMainWindow):
 
         # Aplicar rol operativo (vista limpia + bloqueo playback si es controlador)
         self._aplicar_rol(perfil_data)
+
+        # Cargar áreas de usuario del store
+        self._cargar_areas_usuario(nombre or "Default")
 
         self.radar.update()
 
@@ -3527,31 +3559,186 @@ class MainWindow(QMainWindow):
             mm.layers.pop(layer_name, None)
         self.radar.update()
 
-    def _toggle_area_layer(self, kind, on):
-        """Agrega/quita una capa de áreas (R/P/D) en el PPI/ODS."""
+    def _rebuild_areas_menu(self):
+        """Reconstruye el menú 'Áreas' con los submenús Restringidas, Prohibidas y Peligrosas
+        y sus respectivas áreas individuales de la base de datos dentro de listas scrollables."""
+        self.menu_areas.clear()
+        self.individual_area_actions = {}
+
         from player import atm_db
+        if not atm_db.available():
+            na = self.menu_areas.addAction("Base ATM no encontrada (data/atm/atm.duckdb)")
+            na.setEnabled(False)
+            return
+
+        all_db_areas = atm_db.restricted_airspaces()
+        areas_by_kind = {"R": [], "P": [], "D": []}
+        for area in all_db_areas:
+            if area.kind in areas_by_kind:
+                areas_by_kind[area.kind].append(area)
+
+        # Limpiar capas de áreas de DB que hayan sido eliminadas
+        mm = getattr(self.radar, 'map_manager', None)
+        if mm is not None:
+            current_db_names = {a.name for a in all_db_areas}
+            user_names = {a.name for a in getattr(self, 'user_areas', [])}
+            for name in list(mm.layers.keys()):
+                if name.startswith("AREA::"):
+                    area_name = name.split("::", 1)[1]
+                    if area_name not in current_db_names and area_name not in user_names:
+                        mm.layers.pop(name, None)
+
+        from PyQt6.QtWidgets import QWidgetAction, QListWidget, QListWidgetItem
+        from PyQt6.QtCore import Qt
+
+        class ScrollableAreaListMenu(QWidgetAction):
+            def __init__(self, parent_menu, areas, main_window):
+                super().__init__(parent_menu)
+                self.main_window = main_window
+                self.areas = areas
+                
+                self.list_widget = QListWidget()
+                self.list_widget.setFixedHeight(300)
+                self.list_widget.setFixedWidth(220)
+                self.list_widget.setStyleSheet("""
+                    QListWidget {
+                        background-color: #0B0E14;
+                        color: #E0E6ED;
+                        border: 1px solid rgba(0, 229, 255, 40);
+                        font-size: 8pt;
+                    }
+                    QListWidget::item {
+                        padding: 4px;
+                    }
+                    QListWidget::item:hover {
+                        background-color: rgba(0, 229, 255, 20);
+                    }
+                """)
+                
+                mm_ref = getattr(main_window.radar, 'map_manager', None)
+                for area in areas:
+                    item = QListWidgetItem(area.name)
+                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                    
+                    layer_name = f"AREA::{area.name}"
+                    was_visible = mm_ref is not None and layer_name in mm_ref.layers
+                    item.setCheckState(Qt.CheckState.Checked if was_visible else Qt.CheckState.Unchecked)
+                    
+                    item.setData(Qt.ItemDataRole.UserRole, area)
+                    self.list_widget.addItem(item)
+                    
+                self.list_widget.itemChanged.connect(self.on_item_changed)
+                self.setDefaultWidget(self.list_widget)
+                
+            def on_item_changed(self, item):
+                area = item.data(Qt.ItemDataRole.UserRole)
+                checked = item.checkState() == Qt.CheckState.Checked
+                self.main_window._toggle_individual_db_area(area, checked)
+
+        self.area_list_widgets = {}
+
+        # Para cada tipo, creamos un submenú y agregamos el widget de lista scrollable
+        for label, kind in [("Restringidas", "R"), ("Prohibidas", "P"),
+                             ("Peligrosas", "D")]:
+            submenu = self.menu_areas.addMenu(label)
+            self.area_submenus[kind] = submenu
+            
+            sorted_areas = sorted(areas_by_kind[kind], key=lambda a: a.name)
+            
+            if sorted_areas:
+                scroll_action = ScrollableAreaListMenu(submenu, sorted_areas, self)
+                submenu.addAction(scroll_action)
+                self.area_list_widgets[kind] = scroll_action
+            else:
+                act_empty = submenu.addAction("(vacío)")
+                act_empty.setEnabled(False)
+
+    def _toggle_individual_db_area(self, area, on):
+        """Muestra u oculta una área de base de datos específica en el PPI/ODS."""
         from player.areas import render as _ar
         mm = getattr(self.radar, 'map_manager', None)
         if mm is None:
             return
-        layer_name = f"AREA::{kind}"
+        layer_name = f"AREA::{area.name}"
         if on:
             try:
-                segs = _ar.area_segments(atm_db.restricted_airspaces(kinds=[kind]))
+                segs = _ar.area_segments([area])
+                mm.add_layer(layer_name, segs, "TACTICO")
+                if layer_name in mm.layers:
+                    mm.layers[layer_name].color = _ar.AREA_COLORS.get(area.kind, "#39C5FF")
+                if getattr(self.radar, 'proy', None) is not None:
+                    mm.reproject_all(self.radar.proy)
             except Exception as e:
-                print(f"[Áreas] Error generando capa {kind}: {e}")
-                return
-            if not segs:
-                print(f"[Áreas] Sin geometría para {kind}")
-                return
-            mm.add_layer(layer_name, segs, "TACTICO")
-            if layer_name in mm.layers:
-                mm.layers[layer_name].color = _ar.AREA_COLORS.get(kind, "#39C5FF")
-            if getattr(self.radar, 'proy', None) is not None:
-                mm.reproject_all(self.radar.proy)
+                print(f"[Áreas] Error generando capa individual {area.name}: {e}")
         else:
             mm.layers.pop(layer_name, None)
         self.radar.update()
+
+    def _toggle_area_layer(self, kind, on):
+        """Refresca las capas de áreas individuales de la base de datos de un cierto tipo."""
+        if not on:
+            return
+        
+        # Reconstruir el menú para reflejar cualquier cambio (alta, baja, modificación)
+        self._rebuild_areas_menu()
+
+        # Para todas las áreas individuales de este tipo que estén marcadas como activas (checked),
+        # refrescamos su geometría en el map_manager
+        mm = getattr(self.radar, 'map_manager', None)
+        if mm is not None:
+            from player import atm_db
+            from player.areas import render as _ar
+            
+            db_areas = atm_db.restricted_airspaces(kinds=[kind])
+            for area in db_areas:
+                layer_name = f"AREA::{area.name}"
+                if layer_name in mm.layers:
+                    try:
+                        segs = _ar.area_segments([area])
+                        mm.add_layer(layer_name, segs, "TACTICO")
+                        if layer_name in mm.layers:
+                            mm.layers[layer_name].color = _ar.AREA_COLORS.get(kind, "#39C5FF")
+                    except Exception as e:
+                        print(f"[Áreas] Error refrescando capa individual {area.name}: {e}")
+            
+            if getattr(self.radar, 'proy', None) is not None:
+                mm.reproject_all(self.radar.proy)
+        self.radar.update()
+
+    def _cargar_areas_usuario(self, profile_name: str):
+        """Carga las áreas de usuario para el perfil especificado y actualiza las capas del mapa."""
+        from player.areas import store as _store
+        from player.areas import render as _ar
+
+        # 1. Cargar desde store
+        self.user_areas = _store.cargar_todas(profile_name)
+        self.radar.user_areas = self.user_areas
+
+        # 2. Limpiar capas de áreas de usuario previas
+        mm = getattr(self.radar, 'map_manager', None)
+        if mm is not None:
+            user_layers = [name for name in mm.layers if name.startswith("AREA::") and name not in ("AREA::R", "AREA::P", "AREA::D")]
+            for name in user_layers:
+                mm.layers.pop(name, None)
+
+            # 3. Registrar y renderizar las áreas de usuario que estén habilitadas
+            for area in self.user_areas:
+                if area.vigencia.habilitada:
+                    layer_name = f"AREA::{area.name}"
+                    segs = _ar.area_segments([area])
+                    mm.add_layer(layer_name, segs, "TACTICO")
+                    if layer_name in mm.layers:
+                        mm.layers[layer_name].color = _ar.AREA_COLORS.get(area.kind, "#39C5FF")
+
+            if getattr(self.radar, 'proy', None) is not None:
+                mm.reproject_all(self.radar.proy)
+
+    def get_all_areas(self):
+        """Devuelve la combinación de áreas de la base de datos y de usuario."""
+        from player import atm_db
+        db_a = atm_db.restricted_airspaces() if atm_db.available() else []
+        usr_a = getattr(self, 'user_areas', [])
+        return db_a + usr_a
 
     def _rebuild_and_draw_maps(self):
         # 1. Limpiar SOLO las capas gestionadas por estos menús (no las del perfil/cartografía)
@@ -3847,9 +4034,11 @@ class MainWindow(QMainWindow):
         # 2. Detener barrido radar
         self.radar.stop_sweep()
         
-        # 2b. Limpiar diálogo STCA
+        # 2b. Limpiar diálogo STCA y APW
         if self.radar is not None and hasattr(self.radar, 'stca_dialog') and self.radar.stca_dialog:
             self.radar.stca_dialog.limpiar()
+        if self.radar is not None and hasattr(self.radar, 'apw_dialog') and self.radar.apw_dialog:
+            self.radar.apw_dialog.limpiar()
 
         # 3. Habilitar controles históricos
         self.btn_cargar.setEnabled(True)

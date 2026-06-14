@@ -7,6 +7,7 @@ Si la base no existe, `available()` devuelve False y los getters dan vacío
 """
 import os
 import threading
+import contextlib
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        "data", "atm", "atm.duckdb")
@@ -25,6 +26,32 @@ def _con():
         import duckdb
         _conn = duckdb.connect(DB_PATH, read_only=True)
     return _conn
+
+
+def _close():
+    """Cierra la conexión read-only (necesario antes de escribir: DuckDB es
+    single-writer y no admite una RW con una RO abierta del mismo proceso)."""
+    global _conn
+    if _conn is not None:
+        try:
+            _conn.close()
+        except Exception:
+            pass
+        _conn = None
+
+
+@contextlib.contextmanager
+def _writer():
+    """Conexión read-write corta. Cierra la RO antes y la deja cerrada al salir
+    (se reabre perezosamente en la próxima lectura)."""
+    import duckdb
+    with _lock:
+        _close()
+        w = duckdb.connect(DB_PATH, read_only=False)
+        try:
+            yield w
+        finally:
+            w.close()
 
 
 def parse_dms(image: str):
@@ -199,7 +226,7 @@ def restricted_airspaces(kinds=None):
         return []
     from player.areas.model import Area, Vigencia
     sql = ("SELECT TRIM(identifier_name), area_kind, lower_altitude, upper_altitude, "
-           "contour_figure, circle_radius, permanent, " + ", ".join(_DAY_COLS) +
+           "contour_figure, circle_radius, permanent, prediction_time, " + ", ".join(_DAY_COLS) +
            " FROM restricted_airspaces")
     params = []
     if kinds:
@@ -213,7 +240,8 @@ def restricted_airspaces(kinds=None):
         lo, up = int(row[2] or 0), int(row[3] or 999)
         fig = (row[4] or "").strip()
         radius = float(row[5] or 0.0)
-        days = {i for i, flag in enumerate(row[7:14]) if (flag or "").strip().upper() == "Y"}
+        pred_time = int(row[7]) if row[7] is not None else 120
+        days = {i for i, flag in enumerate(row[8:15]) if (flag or "").strip().upper() == "Y"}
         vig = Vigencia(permanente=True, dias=days)
         verts = _restricted_vertices(name)
         if fig == "C":
@@ -224,14 +252,93 @@ def restricted_airspaces(kinds=None):
                 continue
             out.append(Area(name=name, kind=kind, shape="circle", lower_fl=lo,
                             upper_fl=up, center=center, radius_nm=radius,
-                            vigencia=vig, origen="db"))
+                            vigencia=vig, origen="db", prediction_time=pred_time))
         else:
             pts = [(la, lo2) for _seq, la, lo2 in verts]
             if len(pts) < 3:
                 continue
             out.append(Area(name=name, kind=kind, shape="poly", lower_fl=lo,
-                            upper_fl=up, vertices=pts, vigencia=vig, origen="db"))
+                            upper_fl=up, vertices=pts, vigencia=vig, origen="db",
+                            prediction_time=pred_time))
     return out
+
+
+def _dms_image(val, is_lon: bool) -> str:
+    """Decimal -> imagen DMS entera compatible con parse_dms ('DDMMSSH')."""
+    hemi = ("E" if val >= 0 else "W") if is_lon else ("N" if val >= 0 else "S")
+    v = abs(val)
+    deg = int(v)
+    m = int((v - deg) * 60)
+    s = int(round(((v - deg) * 60 - m) * 60))
+    if s >= 60:
+        s -= 60
+        m += 1
+    if m >= 60:
+        m -= 60
+        deg += 1
+    return (f"{deg:03d}{m:02d}{s:02d}{hemi}" if is_lon
+            else f"{deg:02d}{m:02d}{s:02d}{hemi}")
+
+
+def delete_area(name: str):
+    """Borra un área (filas en restricted_airspaces + restricted_vertices)."""
+    nm = (name or "").strip()
+    if not nm:
+        return
+    with _writer() as w:
+        w.execute("DELETE FROM restricted_vertices WHERE TRIM(airspace_identity)=?", [nm])
+        w.execute("DELETE FROM restricted_airspaces WHERE TRIM(identifier_name)=?", [nm])
+
+
+def write_area(area):
+    """Inserta/reemplaza un área en la DB como permanente (upsert por nombre).
+
+    Polígono: vértices 1..n. Círculo: vértice 0 = centro + circle_radius (NM).
+    Genera los campos DMS imagen (lat_dec/lon_dec quedan en decimal informativo).
+    """
+    nm = (area.name or "").strip()
+    if not nm:
+        raise ValueError("El área necesita un nombre")
+    v = area.vigencia
+    day_vals = ["Y" if i in v.dias else "N" for i in range(7)]
+    sched = "Y" if (v.desde and v.hasta) else "N"
+    st = v.desde.strftime("%H%M") if v.desde else None
+    et = v.hasta.strftime("%H%M") if v.hasta else None
+    fig = "C" if area.shape == "circle" else "P"
+    radius = float(area.radius_nm or 0.0)
+
+    if area.shape == "circle":
+        if not area.center:
+            raise ValueError("Círculo sin centro")
+        verts = [(0, area.center[0], area.center[1])]
+    else:
+        if len(area.vertices) < 3:
+            raise ValueError("Polígono con menos de 3 vértices")
+        verts = [(i + 1, la, lo) for i, (la, lo) in enumerate(area.vertices)]
+
+    cols = ("identifier_name, area_kind, lower_altitude, upper_altitude, lower_unit, "
+            "upper_unit, contour_figure, circle_radius, radius_unit, scheduled_flag, "
+            "permanent, prediction_time, starting_time, ending_time, "
+            + ", ".join(_DAY_COLS))
+    ph = ", ".join("?" for _ in range(14 + 7))
+    row = [nm, area.kind, int(area.lower_fl), int(area.upper_fl), "F", "F", fig,
+           radius, "N", sched, "Y", 120, st, et] + day_vals
+
+    with _writer() as w:
+        w.execute("DELETE FROM restricted_vertices WHERE TRIM(airspace_identity)=?", [nm])
+        w.execute("DELETE FROM restricted_airspaces WHERE TRIM(identifier_name)=?", [nm])
+        w.execute(f"INSERT INTO restricted_airspaces ({cols}) VALUES ({ph})", row)
+        for seq, la, lo in verts:
+            w.execute(
+                "INSERT INTO restricted_vertices "
+                "(airspace_identity, sequence_number, latitude_image, longitude_image, "
+                "lat_dec, lon_dec, visual) VALUES (?,?,?,?,?,?,?)",
+                [nm, seq, _dms_image(la, False), _dms_image(lo, True),
+                 f"{la:.6f}", f"{lo:.6f}", 1])
+
+
+# update == upsert
+update_area = write_area
 
 
 def fixes(kinds=None):
