@@ -9,6 +9,13 @@ from player import atm_db
 AIRWAY_LAYER = "AEROVIAS"
 FIX_LAYER = "FIX"
 
+# Color distinto por categoría de aerovía (vale para PPI técnico, ODS y vista FIR).
+AIRWAY_COLORS = {
+    "SUP": "#FFB040",    # Superiores  → ámbar
+    "INF": "#39C5FF",    # Inferiores  → cian
+    "RNAV": "#C882FF",   # RNAV        → violeta
+}
+
 
 def _polyline(points):
     return [("M" if i == 0 else "L", AIRWAY_LAYER, lat, lon)
