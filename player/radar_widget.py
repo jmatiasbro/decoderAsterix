@@ -3692,11 +3692,23 @@ class RadarWidget(_RadarBase):
                     if not p_origen or not p_destino:
                         return None, None, None
 
+                    # ODS: herramienta en cian apagado con intensidad de capa 'tools'
+                    # (label sin caja). En vista técnica se conserva el color recibido.
+                    ods = getattr(self, 'vista_controlador', False) and getattr(self, 'ods_enabled', True)
+                    if ods:
+                        from player.ods import palette as _pal
+                        intens = getattr(self, 'ods_layer_intensity', _pal.LAYER_DEFAULT)
+                        _a = _pal.layer_alpha('tools', intens.get('tools', 0.85))
+                        if rbl_entry is None:
+                            _a = int(_a * 0.7)  # RBL en construcción, más tenue
+                        rbl_color = QColor(*_pal.TOOL_RBL)
+                        rbl_color.setAlpha(_a)
+
                     painter.save()
                     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
                     # Línea de trazos con el color del RBL
-                    pen = QPen(rbl_color, 2, Qt.PenStyle.DashLine)
+                    pen = QPen(rbl_color, 1.4 if ods else 2, Qt.PenStyle.DashLine)
                     painter.setPen(pen)
                     painter.drawLine(p_origen, p_destino)
 
@@ -3756,12 +3768,15 @@ class RadarWidget(_RadarBase):
                     rect_h = fm.height() * len(lines_t) + 8
                     text_rect = QRectF(mid_x - rect_w / 2.0, mid_y - rect_h / 2.0, rect_w, rect_h)
 
-                    # Borde del color del RBL, fondo negro
-                    painter.setPen(QPen(rbl_color, 1.5))
-                    painter.setBrush(QBrush(QColor("#000000")))
-                    painter.drawRoundedRect(text_rect, 4, 4)
-
-                    painter.setPen(QColor("#FFFFFF"))
+                    if ods:
+                        # ODS: texto sin caja, en el color de la herramienta
+                        painter.setPen(QColor(rbl_color))
+                    else:
+                        # Técnico: borde del color del RBL, fondo negro
+                        painter.setPen(QPen(rbl_color, 1.5))
+                        painter.setBrush(QBrush(QColor("#000000")))
+                        painter.drawRoundedRect(text_rect, 4, 4)
+                        painter.setPen(QColor("#FFFFFF"))
                     for i, line in enumerate(lines_t):
                         line_y = text_rect.top() + fm.ascent() + 4 + i * fm.height()
                         line_w = fm.horizontalAdvance(line)

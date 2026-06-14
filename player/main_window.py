@@ -1018,8 +1018,9 @@ class MainWindow(QMainWindow):
         dlg = QDialog(self)
         dlg.setWindowTitle("Intensidad de capas ODS")
         v = QVBoxLayout(dlg)
-        capas = [("map", "Mapa"), ("rings", "Anillos"), ("labels", "Etiquetas"),
-                 ("history", "Historial"), ("compass", "Rosa de rumbos")]
+        capas = [("map", "Mapa"), ("labels", "Etiquetas"),
+                 ("history", "Historial"), ("compass", "Rosa de rumbos"),
+                 ("tools", "Herramientas (RBL)")]
         intens = getattr(self.radar, 'ods_layer_intensity', {})
         for key, lbl in capas:
             row = QHBoxLayout()

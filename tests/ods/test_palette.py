@@ -24,3 +24,13 @@ def test_alpha_por_intensidad_clampa():
 def test_alerta_stca_es_rojo_dominante():
     r, g, b = P.ALERT_STCA
     assert r > 180 and g < 120 and b < 120
+
+def test_capa_tools_existe_para_rbl():
+    assert "tools" in P.LAYER_DEFAULT
+    assert 0.0 <= P.LAYER_DEFAULT["tools"] <= 1.0
+
+def test_tool_rbl_es_cian_apagado_no_saturado():
+    r, g, b = P.TOOL_RBL
+    # cian apagado: azul/verde dominan sobre rojo, baja saturación (no alerta)
+    assert b >= r and g >= r
+    assert max(r, g, b) < 230
