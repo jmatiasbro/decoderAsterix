@@ -32,6 +32,17 @@ class MBTilesReader:
         except sqlite3.Error:
             return {}
 
+    def zoom_range(self):
+        """(min_z, max_z) de los tiles realmente presentes, o None si vacío."""
+        try:
+            row = self.conn.execute(
+                "SELECT MIN(zoom_level), MAX(zoom_level) FROM tiles").fetchone()
+            if row and row[0] is not None:
+                return int(row[0]), int(row[1])
+        except sqlite3.Error:
+            pass
+        return None
+
     def close(self):
         self.conn.close()
 

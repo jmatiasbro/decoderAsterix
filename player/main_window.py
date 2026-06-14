@@ -994,35 +994,43 @@ class MainWindow(QMainWindow):
         self.act_ods.toggled.connect(self._toggle_ods)
         menu_modo.addAction(_icon("fa5s.sliders-h"), "Intensidad ODS…", self._abrir_ods_intensidad)
         menu_modo.addSeparator()
-        menu_modo.addAction(_icon("fa5s.globe-americas"), "Vista FIR (satélite)…", self._abrir_vista_fir)
+        self.act_fir = menu_modo.addAction(_icon("fa5s.globe-americas"), "Vista FIR (satélite)")
+        self.act_fir.setCheckable(True)
+        self.act_fir.toggled.connect(self._toggle_vista_fir)
 
-    def _abrir_vista_fir(self):
-        """Abre la vista FIR satelital (slippy-map) alimentada con los plots reales."""
+    def _toggle_vista_fir(self, on: bool):
+        """Vista FIR satelital EMBEBIDA: cubre el PPI (hija del radar). Off -> oculta."""
         import os
         from player.firmap.firmap_view import FirMapView
-        if getattr(self, '_fir_view', None) is None:
-            path = "data/firmap/argentina.mbtiles"
-            if not os.path.exists(path):
-                alt = "data/firmap/_test_lowzoom.mbtiles"
-                path = alt if os.path.exists(alt) else None
-            v = FirMapView(path)
-            v.setWindowTitle("Vista FIR (satélite) — Sentinel-2 cloudless")
-            v.resize(1000, 760)
-            v.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-            lat = getattr(self.radar, 'aeropuerto_lat', None)
-            lon = getattr(self.radar, 'aeropuerto_lon', None)
-            if lat is not None and lon is not None:
-                v.set_center(lon, lat)
-                v.set_zoom(8)
-                v.set_home(lon, lat)
-            v.track_selected.connect(self._fir_select_track)
-            v.destroyed.connect(self._on_fir_closed)
-            self._fir_view = v
-            self._fir_timer = QTimer(self)
-            self._fir_timer.timeout.connect(self._refresh_fir)
+        if on:
+            if getattr(self, '_fir_view', None) is None:
+                path = "data/firmap/argentina.mbtiles"
+                if not os.path.exists(path):
+                    alt = "data/firmap/_test_lowzoom.mbtiles"
+                    path = alt if os.path.exists(alt) else None
+                v = FirMapView(path, parent=self.radar)  # embebida sobre el PPI
+                lat = getattr(self.radar, 'aeropuerto_lat', None)
+                lon = getattr(self.radar, 'aeropuerto_lon', None)
+                if lat is not None and lon is not None:
+                    v.set_center(lon, lat)
+                    v.set_home(lon, lat)
+                # Arrancar al mayor zoom disponible que no supere ~nivel TMA.
+                v.set_zoom(min(v.max_zoom, 8))
+                v.track_selected.connect(self._fir_select_track)
+                self._fir_view = v
+                self._fir_timer = QTimer(self)
+                self._fir_timer.timeout.connect(self._refresh_fir)
+            self._fir_view.setGeometry(self.radar.rect())
+            self._fir_view.show()
+            self._fir_view.raise_()
+            self._fir_view.setFocus()
             self._fir_timer.start(300)  # ~3 Hz
-        self._fir_view.show()
-        self._fir_view.raise_()
+            self._refresh_fir()          # primer frame inmediato
+        else:
+            if getattr(self, '_fir_timer', None) is not None:
+                self._fir_timer.stop()
+            if getattr(self, '_fir_view', None) is not None:
+                self._fir_view.hide()
 
     def _refresh_fir(self):
         from player.firmap.feed import build_tracks
@@ -1034,12 +1042,6 @@ class MainWindow(QMainWindow):
         if hasattr(self.radar, 'focused_target_id'):
             self.radar.focused_target_id = track_id
             self.radar.update()
-
-    def _on_fir_closed(self, *_a):
-        if getattr(self, '_fir_timer', None) is not None:
-            self._fir_timer.stop()
-            self._fir_timer = None
-        self._fir_view = None
 
     def _toggle_ods(self, on: bool):
         if hasattr(self.radar, 'ods_enabled'):
@@ -1946,6 +1948,10 @@ class MainWindow(QMainWindow):
             self._reposicionar_reloj()
             if hasattr(self, 'reloj_utc'):
                 self.reloj_utc.raise_()
+            fv = getattr(self, '_fir_view', None)
+            if fv is not None and fv.isVisible():
+                fv.setGeometry(self.radar.rect())
+                fv.raise_()
         return super().eventFilter(obj, event)
 
     def resizeEvent(self, event):
