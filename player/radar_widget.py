@@ -2841,11 +2841,18 @@ class RadarWidget(_RadarBase):
                     painter.setPen(pen_runways)
                     painter.drawPath(layer.path_runways)
                     
-                    # D. Otros → mismo color
+                    # D. Otros → mismo color. Las áreas (AREA::*) van con relleno tenue.
                     pen_other = QPen(layer_color)
-                    pen_other.setWidthF(max(1.0, inv_z * 1.2))
+                    pen_other.setWidthF(max(1.2, inv_z * 1.4))
                     painter.setPen(pen_other)
-                    painter.drawPath(layer.path_other)
+                    if str(getattr(layer, 'name', '')).startswith("AREA::"):
+                        fill = QColor(layer_color)
+                        fill.setAlpha(int(min(70, alpha_base) * 0.5))
+                        painter.setBrush(QBrush(fill))
+                        painter.drawPath(layer.path_other)
+                        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                    else:
+                        painter.drawPath(layer.path_other)
                     
                     # E. Símbolos
                     if layer.map_symbols:

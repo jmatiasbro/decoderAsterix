@@ -170,6 +170,70 @@ def airports_with_procedures():
 
 
 # ---- Fixes ----
+# ---- Áreas restringidas / prohibidas / peligrosas ----
+_DAY_COLS = ["monday_activity", "tuesday_activity", "wednesday_activity",
+             "thursday_activity", "friday_activity", "saturday_activity", "sunday_activity"]
+
+
+def _restricted_vertices(name):
+    """[(sequence_number, lat, lon)] del área, parseando DMS (lat_dec viene '00')."""
+    rows = _con().execute(
+        "SELECT sequence_number, latitude_image, longitude_image "
+        "FROM restricted_vertices WHERE TRIM(airspace_identity)=? ORDER BY sequence_number",
+        [name]).fetchall()
+    out = []
+    for seq, lat_i, lon_i in rows:
+        lat, lon = parse_dms(lat_i), parse_dms(lon_i)
+        if lat is not None and lon is not None:
+            out.append((seq, lat, lon))
+    return out
+
+
+def restricted_airspaces(kinds=None):
+    """[Area] desde la DB. `kinds`: subconjunto de {'R','P','D'} o None=todas.
+
+    Las áreas de la base se modelan como permanentes (con días de semana si la
+    base los trae). Círculo: vértice sequence_number=0 = centro + circle_radius (NM).
+    """
+    if not available():
+        return []
+    from player.areas.model import Area, Vigencia
+    sql = ("SELECT TRIM(identifier_name), area_kind, lower_altitude, upper_altitude, "
+           "contour_figure, circle_radius, permanent, " + ", ".join(_DAY_COLS) +
+           " FROM restricted_airspaces")
+    params = []
+    if kinds:
+        ph = ",".join("?" for _ in kinds)
+        sql += f" WHERE area_kind IN ({ph})"
+        params = list(kinds)
+    out = []
+    for row in _con().execute(sql, params).fetchall():
+        name = row[0]
+        kind = (row[1] or "").strip()
+        lo, up = int(row[2] or 0), int(row[3] or 999)
+        fig = (row[4] or "").strip()
+        radius = float(row[5] or 0.0)
+        days = {i for i, flag in enumerate(row[7:14]) if (flag or "").strip().upper() == "Y"}
+        vig = Vigencia(permanente=True, dias=days)
+        verts = _restricted_vertices(name)
+        if fig == "C":
+            center = next(((la, lo2) for seq, la, lo2 in verts if seq == 0), None)
+            if center is None and verts:
+                center = (verts[0][1], verts[0][2])
+            if center is None or radius <= 0.0:
+                continue
+            out.append(Area(name=name, kind=kind, shape="circle", lower_fl=lo,
+                            upper_fl=up, center=center, radius_nm=radius,
+                            vigencia=vig, origen="db"))
+        else:
+            pts = [(la, lo2) for _seq, la, lo2 in verts]
+            if len(pts) < 3:
+                continue
+            out.append(Area(name=name, kind=kind, shape="poly", lower_fl=lo,
+                            upper_fl=up, vertices=pts, vigencia=vig, origen="db"))
+    return out
+
+
 def fixes(kinds=None):
     """[{'name','lat','lon','kind'}] de fixpoints, filtrando por kind_specifier."""
     if not available():

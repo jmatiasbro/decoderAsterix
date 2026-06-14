@@ -993,6 +993,20 @@ class MainWindow(QMainWindow):
         self.menu_mapas.addSeparator()
         self.menu_mapas.addAction("Cargar Mapa Personalizado (.geojson)...", self._cargar_mapa_personalizado)
 
+        # Menú Áreas — restringidas / prohibidas / peligrosas (desde atm.duckdb)
+        self.menu_areas = menu_bar.addMenu("Áreas")
+        self.area_actions = {}
+        if atm_db.available():
+            for label, kind in [("Restringidas", "R"), ("Prohibidas", "P"),
+                                 ("Peligrosas", "D")]:
+                act = self.menu_areas.addAction(label)
+                act.setCheckable(True)
+                act.toggled.connect(lambda on, k=kind: self._toggle_area_layer(k, on))
+                self.area_actions[kind] = act
+        else:
+            na = self.menu_areas.addAction("Base ATM no encontrada (data/atm/atm.duckdb)")
+            na.setEnabled(False)
+
         # Menú Modo (Playback / Consola)
         menu_modo = menu_bar.addMenu("Modo")
         # El controlador trabaja online: no puede activar playback (se gatea en _aplicar_rol).
@@ -3507,6 +3521,32 @@ class MainWindow(QMainWindow):
             if key.startswith("AERO_") and layer_name in mm.layers:
                 cat = key.split("_", 1)[1]
                 mm.layers[layer_name].color = atm_maps.AIRWAY_COLORS.get(cat, "#00E5FF")
+            if getattr(self.radar, 'proy', None) is not None:
+                mm.reproject_all(self.radar.proy)
+        else:
+            mm.layers.pop(layer_name, None)
+        self.radar.update()
+
+    def _toggle_area_layer(self, kind, on):
+        """Agrega/quita una capa de áreas (R/P/D) en el PPI/ODS."""
+        from player import atm_db
+        from player.areas import render as _ar
+        mm = getattr(self.radar, 'map_manager', None)
+        if mm is None:
+            return
+        layer_name = f"AREA::{kind}"
+        if on:
+            try:
+                segs = _ar.area_segments(atm_db.restricted_airspaces(kinds=[kind]))
+            except Exception as e:
+                print(f"[Áreas] Error generando capa {kind}: {e}")
+                return
+            if not segs:
+                print(f"[Áreas] Sin geometría para {kind}")
+                return
+            mm.add_layer(layer_name, segs, "TACTICO")
+            if layer_name in mm.layers:
+                mm.layers[layer_name].color = _ar.AREA_COLORS.get(kind, "#39C5FF")
             if getattr(self.radar, 'proy', None) is not None:
                 mm.reproject_all(self.radar.proy)
         else:

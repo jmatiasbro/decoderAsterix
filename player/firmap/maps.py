@@ -4,7 +4,7 @@ puntos/fixes sobre el mapa satelital. Recibe el dict de feed.build_maps():
    "points": [{"lat","lon","text","symbol":bool,"color":(r,g,b)}, ...]}
 """
 from PyQt6.QtCore import Qt, QPointF
-from PyQt6.QtGui import QColor, QPen, QFont
+from PyQt6.QtGui import QColor, QPen, QFont, QBrush, QPolygonF
 
 
 def draw_maps(painter, view, maps, margin: float = 120.0):
@@ -18,19 +18,21 @@ def draw_maps(painter, view, maps, margin: float = 120.0):
     a_line = int(200 * mi)
     a_sym = int(170 * mi)         # fixes menos invasivos
     a_txt = int(180 * mi)
-    # Polilíneas
+    # Polilíneas (las áreas se rellenan tenue)
     for ln in maps.get("lines", []):
         pts = ln.get("pts") or []
         if len(pts) < 2:
             continue
         r, g, b = ln["color"]
-        painter.setPen(QPen(QColor(r, g, b, a_line), 1.2))
-        prev = None
-        for (la, lo) in pts:
-            q = view._lonlat_to_screen(la, lo)
-            if prev is not None:
-                painter.drawLine(prev, q)
-            prev = q
+        scr = [view._lonlat_to_screen(la, lo) for (la, lo) in pts]
+        painter.setPen(QPen(QColor(r, g, b, a_line), 1.4))
+        if ln.get("fill"):
+            painter.setBrush(QBrush(QColor(r, g, b, int(45 * mi))))
+            painter.drawPolygon(QPolygonF(scr))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+        else:
+            for i in range(1, len(scr)):
+                painter.drawLine(scr[i - 1], scr[i])
     # Puntos / fixes
     font = QFont("Consolas", 7)
     painter.setFont(font)
