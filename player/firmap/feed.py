@@ -44,7 +44,9 @@ def _trail(radar, proy, plot, max_pts=10):
 def build_tracks(radar):
     """Devuelve la lista de tracks (dicts) para FirMapView.set_tracks()."""
     proy = getattr(radar, "proy", None)
-    if proy is None or not getattr(proy, "activo", False) or getattr(proy, "proj", None) is None:
+    # `activo` ya garantiza que la proyección esté construida (StereographicLocal
+    # usa _proj privado; NO chequear proy.proj, que no existe -> siempre vacío).
+    if proy is None or not getattr(proy, "activo", False):
         return []
     focused = getattr(radar, "focused_target_id", None)
     alerts = _alert_ids(radar)

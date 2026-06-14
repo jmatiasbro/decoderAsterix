@@ -3284,6 +3284,17 @@ class MainWindow(QMainWindow):
         - Controlador: vuelve a centrar el mapa en el área de incumbencia (aeropuerto del perfil).
         - Técnico: centra en el radar seleccionado / sensor activo.
         """
+        # Vista FIR satelital activa: recentrarla (en el aeropuerto, o encuadrar tráfico).
+        fv = getattr(self, '_fir_view', None)
+        if fv is not None and fv.isVisible():
+            lat = getattr(self.radar, 'aeropuerto_lat', None)
+            lon = getattr(self.radar, 'aeropuerto_lon', None)
+            if lat is not None and lon is not None:
+                fv.set_center(lon, lat)
+            elif fv.tracks:
+                fv.fit_to_tracks()
+            return
+
         # Controlador: re-encuadrar el área de incumbencia
         if getattr(self.radar, 'vista_controlador', False):
             lat = getattr(self.radar, 'aeropuerto_lat', None)
