@@ -44,6 +44,7 @@ def build_maps(radar):
     lines, points = [], []
     for layer in mm.get_visible_layers():
         base = _hex_to_rgb(getattr(layer, "color", None))
+        is_area = str(getattr(layer, "name", "")).startswith("AREA::")
         cur = None
         for seg in getattr(layer, "raw_segments", []):
             if len(seg) < 2:
@@ -55,7 +56,7 @@ def build_maps(radar):
                 continue
             if t == "M" and len(seg) >= 4:
                 if cur and len(cur) >= 2:
-                    lines.append({"pts": cur, "color": base})
+                    lines.append({"pts": cur, "color": base, "fill": is_area})
                 cur = [(seg[2], seg[3])]
             elif t == "L" and len(seg) >= 4:
                 if cur is None:
@@ -64,7 +65,7 @@ def build_maps(radar):
             elif t == "C" and cur:
                 cur.append(cur[0])
         if cur and len(cur) >= 2:
-            lines.append({"pts": cur, "color": base})
+            lines.append({"pts": cur, "color": base, "fill": is_area})
     return {"lines": lines, "points": points}
 
 
