@@ -4339,7 +4339,15 @@ class RadarWidget(_RadarBase):
                 vr = self._estimar_vrate(plot)
             except Exception:
                 vr = None
-            return _fdb.build_lines(plot, full=True, vrate=vr, fields=cfg)
+            # Nivel con toggle A/F según TA + QNH (igual que la vista técnica),
+            # conservando la flecha de tendencia ODS.
+            level_str = None
+            fl_for_label = plot.flight_level
+            if fl_for_label is None and getattr(plot, 'altitude_ft', None) is not None:
+                fl_for_label = plot.altitude_ft / 100.0
+            if fl_for_label is not None and getattr(self, 'altimetry', None) is not None:
+                level_str = self.altimetry.formatear_altitud(fl_for_label) + _fdb.trend_arrow(vr)
+            return _fdb.build_lines(plot, full=True, vrate=vr, fields=cfg, level_str=level_str)
 
         # 1. Line 1: Identity
         show_id = True if es_ctrl else cfg.get("identific_aeronave", True)

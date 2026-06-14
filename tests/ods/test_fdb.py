@@ -60,3 +60,20 @@ def test_filtro_oculta_nivel_requiere_ambos_off():
     assert "FL330=" not in lines
     lines2 = fdb.build_lines(p, full=True, fields={"codigo_c": False})
     assert any(s.startswith("FL330") for s in lines2)
+
+def test_trend_arrow():
+    assert fdb.trend_arrow(800) == "↑"
+    assert fdb.trend_arrow(-800) == "↓"
+    assert fdb.trend_arrow(0) == "="
+    assert fdb.trend_arrow(None) == "="
+
+def test_level_str_override_reemplaza_fl_crudo():
+    p = P(callsign="IBE123", fl=35, gs=200)
+    lines = fdb.build_lines(p, full=True, level_str="A035↑")
+    assert lines[1] == "A035↑"
+
+def test_level_str_se_gatea_por_filtro():
+    p = P(callsign="IBE123", fl=35, gs=200)
+    lines = fdb.build_lines(p, full=True, fields={"codigo_c": False, "altitud_adsb": False},
+                            level_str="A035↑")
+    assert "A035↑" not in lines
