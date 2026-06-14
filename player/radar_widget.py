@@ -4330,15 +4330,16 @@ class RadarWidget(_RadarBase):
         # rol técnico: todos los campos disponibles según el filtro de etiquetas.
         es_ctrl = getattr(self, 'vista_controlador', False)
 
-        # ODS: en vista controlador el data block sigue el formato FDB/LDB estándar
-        # (callsign · FL+tendencia · GS), independiente del filtro de etiquetas técnico.
+        # ODS: el data block sigue el formato FDB/LDB estándar (callsign [+ Mode S]
+        # · FL+tendencia · GS) pero respeta el filtro de etiquetas (cada campo se
+        # prende/apaga según label_filter_config).
         if es_ctrl and getattr(self, 'ods_enabled', True):
             from player.ods import fdb as _fdb
             try:
                 vr = self._estimar_vrate(plot)
             except Exception:
                 vr = None
-            return _fdb.build_lines(plot, full=True, vrate=vr)
+            return _fdb.build_lines(plot, full=True, vrate=vr, fields=cfg)
 
         # 1. Line 1: Identity
         show_id = True if es_ctrl else cfg.get("identific_aeronave", True)
