@@ -5,7 +5,9 @@ A/F) y la clasificación/paleta ODS. Sin estado propio.
 import math
 
 
-def _heading(plot):
+def _heading(plot, hist=None):
+    """Rumbo en grados (0=N, horario). Prioriza track_angle; si no, velocidad
+    suavizada; si no, el rumbo del movimiento (últimos 2 puntos de historia)."""
     ta = getattr(plot, "track_angle", None)
     if ta is not None:
         return float(ta) % 360.0
@@ -13,6 +15,12 @@ def _heading(plot):
     vy = getattr(plot, "_smooth_vy", None)
     if vx and vy:  # x este, y norte
         return math.degrees(math.atan2(vx, vy)) % 360.0
+    if hist and len(hist) >= 2:
+        pts = list(hist)
+        dx = pts[-1].x - pts[-2].x
+        dy = pts[-1].y - pts[-2].y
+        if dx or dy:
+            return math.degrees(math.atan2(dx, dy)) % 360.0
     return 0.0
 
 
@@ -75,7 +83,7 @@ def build_tracks(radar):
             out.append({
                 "id": plot.id,
                 "lat": lat, "lon": lon,
-                "heading": _heading(plot),
+                "heading": _heading(plot, getattr(radar, "history", {}).get(plot.id)),
                 "lines": lines,
                 "color": rgb,
                 "selected": (plot.id == focused),

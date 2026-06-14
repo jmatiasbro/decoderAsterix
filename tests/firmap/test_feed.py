@@ -42,5 +42,17 @@ def test_build_tracks_reproyecta_y_marca_seleccion():
 
 def test_build_tracks_sin_proyeccion_devuelve_vacio():
     r = _Radar()
+    r.proy = _Proj()
     r.proy.activo = False
     assert build_tracks(r) == []
+
+
+def test_heading_desde_movimiento_si_falta_track_angle():
+    from types import SimpleNamespace as S
+    from player.firmap.feed import _heading
+    p = S(track_angle=None, _smooth_vx=None, _smooth_vy=None)
+    este = [S(x=0, y=0), S(x=100, y=0)]
+    norte = [S(x=0, y=0), S(x=0, y=100)]
+    assert round(_heading(p, este)) == 90    # x este -> 90
+    assert round(_heading(p, norte)) == 0     # y norte -> 0
+    assert _heading(S(track_angle=270.0), None) == 270.0
