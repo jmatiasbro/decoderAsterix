@@ -94,12 +94,21 @@ class ProfileAdminDialog(QDialog):
         self._setup_style()
         self._setup_ui()
         
-        # Iniciar lectura en segundo plano
-        # Fuente principal de ICAO: files/nombres.json; frecuencias desde ar_apt.geojson
+        # Lista de aeropuertos: preferir la base ATM (atm.duckdb) con coords + TA;
+        # GeoJSON aporta frecuencias por merge. Sin base ATM, GeoJSON es la fuente única.
+        from player import atm_db
         nombres_path = os.path.join(self.base_dir, "files", "nombres.json")
         ar_apt_path = os.path.join(self.base_dir, "cartografia_base", "ar_apt.geojson")
+        self._atm_primary = atm_db.available()
+        if self._atm_primary:
+            self._on_airports_loaded({
+                icao: {"lat": d["lat"], "lon": d["lon"], "name": "",
+                       "frequencies": [], "transition_level": d["transition_level"]}
+                for icao, d in atm_db.airports().items()
+            })
         self.loader_thread = AirportLoaderThread([nombres_path, ar_apt_path])
-        self.loader_thread.airports_loaded.connect(self._on_airports_loaded)
+        self.loader_thread.airports_loaded.connect(
+            self._merge_airport_frequencies if self._atm_primary else self._on_airports_loaded)
         self.loader_thread.start()
         
         # Rellenar lista de perfiles y seleccionar el activo
@@ -412,12 +421,25 @@ class ProfileAdminDialog(QDialog):
         if self.cmb_aeropuerto.currentIndex() >= 0:
             self._on_airport_changed(self.cmb_aeropuerto.currentText())
 
+    def _merge_airport_frequencies(self, geojson_airports):
+        """ATM es la fuente de aeropuertos/coords; el GeoJSON solo aporta frecuencias."""
+        for icao, info in geojson_airports.items():
+            if icao in self.aeropuertos_data and info.get("frequencies"):
+                self.aeropuertos_data[icao]["frequencies"] = info["frequencies"]
+        if self.cmb_aeropuerto.currentIndex() >= 0:
+            self._on_airport_changed(self.cmb_aeropuerto.currentText())
+
     def _on_airport_changed(self, icao):
         icao = (icao or "").strip().upper()
         if icao in self.aeropuertos_data:
             info = self.aeropuertos_data[icao]
             self.txt_lat.setText(f"{info['lat']:.5f}")
             self.txt_lon.setText(f"{info['lon']:.5f}")
+            # TA desde la base ATM (transition_level en FL -> ft). Inerte mientras
+            # airport_environment esté vacía (transition_level None).
+            tl = info.get("transition_level")
+            if tl is not None:
+                self.sb_transition_altitude.setValue(int(tl) * 100)
             
             # Autocompletado inteligente de frecuencias del aeropuerto
             freqs = info.get("frequencies", [])
