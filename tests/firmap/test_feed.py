@@ -2,8 +2,8 @@ from player.firmap.feed import build_tracks
 
 
 class _Proj:
+    # Fiel a StereographicLocal: expone `activo` y xy_to_latlon (NO `proj`).
     activo = True
-    proj = object()
 
     def xy_to_latlon(self, x, y):
         return (-34.0 + y / 1e5, -64.0 + x / 1e5)
