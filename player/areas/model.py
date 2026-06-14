@@ -82,6 +82,7 @@ class Area:
     radius_nm: float = None
     vigencia: Vigencia = field(default_factory=Vigencia)
     origen: str = "db"                            # 'db' | 'usuario'
+    prediction_time: int = 120
 
     def contiene(self, lat, lon) -> bool:
         if self.shape == "circle" and self.center and self.radius_nm:

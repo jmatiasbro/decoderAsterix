@@ -76,6 +76,11 @@ def _alert_ids(radar):
             ids.add(c[0]); ids.add(c[1])
         except (IndexError, TypeError):
             pass
+    for a in getattr(radar, "apw_activos", []) or []:
+        try:
+            ids.add(a.track_id)
+        except AttributeError:
+            pass
     return ids
 
 

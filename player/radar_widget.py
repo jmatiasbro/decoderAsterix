@@ -322,7 +322,7 @@ class RadarPlot:
                  # de __slots__: el AttributeError silencioso deshabilitaba el
                  # cross-fill de identidad y la acumulación de reporting_sensors).
                  '_smooth_vx', '_smooth_vy', '_vel_prev_x', '_vel_prev_y', '_vel_prev_t',
-                 '_last_fl_time', '_last_gs_time')
+                 '_last_fl_time', '_last_gs_time', 'vx', 'vy')
 
     def __init__(self, x: float, y: float, sac_sic: str, category: int,
                  timestamp: float, mode3a: str, callsign: str,
@@ -383,6 +383,8 @@ class RadarPlot:
         self.label_rect = QRectF()
         self.widget_ref = None
         self._update_period = 4.0
+        self.vx = None
+        self.vy = None
 
     def set_highlight_filter(self, filtro: str):
         self._highlight_filter = filtro
@@ -799,6 +801,7 @@ class RadarWidget(_RadarBase):
             "rho_theta": False, "rumbo_verdadero": False, "rumbo_magnetico": False,
             "orientacion": "NE", "sel_por_codigo_a": True, "sel_por_posicion": False
         }
+        self.user_areas = []
 
         # Zoom/pan
         self.zoom_factor = 1.0
@@ -871,10 +874,14 @@ class RadarWidget(_RadarBase):
         # Inicializar STCA Engine, Diálogo y QualityManager (DQF)
         from analysis.stca_analyzer import STCA_Engine
         from player.stca_dialog import STCADialog
+        from player.apw_dialog import APWDialog
         from analysis.quality_manager import QualityManager
         self.stca_engine = STCA_Engine()
         self.stca_dialog = STCADialog(self)
         self.stca_habilitado = True
+        self.apw_dialog = APWDialog(self)
+        self.apw_habilitado = True
+        self.apw_activos = []
         self.quality_manager = QualityManager()
         # Silenciar el logger interno del QM: registra en cada ciclo y satura el
         # archivo. El registro de eventos de calidad ahora es deduplicado y vive
@@ -1041,11 +1048,14 @@ class RadarWidget(_RadarBase):
             self.detected_reflectors.clear()
             self.plot_count = 0
             
-            # Reset Hibrido STCA
+            # Reset Hibrido STCA y APW
             if hasattr(self, 'stca_dialog') and self.stca_dialog:
                 self.stca_dialog.hide()
+            if hasattr(self, 'apw_dialog') and self.apw_dialog:
+                self.apw_dialog.hide()
             self.tracks_en_alerta = set()
             self.conflictos_activos = []
+            self.apw_activos = []
             self.logged_conflicts = {}
             
             self.update()
@@ -1086,11 +1096,14 @@ class RadarWidget(_RadarBase):
         if hasattr(self, 'detected_reflectors'):
             self.detected_reflectors.clear()
             
-        # Reset Hibrido STCA
+        # Reset Hibrido STCA y APW
         if hasattr(self, 'stca_dialog') and self.stca_dialog:
             self.stca_dialog.hide()
+        if hasattr(self, 'apw_dialog') and self.apw_dialog:
+            self.apw_dialog.hide()
         self.tracks_en_alerta = set()
         self.conflictos_activos = []
+        self.apw_activos = []
         self.logged_conflicts = {}
         
         self.update()
@@ -2221,11 +2234,119 @@ class RadarWidget(_RadarBase):
         except Exception:
             pass
 
+    def calcular_velocidades_pistas(self):
+        """
+        Calcula vx y vy (m/s) para todas las pistas vivas y las guarda en el objeto RadarPlot.
+        Reutiliza la lógica de CPA Kinematics y regresión lineal del STCA.
+        """
+        for tid, track in self.tracks.items():
+            if not track.is_alive():
+                track.vx = None
+                track.vy = None
+                continue
+            if getattr(track, 'degradada', False) or getattr(track, 'is_reflection', False):
+                track.vx = None
+                track.vy = None
+                continue
+            if tid.startswith('PSR_'):
+                track.vx = None
+                track.vy = None
+                continue
+            
+            vx = vy = None
+            if track.ground_speed is not None and track.track_angle is not None:
+                speed_mps = track.ground_speed * (METERS_PER_NM / 3600.0)
+                if 1.0 <= speed_mps <= 600.0:
+                    angle_rad = math.radians(track.track_angle)
+                    vx = speed_mps * math.sin(angle_rad)
+                    vy = speed_mps * math.cos(angle_rad)
+            
+            if vx is None or vy is None:
+                hist = self.history.get(tid)
+                if hist and len(hist) >= 2:
+                    samples = [
+                        (pt.timestamp, pt.x, pt.y)
+                        for pt in hist
+                        if 1.0 <= (track.timestamp - pt.timestamp) <= 25.0
+                    ]
+                    samples.append((track.timestamp, track.x, track.y))
+                    
+                    est_vx = est_vy = None
+                    if len(samples) >= 3:
+                        n = len(samples)
+                        t_mean = sum(s[0] for s in samples) / n
+                        x_mean = sum(s[1] for s in samples) / n
+                        y_mean = sum(s[2] for s in samples) / n
+                        var_t = sum((s[0] - t_mean) ** 2 for s in samples)
+                        if var_t > 1e-6:
+                            est_vx = sum((s[0] - t_mean) * (s[1] - x_mean) for s in samples) / var_t
+                            est_vy = sum((s[0] - t_mean) * (s[2] - y_mean) for s in samples) / var_t
+                    elif len(samples) >= 2:
+                        (t0, x0, y0), (t1, x1, y1) = samples[0], samples[-1]
+                        dt = t1 - t0
+                        if dt >= 1.0:
+                            est_vx = (x1 - x0) / dt
+                            est_vy = (y1 - y0) / dt
+                    
+                    if est_vx is not None and est_vy is not None:
+                        speed = math.sqrt(est_vx ** 2 + est_vy ** 2)
+                        if 5.0 <= speed <= 600.0:
+                            vx = est_vx
+                            vy = est_vy
+                    
+                    if vx is not None and vy is not None:
+                        vel_prev_map = getattr(self, '_stca_vel_prev', None)
+                        if vel_prev_map is None:
+                            vel_prev_map = self._stca_vel_prev = {}
+                        prev = vel_prev_map.get(tid)
+                        if prev is not None:
+                            pvx, pvy = prev
+                            prev_mag = math.hypot(pvx, pvy)
+                            cur_mag = math.hypot(vx, vy)
+                            if prev_mag > 1e-3 and cur_mag > 1e-3:
+                                dot = max(-1.0, min(1.0, (pvx * vx + pvy * vy) / (prev_mag * cur_mag)))
+                                heading_change = math.degrees(math.acos(dot))
+                                mag_ratio = cur_mag / prev_mag
+                                if heading_change > 25.0 or mag_ratio < 0.5 or mag_ratio > 2.0:
+                                    vx = vy = None
+                        if vx is not None and vy is not None:
+                            vel_prev_map[tid] = (vx, vy)
+            
+            track.vx = vx
+            track.vy = vy
+
+    def evaluar_apw(self):
+        """
+        Evalúa alertas APW (Area Proximity Warning) para todas las pistas vivas.
+        """
+        if not getattr(self, 'apw_habilitado', True):
+            self.apw_activos = []
+            if hasattr(self, 'apw_dialog') and self.apw_dialog:
+                self.apw_dialog.actualizar_alertas([])
+            return
+
+        import datetime
+        from player.areas.apw import evaluar_apw as engine_evaluar_apw
+        
+        try:
+            ahora = datetime.datetime.fromtimestamp(SimulationTime.time())
+            alertas = engine_evaluar_apw(self.tracks.values(), self.get_all_areas(), ahora)
+            self.apw_activos = alertas
+            
+            if hasattr(self, 'apw_dialog') and self.apw_dialog:
+                self.apw_dialog.actualizar_alertas(alertas, self)
+        except Exception as e:
+            print(f"[APW ERROR] Error al evaluar APW: {e}")
+
     def evaluar_stca(self):
         """
         Evalúa conflictos STCA con lógica de inhibición multisensor (Regla de Oro de la FASE 3).
         """
+        # Calcular velocidades primero para que siempre estén disponibles (para STCA y APW)
+        self.calcular_velocidades_pistas()
+
         if not hasattr(self, 'stca_engine') or not hasattr(self, 'stca_dialog'):
+            self.evaluar_apw()
             return
 
         # Seguridad Operativa: Desactivar procesamiento si stca_habilitado es False
@@ -2234,6 +2355,7 @@ class RadarWidget(_RadarBase):
             self.conflictos_activos = []
             if hasattr(self, 'stca_dialog') and self.stca_dialog:
                 self.stca_dialog.actualizar_alertas([])
+            self.evaluar_apw()
             return
 
         # 1. LÓGICA DE INHIBICIÓN MULTISENSOR
@@ -2268,82 +2390,9 @@ class RadarWidget(_RadarBase):
                     except Exception:
                         pass
                 
-                # CPA Kinematics: vx, vy calculation
-                vx = vy = None
-                if track.ground_speed is not None and track.track_angle is not None:
-                    speed_mps = track.ground_speed * (METERS_PER_NM / 3600.0)
-                    if 1.0 <= speed_mps <= 600.0:
-                        angle_rad = math.radians(track.track_angle)
-                        vx = speed_mps * math.sin(angle_rad)
-                        vy = speed_mps * math.cos(angle_rad)
-                
-                # Si no se dispone de velocidad directa, estimar mediante regresión
-                # lineal por mínimos cuadrados sobre la ventana de historial (A).
-                # Promedia el ruido de N muestras en lugar de fiarse de 2 puntos,
-                # reduciendo el jitter del CPA. Tras estimar, un gate de confianza
-                # (D) descarta el vector para predicción si saltó respecto al tick
-                # previo (maniobra/ruido): en ese caso el STCA solo evalúa VIOLATION.
-                if vx is None or vy is None:
-                    hist = self.history.get(tid)
-                    if hist and len(hist) >= 2:
-                        # Recolectar muestras (t, x, y) dentro de la ventana temporal
-                        samples = [
-                            (pt.timestamp, pt.x, pt.y)
-                            for pt in hist
-                            if 1.0 <= (track.timestamp - pt.timestamp) <= 25.0
-                        ]
-                        # Incluir el punto actual como muestra más reciente
-                        samples.append((track.timestamp, track.x, track.y))
-
-                        est_vx = est_vy = None
-                        if len(samples) >= 3:
-                            # Regresión lineal: pendiente temporal = componente de velocidad
-                            n = len(samples)
-                            t_mean = sum(s[0] for s in samples) / n
-                            x_mean = sum(s[1] for s in samples) / n
-                            y_mean = sum(s[2] for s in samples) / n
-                            var_t = sum((s[0] - t_mean) ** 2 for s in samples)
-                            if var_t > 1e-6:
-                                est_vx = sum((s[0] - t_mean) * (s[1] - x_mean) for s in samples) / var_t
-                                est_vy = sum((s[0] - t_mean) * (s[2] - y_mean) for s in samples) / var_t
-                        elif len(samples) >= 2:
-                            # Fallback de 2 puntos si la ventana es demasiado corta
-                            (t0, x0, y0), (t1, x1, y1) = samples[0], samples[-1]
-                            dt = t1 - t0
-                            if dt >= 1.0:
-                                est_vx = (x1 - x0) / dt
-                                est_vy = (y1 - y0) / dt
-
-                        # Validar que la velocidad estimada sea realista (5–600 m/s)
-                        if est_vx is not None and est_vy is not None:
-                            speed = math.sqrt(est_vx ** 2 + est_vy ** 2)
-                            if 5.0 <= speed <= 600.0:
-                                vx = est_vx
-                                vy = est_vy
-
-                        # --- Gate de confianza (D) ---
-                        # Solo aplica al vector ESTIMADO. Si el rumbo cambió > 25°
-                        # o la magnitud salió del rango 0.5x–2x respecto al tick
-                        # anterior, el vector no es confiable para predicción:
-                        # se descarta (vx,vy=None) y el STCA evaluará solo VIOLATION.
-                        if vx is not None and vy is not None:
-                            vel_prev_map = getattr(self, '_stca_vel_prev', None)
-                            if vel_prev_map is None:
-                                vel_prev_map = self._stca_vel_prev = {}
-                            prev = vel_prev_map.get(tid)
-                            if prev is not None:
-                                pvx, pvy = prev
-                                prev_mag = math.hypot(pvx, pvy)
-                                cur_mag = math.hypot(vx, vy)
-                                if prev_mag > 1e-3 and cur_mag > 1e-3:
-                                    dot = max(-1.0, min(1.0, (pvx * vx + pvy * vy) / (prev_mag * cur_mag)))
-                                    heading_change = math.degrees(math.acos(dot))
-                                    mag_ratio = cur_mag / prev_mag
-                                    if heading_change > 25.0 or mag_ratio < 0.5 or mag_ratio > 2.0:
-                                        vx = vy = None  # inestable: no confiable para predicción
-                            # Guardar para el próximo tick solo si quedó vector válido
-                            if vx is not None and vy is not None:
-                                vel_prev_map[tid] = (vx, vy)
+                # CPA Kinematics: vx, vy calculation (reused from pre-calculated values)
+                vx = track.vx
+                vy = track.vy
                 
                 # Obtener velocidad en nudos (knots) para filtrar blancos estáticos (ruido/obstáculos MTR/transpondedores de calibración)
                 speed_kt = track.ground_speed
@@ -2435,6 +2484,9 @@ class RadarWidget(_RadarBase):
         # 2. Actualizar la UI flotante
         if hasattr(self, 'stca_dialog') and self.stca_dialog:
             self.stca_dialog.actualizar_alertas(conflictos)
+
+        # 3. Evaluar alertas APW
+        self.evaluar_apw()
 
     def _log_stca_event(self, message: str):
         """
@@ -3439,6 +3491,19 @@ class RadarWidget(_RadarBase):
             for t1, t2, estado, tiempo in getattr(self, 'conflictos_activos', []):
                 alertas_dict[t1] = (estado, tiempo, t2)
                 alertas_dict[t2] = (estado, tiempo, t1)
+
+            # Combinar con alertas APW activas
+            for a in getattr(self, 'apw_activos', []):
+                tid = a.track_id
+                tipo = a.tipo # 'VIOLATION' | 'PREDICTED'
+                eta = a.eta_s
+                if tid in alertas_dict:
+                    # Sobrescribir solo si la nueva alerta es de mayor severidad (VIOLATION)
+                    prev_estado = alertas_dict[tid][0]
+                    if prev_estado != 'VIOLATION' and tipo == 'VIOLATION':
+                        alertas_dict[tid] = (tipo, eta, 'APW')
+                else:
+                    alertas_dict[tid] = (tipo, eta, 'APW')
 
             all_active_plots = list(self.tracks.items()) + list(self.pending_tracks.items())
 
@@ -5025,7 +5090,12 @@ class RadarWidget(_RadarBase):
                     plot_color = QColor("#FFA500")
             elif plot.id in alertas_dict:
                 estado, tiempo, _ = alertas_dict[plot.id]
-                plot_color = QColor("#FF0000") if estado == 'VIOLATION' else QColor("#FFFF00")
+                if estado == 'VIOLATION':
+                    plot_color = QColor("#FF0000")
+                elif estado == 'PREDICTED':
+                    plot_color = QColor("#FFB040")
+                else:
+                    plot_color = QColor("#FFFF00")
             elif getattr(plot, 'is_reflection', False) and not getattr(self, 'modo_crudo', False):
                 plot_color = QColor(255, 51, 102)
             elif getattr(plot, 'has_reflection', False) and not getattr(self, 'modo_crudo', False):
@@ -5123,7 +5193,12 @@ class RadarWidget(_RadarBase):
             if plot.id in alertas_dict:
                 try:
                     estado, tiempo, _ = alertas_dict[plot.id]
-                    color_alerta = QColor("#FF0000") if estado == 'VIOLATION' else QColor("#FFFF00")
+                    if estado == 'VIOLATION':
+                        color_alerta = QColor("#FF0000")
+                    elif estado == 'PREDICTED':
+                        color_alerta = QColor("#FFB040")
+                    else:
+                        color_alerta = QColor("#FFFF00")
                     
                     painter.save()
                     painter.translate(x, y)
@@ -5235,19 +5310,39 @@ class RadarWidget(_RadarBase):
                     # Draw Leader Line from aircraft center (0, 0) to label offset
                     painter.drawLine(QPointF(0, 0), plot.label_offset)
                     
-                    # If target is in conflict STCA, draw badge/box
+                    # If target is in conflict STCA / APW, draw badge/box
                     if plot.id in alertas_dict:
                         try:
                             estado, tiempo, _ = alertas_dict[plot.id]
-                            color_alerta = QColor("#FF0000") if estado == 'VIOLATION' else QColor("#FFFF00")
+                            if estado == 'VIOLATION':
+                                color_alerta = QColor("#FF0000")
+                            elif estado == 'PREDICTED':
+                                color_alerta = QColor("#FFB040")
+                            else:
+                                color_alerta = QColor("#FFFF00")
+                                
                             pen_box = QPen(color_alerta, 1.2)
                             painter.setPen(pen_box)
                             painter.setBrush(QBrush(QColor(11, 14, 20, 180)))
                             rect_label = QRectF(dx - 5, dy - 2, max_w + 10, len(lines) * 14 + 3)
                             painter.drawRect(rect_label)
                             
+                            badge_txt = None
+                            badge_bg = None
+                            badge_fg = QColor("#000000")
                             if estado == 'PREDICTION':
                                 badge_txt = f"T-{tiempo}s"
+                                badge_bg = QColor("#FFFF00")
+                            elif estado == 'PREDICTED':
+                                badge_txt = f"A-{int(tiempo)}s"
+                                badge_bg = QColor("#FFB040")
+                            elif estado == 'VIOLATION':
+                                # Si es APW (o STCA con APW), dibuja badge
+                                badge_txt = "APW"
+                                badge_bg = QColor("#FF0000")
+                                badge_fg = QColor("#FFFFFF")
+                                
+                            if badge_txt and badge_bg:
                                 painter.save()
                                 painter.setFont(QFont("Consolas", 7, QFont.Weight.Bold))
                                 fm_badge = QFontMetrics(painter.font())
@@ -5255,9 +5350,9 @@ class RadarWidget(_RadarBase):
                                 badge_h = 11
                                 rect_badge = QRectF(rect_label.right() - badge_w - 4, rect_label.top() - 9, badge_w, badge_h)
                                 painter.setPen(Qt.PenStyle.NoPen)
-                                painter.setBrush(QBrush(QColor("#FFFF00")))
+                                painter.setBrush(QBrush(badge_bg))
                                 painter.drawRect(rect_badge)
-                                painter.setPen(QColor("#000000"))
+                                painter.setPen(badge_fg)
                                 painter.drawText(rect_badge, Qt.AlignmentFlag.AlignCenter, badge_txt)
                                 painter.restore()
                             painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
@@ -5296,3 +5391,10 @@ class RadarWidget(_RadarBase):
             alertas_dict[t1] = (estado, tiempo, t2)
             alertas_dict[t2] = (estado, tiempo, t1)
         self._draw_oaci_track(painter, plot, z, inv_z, alertas_dict)
+
+    def get_all_areas(self):
+        """Devuelve la combinación de áreas de la base de datos y de usuario."""
+        from player import atm_db
+        db_a = atm_db.restricted_airspaces() if atm_db.available() else []
+        usr_a = getattr(self, 'user_areas', [])
+        return db_a + usr_a

@@ -1,15 +1,35 @@
 import os
 import re
 import math
+from datetime import time
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QWidget, QGroupBox,
     QPushButton, QLabel, QComboBox, QListWidget,
     QListWidgetItem, QMessageBox, QButtonGroup, QCheckBox, QFormLayout,
-    QTextEdit
+    QTextEdit, QLineEdit, QRadioButton, QTimeEdit, QTabWidget, QDoubleSpinBox, QSpinBox
 )
 from PyQt6.QtCore import Qt, QEvent, QPointF
 from PyQt6.QtGui import QPainter, QPen, QColor, QPolygonF, QBrush
 from geo_tools import GeoTools
+
+class FLSpinBox(QSpinBox):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setRange(0, 999)
+        self.setValue(0)
+
+    def textFromValue(self, value):
+        if value == 999:
+            return "UNL"
+        return f"{value:03d}"
+
+    def valueFromText(self, text):
+        if text.strip().upper() == "UNL":
+            return 999
+        try:
+            return int(text)
+        except ValueError:
+            return 0
 
 # Color mapping for presentation and drawing
 COLOR_MAP = {
@@ -83,9 +103,9 @@ class LMG_Dialog(QDialog):
         
         self.setWindowTitle("Herramienta de Dibujo")
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
-        self.setMinimumSize(360, 620)
+        self.setMinimumSize(380, 700)
         from player.ui_scaling import escalar_ventana
-        escalar_ventana(self, 380, 680, centrar=False)
+        escalar_ventana(self, 400, 750, centrar=False)
         
         # State variables
         self.completed_shapes = []
@@ -93,6 +113,8 @@ class LMG_Dialog(QDialog):
         self.shape_closed = False
         self.dragging = False
         self.circle_center = None
+        self.circle_radius_nm = 0.0
+        self.loaded_control_areas = []
         
         # Arc State Machine
         self.arc_step = 0
@@ -147,6 +169,7 @@ class LMG_Dialog(QDialog):
                 background-color: rgba(57, 255, 20, 25);
                 border: 1px solid #39FF14;
                 color: #39FF14;
+                background-color: rgba(57, 255, 20, 15);
             }
             QPushButton:disabled {
                 background-color: rgba(255, 255, 255, 5);
@@ -160,6 +183,7 @@ class LMG_Dialog(QDialog):
                 border-radius: 4px;
                 padding: 4px;
                 font-size: 8pt;
+                min-height: 20px;
             }
             QTextEdit {
                 background-color: #1A2130;
@@ -169,11 +193,41 @@ class LMG_Dialog(QDialog):
                 padding: 4px;
                 font-size: 8pt;
             }
+            QLineEdit, QSpinBox, QDoubleSpinBox, QTimeEdit {
+                background-color: #1A2130;
+                color: #E0E6ED;
+                border: 1px solid rgba(0, 229, 255, 60);
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 8pt;
+                min-height: 20px;
+            }
             QListWidget {
                 background-color: #101520;
                 border: 1px solid rgba(0, 229, 255, 40);
                 border-radius: 4px;
                 color: #E0E6ED;
+            }
+            QTabWidget::pane {
+                border: 1px solid rgba(0, 229, 255, 40);
+                background: #0B0E14;
+                border-radius: 4px;
+            }
+            QTabBar::tab {
+                background: #101520;
+                border: 1px solid rgba(0, 229, 255, 40);
+                padding: 6px 12px;
+                margin-right: 2px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                color: #E0E6ED;
+                font-size: 8pt;
+                font-weight: bold;
+            }
+            QTabBar::tab:selected {
+                background: #0B0E14;
+                border-bottom-color: #0B0E14;
+                color: #00E5FF;
             }
         """)
         
@@ -181,6 +235,16 @@ class LMG_Dialog(QDialog):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(8)
+        
+        self.tabs = QTabWidget()
+        self.tabs.currentChanged.connect(self.on_tab_changed)
+        main_layout.addWidget(self.tabs)
+        
+        # --- TAB 1: DIBUJO DE CAPAS ---
+        tab_draw = QWidget()
+        tab_draw_layout = QVBoxLayout(tab_draw)
+        tab_draw_layout.setContentsMargins(5, 5, 5, 5)
+        tab_draw_layout.setSpacing(8)
         
         # 1. Primitive Graphic Type Area
         primitive_group = QGroupBox("Tipo de Gráfico Primitivo")
@@ -208,7 +272,7 @@ class LMG_Dialog(QDialog):
         primitive_layout.addWidget(self.btn_vector)
         primitive_layout.addWidget(self.btn_circle)
         primitive_layout.addWidget(self.btn_arc)
-        main_layout.addWidget(primitive_group)
+        tab_draw_layout.addWidget(primitive_group)
         
         # 2. Edition Area (Central QGroupBox)
         edition_group = QGroupBox("Área de Edición")
@@ -223,7 +287,7 @@ class LMG_Dialog(QDialog):
         edition_layout.addWidget(QLabel("Ingreso de Coordenadas Lat/Long (DMS):"))
         self.txt_coordenadas = QTextEdit()
         self.txt_coordenadas.setPlaceholderText("Ej: 341215.3N 0582645.2W\nIngrese un punto por línea.")
-        self.txt_coordenadas.setMinimumHeight(100)
+        self.txt_coordenadas.setMinimumHeight(80)
         self.txt_coordenadas.textChanged.connect(self.reset_coordinate_style)
         edition_layout.addWidget(self.txt_coordenadas)
         
@@ -261,7 +325,7 @@ class LMG_Dialog(QDialog):
         form_layout.addRow(QLabel("Grosor:"), self.combo_width)
         edition_layout.addLayout(form_layout)
         
-        main_layout.addWidget(edition_group)
+        tab_draw_layout.addWidget(edition_group)
         
         # 3. Command Area (Lower QGroupBox)
         command_group = QGroupBox("Comandos")
@@ -284,10 +348,179 @@ class LMG_Dialog(QDialog):
         
         command_layout.addWidget(QLabel("Capas del Perfil:"))
         self.list_capas = QListWidget()
-        self.list_capas.setMinimumHeight(120)
+        self.list_capas.setMinimumHeight(80)
         command_layout.addWidget(self.list_capas)
         
-        main_layout.addWidget(command_group)
+        tab_draw_layout.addWidget(command_group)
+        self.tabs.addTab(tab_draw, "Dibujo de Capas")
+
+        # --- TAB 2: ÁREAS OPERATIVAS (CRUD) ---
+        tab_areas = QWidget()
+        tab_areas_layout = QVBoxLayout(tab_areas)
+        tab_areas_layout.setContentsMargins(5, 5, 5, 5)
+        tab_areas_layout.setSpacing(8)
+
+        # Form group box
+        area_form_group = QGroupBox("Nueva / Editar Área")
+        area_form_layout = QFormLayout(area_form_group)
+        area_form_layout.setSpacing(6)
+
+        self.txt_area_name = QLineEdit()
+        self.txt_area_name.setPlaceholderText("Ej: SAP116, ZONA_X")
+        self.txt_area_name.setStyleSheet("QLineEdit { background-color: #1A2130; color: #E0E6ED; border: 1px solid rgba(0, 229, 255, 60); border-radius: 4px; padding: 4px; }")
+        
+        self.combo_area_tipo = QComboBox()
+        self.combo_area_tipo.addItems(["Restringida (R)", "Prohibida (P)", "Peligrosa (D)"])
+        
+        self.spin_area_lower = FLSpinBox()
+        self.spin_area_lower.setStyleSheet("QSpinBox { background-color: #1A2130; color: #E0E6ED; border: 1px solid rgba(0, 229, 255, 60); border-radius: 4px; padding: 4px; }")
+        
+        self.spin_area_upper = FLSpinBox()
+        self.spin_area_upper.setValue(999) # Default to unlimited
+        self.spin_area_upper.setStyleSheet("QSpinBox { background-color: #1A2130; color: #E0E6ED; border: 1px solid rgba(0, 229, 255, 60); border-radius: 4px; padding: 4px; }")
+
+        self.combo_area_shape = QComboBox()
+        self.combo_area_shape.addItems(["Polígono", "Círculo"])
+        self.combo_area_shape.currentIndexChanged.connect(self.on_area_shape_changed)
+
+        self.spin_area_radius = QDoubleSpinBox()
+        self.spin_area_radius.setRange(0.1, 999.0)
+        self.spin_area_radius.setValue(5.0)
+        self.spin_area_radius.setSuffix(" NM")
+        self.spin_area_radius.setStyleSheet("QDoubleSpinBox { background-color: #1A2130; color: #E0E6ED; border: 1px solid rgba(0, 229, 255, 60); border-radius: 4px; padding: 4px; }")
+        self.spin_area_radius.setEnabled(False) # Only enabled for Circle
+
+        self.txt_area_coords = QTextEdit()
+        self.txt_area_coords.setPlaceholderText("Ej para Polígono:\n341215.3N 0582645.2W\n341230.5N 0582615.1W\n\nEj para Círculo (Centro):\n341215.3N 0582645.2W")
+        self.txt_area_coords.setMinimumHeight(60)
+        self.txt_area_coords.setStyleSheet("background-color: #1A2130; color: #E0E6ED; border: 1px solid rgba(0, 229, 255, 60); border-radius: 4px; padding: 4px;")
+
+        area_form_layout.addRow(QLabel("Nombre:"), self.txt_area_name)
+        area_form_layout.addRow(QLabel("Tipo:"), self.combo_area_tipo)
+        area_form_layout.addRow(QLabel("Límite Inferior (FL):"), self.spin_area_lower)
+        area_form_layout.addRow(QLabel("Límite Superior (FL):"), self.spin_area_upper)
+        area_form_layout.addRow(QLabel("Geometría:"), self.combo_area_shape)
+        area_form_layout.addRow(QLabel("Radio Círculo:"), self.spin_area_radius)
+        area_form_layout.addRow(QLabel("Coordenadas (DMS):"), self.txt_area_coords)
+
+        # Vigencia Group Box inside Form
+        self.rad_area_perm = QRadioButton("Permanente")
+        self.rad_area_perm.setChecked(True)
+        self.rad_area_temp = QRadioButton("Temporal")
+        
+        self.vigencia_group = QButtonGroup(self)
+        self.vigencia_group.addButton(self.rad_area_perm)
+        self.vigencia_group.addButton(self.rad_area_temp)
+        
+        vig_radio_layout = QHBoxLayout()
+        vig_radio_layout.addWidget(self.rad_area_perm)
+        vig_radio_layout.addWidget(self.rad_area_temp)
+        area_form_layout.addRow(QLabel("Vigencia:"), vig_radio_layout)
+
+        # Temporal Options Widget (indented/grouped)
+        self.widget_temporal_options = QWidget()
+        temp_opts_layout = QVBoxLayout(self.widget_temporal_options)
+        temp_opts_layout.setContentsMargins(15, 0, 0, 0)
+        temp_opts_layout.setSpacing(6)
+
+        self.chk_area_enabled = QCheckBox("Activar área (Habilitada)")
+        self.chk_area_enabled.setChecked(True)
+        self.chk_area_enabled.setStyleSheet("QCheckBox { color: #E0E6ED; font-size: 8pt; }")
+        temp_opts_layout.addWidget(self.chk_area_enabled)
+
+        # Franja Desde-Hasta
+        time_layout = QHBoxLayout()
+        self.time_area_desde = QTimeEdit()
+        self.time_area_desde.setDisplayFormat("HH:mm")
+        self.time_area_desde.setTime(time(0, 0))
+        self.time_area_desde.setStyleSheet("QTimeEdit { background-color: #1A2130; color: #E0E6ED; border: 1px solid rgba(0, 229, 255, 60); border-radius: 4px; padding: 2px; }")
+        
+        self.time_area_hasta = QTimeEdit()
+        self.time_area_hasta.setDisplayFormat("HH:mm")
+        self.time_area_hasta.setTime(time(23, 59))
+        self.time_area_hasta.setStyleSheet("QTimeEdit { background-color: #1A2130; color: #E0E6ED; border: 1px solid rgba(0, 229, 255, 60); border-radius: 4px; padding: 2px; }")
+        
+        time_layout.addWidget(QLabel("Desde:"))
+        time_layout.addWidget(self.time_area_desde)
+        time_layout.addWidget(QLabel("Hasta:"))
+        time_layout.addWidget(self.time_area_hasta)
+        temp_opts_layout.addLayout(time_layout)
+
+        # Days of week checkboxes
+        days_layout = QHBoxLayout()
+        days_names = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
+        self.chk_days = []
+        for d_name in days_names:
+            chk = QCheckBox(d_name)
+            chk.setStyleSheet("QCheckBox { color: #E0E6ED; font-size: 7.5pt; }")
+            days_layout.addWidget(chk)
+            self.chk_days.append(chk)
+        temp_opts_layout.addLayout(days_layout)
+
+        self.widget_temporal_options.setEnabled(False) # disabled by default
+        self.rad_area_temp.toggled.connect(self.widget_temporal_options.setEnabled)
+        
+        area_form_layout.addRow(self.widget_temporal_options)
+
+        # Save/Clear Form buttons
+        form_btn_layout = QHBoxLayout()
+        self.btn_save_area = QPushButton("Guardar Área")
+        self.btn_save_area.clicked.connect(self.save_area)
+        self.btn_clear_area_form = QPushButton("Limpiar Formulario")
+        self.btn_clear_area_form.clicked.connect(self.clear_area_form)
+        form_btn_layout.addWidget(self.btn_save_area)
+        form_btn_layout.addWidget(self.btn_clear_area_form)
+        area_form_layout.addRow(form_btn_layout)
+
+        tab_areas_layout.addWidget(area_form_group)
+
+        # Combined List Group (Non-invasive Dropdown selection)
+        areas_list_group = QGroupBox("Áreas de Control (DB + Usuario)")
+        areas_list_layout = QHBoxLayout(areas_list_group)
+        areas_list_layout.setSpacing(6)
+        areas_list_layout.setContentsMargins(5, 5, 5, 5)
+
+        self.combo_sel_area = QComboBox()
+        self.combo_sel_area.setStyleSheet("QComboBox { background-color: #1A2130; color: #E0E6ED; border: 1px solid rgba(0, 229, 255, 60); border-radius: 4px; padding: 4px; }")
+        self.combo_sel_area.currentIndexChanged.connect(self.on_selected_area_changed)
+
+        self.chk_sel_area_visible = QCheckBox("Vis")
+        self.chk_sel_area_visible.setToolTip("Visibilidad del área (solo para áreas de usuario)")
+        self.chk_sel_area_visible.setStyleSheet("QCheckBox { color: #00E5FF; font-size: 8pt; font-weight: bold; }")
+        self.chk_sel_area_visible.toggled.connect(self.toggle_selected_user_area_visibility)
+
+        self.btn_edit_sel_area = QPushButton("Edit")
+        self.btn_edit_sel_area.setFixedSize(40, 22)
+        self.btn_edit_sel_area.setStyleSheet("QPushButton { padding: 2px; font-size: 8pt; }")
+        self.btn_edit_sel_area.clicked.connect(self.edit_selected_area)
+
+        self.btn_del_sel_area = QPushButton("X")
+        self.btn_del_sel_area.setFixedSize(22, 22)
+        self.btn_del_sel_area.setToolTip("Eliminar área seleccionada")
+        self.btn_del_sel_area.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 51, 102, 30);
+                border: 1px solid #ff3366;
+                color: #ff3366;
+                border-radius: 4px;
+                font-weight: bold;
+                padding: 0px;
+                font-size: 8pt;
+            }
+            QPushButton:hover {
+                background-color: #ff3366;
+                color: white;
+            }
+        """)
+        self.btn_del_sel_area.clicked.connect(self.delete_selected_area)
+
+        areas_list_layout.addWidget(self.combo_sel_area, 1)
+        areas_list_layout.addWidget(self.chk_sel_area_visible)
+        areas_list_layout.addWidget(self.btn_edit_sel_area)
+        areas_list_layout.addWidget(self.btn_del_sel_area)
+        tab_areas_layout.addWidget(areas_list_group)
+
+        self.tabs.addTab(tab_areas, "Áreas")
         
         # Hook Radar Widget event filter and renderer
         if self.radar:
@@ -297,6 +530,7 @@ class LMG_Dialog(QDialog):
             self.radar.update()
             
         self.load_profile_layers()
+        self.load_areas_list()
         
     def refresh_radar(self):
         if self.radar:
@@ -322,6 +556,8 @@ class LMG_Dialog(QDialog):
         
     def reset_coordinate_style(self):
         self.txt_coordenadas.setStyleSheet("background-color: #1A2130; color: #E0E6ED; border: 1px solid rgba(0, 229, 255, 60);")
+        if hasattr(self, 'txt_area_coords') and self.txt_area_coords:
+            self.txt_area_coords.setStyleSheet("background-color: #1A2130; color: #E0E6ED; border: 1px solid rgba(0, 229, 255, 60);")
             
     def parse_coordinate_string(self, text: str):
         text = text.strip()
@@ -644,8 +880,11 @@ class LMG_Dialog(QDialog):
         self.arc_start_point = None
         self.txt_coordenadas.clear()
         self.refresh_radar()
+
     def eventFilter(self, watched, event):
         if watched == self.radar:
+            is_area_tab = (self.tabs.currentIndex() == 1)
+            
             if event.type() == QEvent.Type.MouseButtonPress:
                 pos = event.position()
                 world_coords = self.radar._screen_to_world(pos.x(), pos.y())
@@ -653,9 +892,18 @@ class LMG_Dialog(QDialog):
                     wx, wy = world_coords
                     lat, lon = self.radar.proy.xy_to_latlon(wx, wy)
                     
-                    if self.btn_vector.isChecked():
+                    if is_area_tab:
+                        is_vector = (self.combo_area_shape.currentText() == "Polígono")
+                        is_circle = (self.combo_area_shape.currentText() == "Círculo")
+                    else:
+                        is_vector = self.btn_vector.isChecked()
+                        is_circle = self.btn_circle.isChecked()
+                        
+                    if is_vector:
                         if event.button() == Qt.MouseButton.LeftButton:
                             self.drawn_points.append((lat, lon))
+                            if is_area_tab:
+                                self.update_area_coordinates_text()
                             self.refresh_radar()
                             return True
                         elif event.button() == Qt.MouseButton.RightButton:
@@ -667,20 +915,24 @@ class LMG_Dialog(QDialog):
                                 })
                                 self.drawn_points = []
                                 self.shape_closed = False
-                                self.update_coordinates_text()
+                                if is_area_tab:
+                                    self.update_area_coordinates_text()
+                                else:
+                                    self.update_coordinates_text()
                                 self.refresh_radar()
                             return True
                             
-                    elif self.btn_circle.isChecked():
+                    elif is_circle:
                         if event.button() == Qt.MouseButton.LeftButton:
                             self.circle_center = (lat, lon)
+                            self.circle_radius_nm = 0.0
                             self.dragging = True
                             self.drawn_points = []
                             self.shape_closed = False
                             self.refresh_radar()
                             return True
                             
-                    elif self.btn_arc.isChecked():
+                    elif not is_area_tab and self.btn_arc.isChecked():
                         if event.button() == Qt.MouseButton.LeftButton:
                             if self.arc_step == 0:
                                 self.arc_center = (lat, lon)
@@ -727,7 +979,7 @@ class LMG_Dialog(QDialog):
                                 self.arc_start_point = None
                                 self.refresh_radar()
                                 return True
- 
+  
             elif event.type() == QEvent.Type.MouseMove:
                 pos = event.position()
                 world_coords = self.radar._screen_to_world(pos.x(), pos.y())
@@ -735,7 +987,14 @@ class LMG_Dialog(QDialog):
                     mx, my = world_coords
                     lat, lon = self.radar.proy.xy_to_latlon(mx, my)
                     
-                    if self.btn_circle.isChecked() and self.dragging and self.circle_center:
+                    if is_area_tab:
+                        is_circle = (self.combo_area_shape.currentText() == "Círculo")
+                        is_arc = False
+                    else:
+                        is_circle = self.btn_circle.isChecked()
+                        is_arc = self.btn_arc.isChecked()
+                        
+                    if is_circle and self.dragging and self.circle_center:
                         c_lat, c_lon = self.circle_center
                         cx, cy = self.radar.proy.latlon_to_xy(c_lat, c_lon)
                         
@@ -753,10 +1012,19 @@ class LMG_Dialog(QDialog):
                             
                         self.drawn_points = points
                         self.shape_closed = True
+                        
+                        # Calculate radius in NM
+                        from player.areas.model import haversine_nm
+                        self.circle_radius_nm = haversine_nm(c_lat, c_lon, lat, lon)
+                        
+                        if is_area_tab:
+                            self.update_area_coordinates_text()
+                            self.spin_area_radius.setValue(self.circle_radius_nm)
+                            
                         self.refresh_radar()
                         return True
                         
-                    elif self.btn_arc.isChecked():
+                    elif not is_area_tab and is_arc:
                         if self.arc_step == 1 and self.arc_center:
                             self.drawn_points = [self.arc_center, (lat, lon)]
                             self.shape_closed = False
@@ -785,7 +1053,12 @@ class LMG_Dialog(QDialog):
                             return True
                              
             elif event.type() == QEvent.Type.MouseButtonRelease:
-                if self.btn_circle.isChecked() and self.dragging:
+                if is_area_tab:
+                    is_circle = (self.combo_area_shape.currentText() == "Círculo")
+                else:
+                    is_circle = self.btn_circle.isChecked()
+                    
+                if is_circle and self.dragging:
                     self.dragging = False
                     if self.drawn_points:
                         self.completed_shapes.append({
@@ -794,7 +1067,10 @@ class LMG_Dialog(QDialog):
                         })
                         self.drawn_points = []
                         self.shape_closed = False
-                        self.update_coordinates_text()
+                        if is_area_tab:
+                            self.update_area_coordinates_text()
+                        else:
+                            self.update_coordinates_text()
                     self.refresh_radar()
                     return True
                     
@@ -841,14 +1117,24 @@ class LMG_Dialog(QDialog):
         painter.translate(center_x, center_y)
         painter.scale(z, -z)
         
-        color_name = self.combo_color.currentText()
-        pen_color = COLOR_MAP.get(color_name, QColor("#00E5FF"))
-        
-        style_name = self.combo_style.currentText()
-        pen_style = STYLE_MAP.get(style_name, Qt.PenStyle.SolidLine)
-        
-        width_name = self.combo_width.currentText()
-        pen_width = WIDTH_MAP.get(width_name, 2)
+        # Color y estilos dinámicos
+        is_area_tab = (self.tabs.currentIndex() == 1)
+        if is_area_tab:
+            from player.areas.render import AREA_COLORS
+            kind_idx = self.combo_area_tipo.currentIndex()
+            kind = "R" if kind_idx == 0 else "P" if kind_idx == 1 else "D"
+            pen_color = QColor(AREA_COLORS.get(kind, "#39C5FF"))
+            pen_style = Qt.PenStyle.SolidLine
+            pen_width = 2
+        else:
+            color_name = self.combo_color.currentText()
+            pen_color = COLOR_MAP.get(color_name, QColor("#00E5FF"))
+            
+            style_name = self.combo_style.currentText()
+            pen_style = STYLE_MAP.get(style_name, Qt.PenStyle.SolidLine)
+            
+            width_name = self.combo_width.currentText()
+            pen_width = WIDTH_MAP.get(width_name, 2)
         
         def draw_single_shape(points, closed):
             if not points:
@@ -889,12 +1175,12 @@ class LMG_Dialog(QDialog):
         if has_drawn:
             draw_single_shape(self.drawn_points, self.shape_closed)
             
-        if self.btn_arc.isChecked():
+        if not is_area_tab and self.btn_arc.isChecked():
             self._draw_arc_helpers_with_painter(painter, inv_z)
             
         painter.restore()
         painter.end()
-
+ 
     def closeEvent(self, event):
         if self.radar:
             self.radar.removeEventFilter(self)
@@ -902,6 +1188,363 @@ class LMG_Dialog(QDialog):
                 self.radar.paintEvent = self.original_paint_event
             self.radar.update()
         super().closeEvent(event)
+
+    # --- CRUD MÉTODOS DE ÁREAS (TAB 2) ---
+    def on_tab_changed(self, index):
+        self.clear_drawing()
+
+    def on_area_shape_changed(self):
+        shape_text = self.combo_area_shape.currentText()
+        self.spin_area_radius.setEnabled(shape_text == "Círculo")
+        self.completed_shapes = []
+        self.drawn_points = []
+        self.shape_closed = False
+        self.circle_center = None
+        self.circle_radius_nm = 0.0
+        self.txt_area_coords.clear()
+        self.refresh_radar()
+
+    def update_area_coordinates_text(self):
+        dms_lines = []
+        if self.drawn_points:
+            for lat, lon in self.drawn_points:
+                dms_lines.append(decimal_to_dms(lat, lon))
+        elif self.completed_shapes:
+            for shape in self.completed_shapes:
+                for lat, lon in shape["points"]:
+                    dms_lines.append(decimal_to_dms(lat, lon))
+        self.txt_area_coords.setPlainText("\n".join(dms_lines))
+
+    def clear_area_form(self):
+        self.txt_area_name.clear()
+        self.combo_area_tipo.setCurrentIndex(0)
+        self.spin_area_lower.setValue(0)
+        self.spin_area_upper.setValue(999)
+        self.combo_area_shape.setCurrentIndex(0)
+        self.spin_area_radius.setValue(5.0)
+        self.txt_area_coords.clear()
+        self.rad_area_perm.setChecked(True)
+        self.chk_area_enabled.setChecked(True)
+        self.time_area_desde.setTime(time(0, 0))
+        self.time_area_hasta.setTime(time(23, 59))
+        for chk in self.chk_days:
+            chk.setChecked(False)
+        self.clear_drawing()
+
+    def load_areas_list(self):
+        self.combo_sel_area.blockSignals(True)
+        self.combo_sel_area.clear()
+        self.loaded_control_areas = []
+
+        # Cargar áreas de la base de datos
+        from player import atm_db
+        db_areas = []
+        if atm_db.available():
+            db_areas = atm_db.restricted_airspaces()
+            
+        # Cargar áreas de usuario del store
+        from player.areas import store as _store
+        username = "Default"
+        if self.parent_window and hasattr(self.parent_window, 'profile_manager'):
+            username = self.parent_window.profile_manager.profile.get("name", "Default")
+        user_areas = _store.cargar_todas(username)
+
+        # Ordenar áreas
+        user_areas = sorted(user_areas, key=lambda a: a.name)
+        db_areas = sorted(db_areas, key=lambda a: a.name)
+
+        from player.areas.model import KIND_LABEL
+
+        # Agregar áreas de usuario
+        for area in user_areas:
+            self.loaded_control_areas.append(area)
+            self.combo_sel_area.addItem(f"{area.name} ({KIND_LABEL.get(area.kind, area.kind)}/Usr)")
+
+        # Agregar áreas de la base de datos
+        for area in db_areas:
+            self.loaded_control_areas.append(area)
+            self.combo_sel_area.addItem(f"{area.name} ({KIND_LABEL.get(area.kind, area.kind)}/DB)")
+
+        self.combo_sel_area.blockSignals(False)
+        
+        # Trigger actualizacion del estado de botones para el elemento seleccionado
+        self.on_selected_area_changed(self.combo_sel_area.currentIndex())
+
+    def on_selected_area_changed(self, index):
+        if index < 0 or index >= len(self.loaded_control_areas):
+            self.chk_sel_area_visible.setEnabled(False)
+            self.chk_sel_area_visible.setChecked(False)
+            self.btn_edit_sel_area.setEnabled(False)
+            self.btn_del_sel_area.setEnabled(False)
+            return
+
+        area = self.loaded_control_areas[index]
+        self.btn_edit_sel_area.setEnabled(True)
+        self.btn_del_sel_area.setEnabled(True)
+
+        if area.origen == "usuario":
+            self.chk_sel_area_visible.setEnabled(True)
+            self.chk_sel_area_visible.blockSignals(True)
+            layer_name = f"AREA::{area.name}"
+            visible = layer_name in self.map_manager.layers
+            self.chk_sel_area_visible.setChecked(visible)
+            self.chk_sel_area_visible.blockSignals(False)
+        else:
+            self.chk_sel_area_visible.setEnabled(False)
+            self.chk_sel_area_visible.blockSignals(True)
+            self.chk_sel_area_visible.setChecked(False)
+            self.chk_sel_area_visible.blockSignals(False)
+
+    def toggle_selected_user_area_visibility(self, checked):
+        index = self.combo_sel_area.currentIndex()
+        if 0 <= index < len(self.loaded_control_areas):
+            area = self.loaded_control_areas[index]
+            if area.origen == "usuario":
+                self.toggle_user_area_visibility(area, checked)
+
+    def edit_selected_area(self):
+        index = self.combo_sel_area.currentIndex()
+        if 0 <= index < len(self.loaded_control_areas):
+            area = self.loaded_control_areas[index]
+            self.edit_area(area)
+
+    def delete_selected_area(self):
+        index = self.combo_sel_area.currentIndex()
+        if 0 <= index < len(self.loaded_control_areas):
+            area = self.loaded_control_areas[index]
+            self.delete_area_action(area)
+
+    def toggle_user_area_visibility(self, area, checked):
+        layer_name = f"AREA::{area.name}"
+        if checked:
+            from player.areas import render as _ar
+            segs = _ar.area_segments([area])
+            self.map_manager.add_layer(layer_name, segs, "TACTICO")
+            if layer_name in self.map_manager.layers:
+                self.map_manager.layers[layer_name].color = _ar.AREA_COLORS.get(area.kind, "#39C5FF")
+            if getattr(self.radar, 'proy', None) is not None:
+                self.map_manager.reproject_all(self.radar.proy)
+        else:
+            self.map_manager.layers.pop(layer_name, None)
+        self.refresh_radar()
+
+    def edit_area(self, area):
+        # Resetear estado de dibujo
+        self.completed_shapes = []
+        self.drawn_points = []
+        self.shape_closed = False
+        
+        # Rellenar campos del formulario
+        self.txt_area_name.setText(area.name)
+        
+        kind_map = {"R": 0, "P": 1, "D": 2}
+        self.combo_area_tipo.setCurrentIndex(kind_map.get(area.kind, 0))
+        
+        self.spin_area_lower.setValue(area.lower_fl)
+        self.spin_area_upper.setValue(area.upper_fl)
+        
+        shape_text = "Círculo" if area.shape == "circle" else "Polígono"
+        self.combo_area_shape.setCurrentText(shape_text)
+        
+        if area.shape == "circle":
+            self.spin_area_radius.setValue(area.radius_nm or 5.0)
+            self.circle_center = area.center
+            self.circle_radius_nm = area.radius_nm
+            if area.center:
+                self.txt_area_coords.setPlainText(decimal_to_dms(area.center[0], area.center[1]))
+        else:
+            self.circle_center = None
+            self.circle_radius_nm = 0.0
+            dms_pts = [decimal_to_dms(lat, lon) for lat, lon in area.vertices]
+            self.txt_area_coords.setPlainText("\n".join(dms_pts))
+            
+        # Vigencia
+        v = area.vigencia
+        if v.permanente:
+            self.rad_area_perm.setChecked(True)
+        else:
+            self.rad_area_temp.setChecked(True)
+            self.chk_area_enabled.setChecked(v.habilitada)
+            self.time_area_desde.setTime(v.desde if v.desde else time(0, 0))
+            self.time_area_hasta.setTime(v.hasta if v.hasta else time(23, 59))
+            
+            # Días
+            for i, chk in enumerate(self.chk_days):
+                chk.setChecked(i in v.dias)
+                
+        # Cargar geometría en completed_shapes para previsualización
+        if area.shape == "circle" and area.center:
+            self.completed_shapes = [{
+                "points": area.polilinea(),
+                "closed": True
+            }]
+        elif area.shape == "poly" and area.vertices:
+            self.completed_shapes = [{
+                "points": list(area.vertices),
+                "closed": True
+            }]
+            
+        self.refresh_radar()
+
+    def delete_area_action(self, area):
+        confirm = QMessageBox.question(
+            self, "Confirmar Eliminación", 
+            f"¿Está seguro de que desea eliminar el área '{area.name}' permanentemente?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if confirm == QMessageBox.StandardButton.Yes:
+            if area.origen == "usuario":
+                username = "Default"
+                if self.parent_window and hasattr(self.parent_window, 'profile_manager'):
+                    username = self.parent_window.profile_manager.profile.get("name", "Default")
+                from player.areas import store as _store
+                _store.borrar(area.name, username)
+                
+                # Quitar capa de visualización
+                self.map_manager.layers.pop(f"AREA::{area.name}", None)
+                
+                # Actualizar listas
+                self.load_areas_list()
+                if self.parent_window:
+                    self.parent_window.user_areas = _store.cargar_todas(username)
+                    self.parent_window.radar.user_areas = self.parent_window.user_areas
+                self.refresh_radar()
+            else:
+                from player import atm_db
+                atm_db.delete_area(area.name)
+                
+                # Actualizar lista y capas de menú de MainWindow
+                self.load_areas_list()
+                if self.parent_window:
+                    self.parent_window._toggle_area_layer(area.kind, False)
+                    self.parent_window._toggle_area_layer(area.kind, True)
+                self.refresh_radar()
+
+    def save_area(self):
+        name = self.txt_area_name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Error", "El nombre del área no puede estar vacío.")
+            return
+            
+        kind_idx = self.combo_area_tipo.currentIndex()
+        kind = "R" if kind_idx == 0 else "P" if kind_idx == 1 else "D"
+        
+        lower_fl = self.spin_area_lower.value()
+        upper_fl = self.spin_area_upper.value()
+        shape_str = "circle" if self.combo_area_shape.currentText() == "Círculo" else "poly"
+        
+        coord_text = self.txt_area_coords.toPlainText().strip()
+        if not coord_text:
+            QMessageBox.warning(self, "Error", "Debe ingresar coordenadas lat/lon (DMS).")
+            return
+            
+        lines = [l.strip() for l in coord_text.split("\n") if l.strip()]
+        
+        vertices = []
+        center = None
+        radius_nm = None
+        
+        if shape_str == "poly":
+            for line in lines:
+                coords = self.parse_coordinate_string(line)
+                if not coords:
+                    QMessageBox.warning(self, "Error", f"Coordenada inválida: '{line}'")
+                    return
+                vertices.append(coords)
+            if len(vertices) < 3:
+                QMessageBox.warning(self, "Error", "Un polígono debe tener al menos 3 vértices.")
+                return
+        else:
+            coords = self.parse_coordinate_string(lines[0])
+            if not coords:
+                QMessageBox.warning(self, "Error", f"Centro de círculo inválido: '{lines[0]}'")
+                return
+            center = coords
+            radius_nm = self.spin_area_radius.value()
+            if radius_nm <= 0:
+                QMessageBox.warning(self, "Error", "El radio del círculo debe ser mayor que 0.")
+                return
+                
+        is_perm = self.rad_area_perm.isChecked()
+        if is_perm:
+            from player.areas.model import Vigencia as _Vigencia
+            vig = _Vigencia(permanente=True)
+        else:
+            hab = self.chk_area_enabled.isChecked()
+            qdesde = self.time_area_desde.time()
+            qhasta = self.time_area_hasta.time()
+            from datetime import time as dt_time
+            desde = dt_time(qdesde.hour(), qdesde.minute())
+            hasta = dt_time(qhasta.hour(), qhasta.minute())
+            
+            dias = set()
+            for i, chk in enumerate(self.chk_days):
+                if chk.isChecked():
+                    dias.add(i)
+                    
+            from player.areas.model import Vigencia as _Vigencia
+            vig = _Vigencia(permanente=False, habilitada=hab, dias=dias, desde=desde, hasta=hasta)
+            
+        from player.areas.model import Area as _Area
+        area = _Area(
+            name=name, kind=kind, shape=shape_str,
+            lower_fl=lower_fl, upper_fl=upper_fl,
+            vertices=vertices, center=center, radius_nm=radius_nm,
+            vigencia=vig, origen="db" if is_perm else "usuario"
+        )
+        
+        username = "Default"
+        if self.parent_window and hasattr(self.parent_window, 'profile_manager'):
+            username = self.parent_window.profile_manager.profile.get("name", "Default")
+            
+        try:
+            if is_perm:
+                from player import atm_db
+                atm_db.write_area(area)
+                
+                # Borrar del store si existiera como temporal de usuario
+                from player.areas import store as _store
+                _store.borrar(name, username)
+                
+                # Quitar capa de usuario si estuviera activa
+                self.map_manager.layers.pop(f"AREA::{name}", None)
+                
+                # Refrescar capas de base de datos en MainWindow
+                if self.parent_window:
+                    self.parent_window._toggle_area_layer(kind, False)
+                    self.parent_window._toggle_area_layer(kind, True)
+            else:
+                from player.areas import store as _store
+                _store.guardar(area, username)
+                
+                # Quitar de la base de datos si existiera como permanente
+                from player import atm_db
+                atm_db.delete_area(name)
+                
+                # Si está habilitada, actualizar la capa de mapa
+                layer_name = f"AREA::{name}"
+                if hab:
+                    from player.areas import render as _ar
+                    segs = _ar.area_segments([area])
+                    self.map_manager.add_layer(layer_name, segs, "TACTICO")
+                    if layer_name in self.map_manager.layers:
+                        self.map_manager.layers[layer_name].color = _ar.AREA_COLORS.get(kind, "#39C5FF")
+                    if getattr(self.radar, 'proy', None) is not None:
+                        self.map_manager.reproject_all(self.radar.proy)
+                else:
+                    self.map_manager.layers.pop(layer_name, None)
+                    
+            # Actualizar MainWindow user_areas
+            if self.parent_window:
+                from player.areas import store as _store
+                self.parent_window.user_areas = _store.cargar_todas(username)
+                self.parent_window.radar.user_areas = self.parent_window.user_areas
+                
+            self.load_areas_list()
+            self.clear_area_form()
+            QMessageBox.information(self, "Éxito", f"Área '{name}' guardada correctamente.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al guardar el área: {e}")
 
 # Alias for backwards compatibility with main_window.py
 MapEditorDialog = LMG_Dialog
