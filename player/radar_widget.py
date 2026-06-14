@@ -4811,15 +4811,18 @@ class RadarWidget(_RadarBase):
         return None
 
     def _draw_track_label_ods(self, painter, plot, sp, qcolor):
-        """Etiqueta ODS (FDB) con leader line, en píxeles de pantalla."""
-        from PyQt6.QtCore import QPointF
+        """Etiqueta ODS (FDB) con leader line, en píxeles de pantalla.
+
+        Posición por plot.label_offset (el controlador la arrastra libremente) y
+        setea plot.label_rect con el bbox del texto para el hit-test del drag.
+        """
+        from PyQt6.QtCore import QPointF, QRectF
         from player.ods import palette as _pal
         lines = self._build_plot_label_lines(plot)
         if not lines:
             return
-        cache = getattr(self, '_label_shifts_cache', {})
-        shift = cache.get(plot.id, [0.0, 0.0])
-        lx, ly = sp.x() + 14 + shift[0], sp.y() - 14 + shift[1]
+        off = plot.label_offset
+        lx, ly = sp.x() + off.x(), sp.y() + off.y()
         intens = getattr(self, 'ods_layer_intensity', _pal.LAYER_DEFAULT)
         a = _pal.layer_alpha("labels", intens.get("labels", _pal.LAYER_DEFAULT["labels"]))
         col = QColor(qcolor)
@@ -4832,9 +4835,16 @@ class RadarWidget(_RadarBase):
         painter.drawLine(QPointF(sp.x(), sp.y()), QPointF(lx, ly))  # leader line
         painter.setFont(QFont("Consolas", 8))
         fm = painter.fontMetrics()
+        hitbox = None
         for i, ln in enumerate(lines):
-            painter.drawText(QPointF(lx, ly + i * (fm.height() - 1)), str(ln))
+            ty = ly + i * (fm.height() - 1)
+            painter.drawText(QPointF(lx, ty), str(ln))
+            r = QRectF(lx, ty - fm.ascent(), fm.horizontalAdvance(str(ln)), fm.height())
+            hitbox = r if hitbox is None else hitbox.united(r)
         painter.restore()
+        if hitbox is not None:
+            self.label_hitboxes[plot.id] = hitbox
+            plot.label_rect = hitbox
 
     def _draw_oaci_track(self, painter: QPainter, plot: 'RadarPlot', z: float, inv_z: float, alertas_dict: dict):
         try:
@@ -4884,13 +4894,23 @@ class RadarWidget(_RadarBase):
                 if sp is not None:
                     coasting = plot.age > 1.5 * scan_time
                     estado = _ts.classify(plot, coasting)
-                    seleccionado = (getattr(self, '_focused_track_id', None) == plot.id)
-                    rgb = _pal.state_rgb(estado, selected=seleccionado)
+                    # El símbolo conserva su color de estado; la selección se marca
+                    # con un recuadro fino (no recoloreando el símbolo).
+                    seleccionado = (getattr(self, 'focused_target_id', None) == plot.id)
+                    rgb = _pal.state_rgb(estado, selected=False)
                     col = QColor(rgb[0], rgb[1], rgb[2])
                     col.setAlpha(int(alpha))
+                    spec = _sym.symbol_spec(estado)
                     painter.save()
                     painter.resetTransform()
-                    _sym.draw_symbol(painter, _sym.symbol_spec(estado), sp.x(), sp.y(), col)
+                    _sym.draw_symbol(painter, spec, sp.x(), sp.y(), col)
+                    if seleccionado:
+                        s = spec.size_px + 4.0
+                        sel_col = QColor(*_pal.SELECTED)
+                        sel_col.setAlpha(int(alpha))
+                        painter.setPen(QPen(sel_col, 1.0))
+                        painter.setBrush(Qt.BrushStyle.NoBrush)
+                        painter.drawRect(QRectF(sp.x() - s, sp.y() - s, 2 * s, 2 * s))
                     painter.restore()
                     self._draw_track_label_ods(painter, plot, sp, col)
                 return
