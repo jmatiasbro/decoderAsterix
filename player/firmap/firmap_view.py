@@ -31,6 +31,7 @@ class FirMapView(QWidget):
         self._cache = {}            # (z,x,y) -> QPixmap | None
         self._drag_last = None
         self._attribution = ""
+        self.tracks = []            # lista de dicts (ver traffic.draw_traffic)
         if mbtiles_path and os.path.exists(mbtiles_path):
             self._open(mbtiles_path)
 
@@ -51,6 +52,11 @@ class FirMapView(QWidget):
 
     def set_zoom(self, z):
         self.zoom = max(self.min_zoom, min(self.max_zoom, int(z)))
+        self.update()
+
+    def set_tracks(self, tracks):
+        """Reemplaza el set de tráfico a dibujar (lista de dicts) y repinta."""
+        self.tracks = tracks or []
         self.update()
 
     # ---------- Tiles ----------
@@ -124,8 +130,10 @@ class FirMapView(QWidget):
         p.end()
 
     def draw_overlay(self, painter: QPainter):
-        """Hook para dibujar tráfico/anotaciones encima del mapa (Fase 3)."""
-        pass
+        """Dibuja el tráfico sobre el mapa."""
+        if self.tracks:
+            from player.firmap import traffic as _t
+            _t.draw_traffic(painter, self, self.tracks)
 
     # ---------- Interacción ----------
     def mousePressEvent(self, e):
