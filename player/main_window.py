@@ -357,6 +357,7 @@ class PanelSensoresFlotante(QWidget):
     presentacionToggled = pyqtSignal(str, bool)   # botón ON/OFF (símbolos)
     historicoToggled = pyqtSignal(str, bool)       # checkbox color (estela)
     colorClicked = pyqtSignal(str)
+    cerrado = pyqtSignal()                         # botón ✕ de cierre
 
     N_COLS = 2          # columnas de la grilla
     CELL_W = 162        # ancho de cada celda (checkbox + nombre + ON/OFF)
@@ -395,6 +396,15 @@ class PanelSensoresFlotante(QWidget):
         btn_ninguno.clicked.connect(lambda: self._set_all(False))
         header.addWidget(btn_todos)
         header.addWidget(btn_ninguno)
+        btn_cerrar = QPushButton("✕")
+        btn_cerrar.setFixedSize(18, 18)
+        btn_cerrar.setToolTip("Cerrar panel")
+        btn_cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cerrar.setStyleSheet(
+            "QPushButton { font-size:8pt; padding:0; color:#E0E6ED; border:none; }"
+            "QPushButton:hover { color:#FF5555; }")
+        btn_cerrar.clicked.connect(self.cerrado.emit)
+        header.addWidget(btn_cerrar)
         root.addLayout(header)
 
         self._grid = QGridLayout()
@@ -840,6 +850,7 @@ class MainWindow(QMainWindow):
         self.panel_sensores.presentacionToggled.connect(self._on_custom_sensor_toggled)
         self.panel_sensores.historicoToggled.connect(self._on_historico_toggled)
         self.panel_sensores.colorClicked.connect(self._on_sensor_color_clicked)
+        self.panel_sensores.cerrado.connect(self._cerrar_panel_sensores)
         self.panel_sensores.move(20, 20)
         self.panel_sensores.show()
         self.panel_sensores.raise_()
@@ -994,7 +1005,7 @@ class MainWindow(QMainWindow):
         self.act_ods.setCheckable(True)
         self.act_ods.setChecked(bool(getattr(getattr(self, 'radar', None), 'ods_enabled', True)))
         self.act_ods.toggled.connect(self._toggle_ods)
-        menu_modo.addAction(_icon("fa5s.sliders-h"), "Intensidad ODS…", self._abrir_ods_intensidad)
+        menu_modo.addAction(_icon("fa5s.sliders-h"), "Intensidad Visual…", self._abrir_ods_intensidad)
         menu_modo.addSeparator()
         self.act_fir = menu_modo.addAction(_icon("fa5s.globe-americas"), "Vista FIR (satélite)")
         self.act_fir.setCheckable(True)
@@ -1034,9 +1045,18 @@ class MainWindow(QMainWindow):
             if getattr(self, '_fir_view', None) is not None:
                 self._fir_view.hide()
 
+    def _cerrar_panel_sensores(self):
+        self.panel_sensores.hide()
+        if hasattr(self, 'act_toggle_panel_sensores'):
+            self.act_toggle_panel_sensores.setChecked(False)
+
     def _refresh_fir(self):
-        from player.firmap.feed import build_tracks
+        from player.firmap.feed import build_tracks, build_maps
         if getattr(self, '_fir_view', None) is not None:
+            from player.ods import palette as _pal
+            intens = getattr(self.radar, 'ods_layer_intensity', _pal.LAYER_DEFAULT)
+            self._fir_view.set_map_intensity(intens.get('map', _pal.LAYER_DEFAULT['map']))
+            self._fir_view.set_maps(build_maps(self.radar))
             self._fir_view.set_tracks(build_tracks(self.radar))
 
     def _fir_select_track(self, track_id):
@@ -1056,7 +1076,7 @@ class MainWindow(QMainWindow):
         from PyQt6.QtCore import Qt
         from player.ui_scaling import escalar_ventana
         dlg = QDialog(self)
-        dlg.setWindowTitle("Intensidad de capas ODS")
+        dlg.setWindowTitle("Intensidad Visual")
         v = QVBoxLayout(dlg)
         capas = [("map", "Mapa"), ("labels", "Etiquetas"),
                  ("history", "Historial"), ("compass", "Rosa de rumbos"),
@@ -3469,6 +3489,7 @@ class MainWindow(QMainWindow):
 
     def _toggle_atm_layer(self, key, on, builder):
         """Agrega/quita una capa ATM (aerovía/procedimiento/fixes) en el PPI."""
+        from player import atm_maps
         mm = getattr(self.radar, 'map_manager', None)
         if mm is None:
             return
@@ -3483,6 +3504,9 @@ class MainWindow(QMainWindow):
                 print(f"[ATM Mapas] Capa {key} sin geometría")
                 return
             mm.add_layer(layer_name, segs, "TACTICO")
+            if key.startswith("AERO_") and layer_name in mm.layers:
+                cat = key.split("_", 1)[1]
+                mm.layers[layer_name].color = atm_maps.AIRWAY_COLORS.get(cat, "#00E5FF")
             if getattr(self.radar, 'proy', None) is not None:
                 mm.reproject_all(self.radar.proy)
         else:

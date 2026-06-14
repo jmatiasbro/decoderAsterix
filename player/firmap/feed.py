@@ -24,6 +24,50 @@ def _heading(plot, hist=None):
     return 0.0
 
 
+def _hex_to_rgb(h):
+    s = (h or "").lstrip("#")
+    if len(s) == 6:
+        try:
+            return tuple(int(s[i:i + 2], 16) for i in (0, 2, 4))
+        except ValueError:
+            pass
+    return (0, 229, 255)
+
+
+def build_maps(radar):
+    """Polilíneas y puntos (lat/lon) de las capas visibles del map_manager, para
+    dibujar sobre la vista satelital. Cada capa usa su propio color (las aerovías
+    SUP/INF/RNAV ya vienen con color distinto desde el map_manager)."""
+    mm = getattr(radar, "map_manager", None)
+    if mm is None:
+        return {"lines": [], "points": []}
+    lines, points = [], []
+    for layer in mm.get_visible_layers():
+        base = _hex_to_rgb(getattr(layer, "color", None))
+        cur = None
+        for seg in getattr(layer, "raw_segments", []):
+            if len(seg) < 2:
+                continue
+            t = seg[0]
+            if t in ("S", "T") and len(seg) >= 5:
+                points.append({"lat": seg[2], "lon": seg[3], "text": seg[4],
+                               "symbol": t == "S", "color": base})
+                continue
+            if t == "M" and len(seg) >= 4:
+                if cur and len(cur) >= 2:
+                    lines.append({"pts": cur, "color": base})
+                cur = [(seg[2], seg[3])]
+            elif t == "L" and len(seg) >= 4:
+                if cur is None:
+                    cur = []
+                cur.append((seg[2], seg[3]))
+            elif t == "C" and cur:
+                cur.append(cur[0])
+        if cur and len(cur) >= 2:
+            lines.append({"pts": cur, "color": base})
+    return {"lines": lines, "points": points}
+
+
 def _alert_ids(radar):
     ids = set()
     for c in getattr(radar, "conflictos_activos", []) or []:

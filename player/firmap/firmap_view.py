@@ -38,6 +38,8 @@ class FirMapView(QWidget):
         self._drag_last = None
         self._attribution = ""
         self.tracks = []            # lista de dicts (ver traffic.draw_traffic)
+        self.maps = {}              # {"lines":[...], "points":[...]} (ver maps.draw_maps)
+        self._map_intensity = 1.0   # Intensidad Visual de la cartografía (0..1)
         if mbtiles_path and os.path.exists(mbtiles_path):
             self._open(mbtiles_path)
 
@@ -68,6 +70,16 @@ class FirMapView(QWidget):
     def set_tracks(self, tracks):
         """Reemplaza el set de tráfico a dibujar (lista de dicts) y repinta."""
         self.tracks = tracks or []
+        self.update()
+
+    def set_maps(self, maps):
+        """Reemplaza la cartografía (aerovías/fixes) a dibujar y repinta."""
+        self.maps = maps or {}
+        self.update()
+
+    def set_map_intensity(self, value):
+        """Intensidad Visual (0..1) de la cartografía sobre el satelital."""
+        self._map_intensity = max(0.0, min(1.0, float(value)))
         self.update()
 
     def set_home(self, lon, lat):
@@ -176,7 +188,10 @@ class FirMapView(QWidget):
         p.end()
 
     def draw_overlay(self, painter: QPainter):
-        """Dibuja el tráfico sobre el mapa."""
+        """Dibuja cartografía y tráfico sobre el mapa."""
+        if self.maps:
+            from player.firmap import maps as _m
+            _m.draw_maps(painter, self, self.maps)
         if self.tracks:
             from player.firmap import traffic as _t
             _t.draw_traffic(painter, self, self.tracks)
