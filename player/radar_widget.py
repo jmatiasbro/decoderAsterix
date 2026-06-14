@@ -2806,10 +2806,17 @@ class RadarWidget(_RadarBase):
             
         try:
             painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-            
+
+            # ODS: la capa 'map' atenúa toda la cartografía según el slider de intensidad.
+            map_factor = 1.0
+            if getattr(self, 'vista_controlador', False) and getattr(self, 'ods_enabled', True):
+                from player.ods import palette as _pal
+                intens = getattr(self, 'ods_layer_intensity', _pal.LAYER_DEFAULT)
+                map_factor = max(0.0, min(1.0, intens.get('map', _pal.LAYER_DEFAULT['map'])))
+
             for layer in visibles:
                 # Estilos visuales: TACTICO usa el color guardado por el usuario; ESTRUCTURAL usa colores semánticos fijos
-                alpha_base = 255 if tipo == "TACTICO" else 150
+                alpha_base = int((255 if tipo == "TACTICO" else 150) * map_factor)
                 
                 if tipo == "TACTICO":
                     # Color dinámico guardado en la capa
@@ -3201,6 +3208,12 @@ class RadarWidget(_RadarBase):
 
             # --- FASE 1: HISTORIAL (ESTELA DE PUNTOS MEJORADA) ---
             if getattr(self, 'history_visible', True) and self.history_limit > 0:
+                # ODS: la capa 'history' atenúa toda la estela según el slider de intensidad.
+                hist_factor = 1.0
+                if getattr(self, 'vista_controlador', False) and getattr(self, 'ods_enabled', True):
+                    from player.ods import palette as _pal
+                    _hi = getattr(self, 'ods_layer_intensity', _pal.LAYER_DEFAULT)
+                    hist_factor = max(0.0, min(1.0, _hi.get('history', _pal.LAYER_DEFAULT['history'])))
                 for track_id, history_points in list(self.history.items()):
                     plot = self.tracks.get(track_id) or self.pending_tracks.get(track_id)
                     if not plot or not plot.is_alive():
@@ -3223,7 +3236,7 @@ class RadarWidget(_RadarBase):
                         rpm = self.sensor_rpms.get((plot.sac, plot.sic), self.sweep_rpm)
                         scan_time = 60.0 / rpm if rpm > 0 else 5.0
                         max_age = 3.2 * scan_time
-                        alpha = plot.get_alpha(max_age)
+                        alpha = int(plot.get_alpha(max_age) * hist_factor)
                         if alpha <= 0:
                             continue
 
