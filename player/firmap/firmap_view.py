@@ -45,11 +45,16 @@ class FirMapView(QWidget):
         self._reader = MBTilesReader(path)
         meta = self._reader.metadata()
         self._attribution = meta.get("attribution", "")
-        try:
-            self.min_zoom = int(meta.get("minzoom", self.min_zoom))
-            self.max_zoom = int(meta.get("maxzoom", self.max_zoom))
-        except (TypeError, ValueError):
-            pass
+        # Rango real de tiles presentes (evita pedir zooms vacíos -> mapa en blanco).
+        zr = self._reader.zoom_range()
+        if zr:
+            self.min_zoom, self.max_zoom = zr
+        else:
+            try:
+                self.min_zoom = int(meta.get("minzoom", self.min_zoom))
+                self.max_zoom = int(meta.get("maxzoom", self.max_zoom))
+            except (TypeError, ValueError):
+                pass
 
     # ---------- API ----------
     def set_center(self, lon, lat):
