@@ -1025,6 +1025,8 @@ class MainWindow(QMainWindow):
             if lat is not None and lon is not None:
                 v.set_center(lon, lat)
                 v.set_zoom(8)
+                v.set_home(lon, lat)
+            v.track_selected.connect(self._fir_select_track)
             v.destroyed.connect(self._on_fir_closed)
             self._fir_view = v
             self._fir_timer = QTimer(self)
@@ -1037,6 +1039,12 @@ class MainWindow(QMainWindow):
         from player.firmap.feed import build_tracks
         if getattr(self, '_fir_view', None) is not None:
             self._fir_view.set_tracks(build_tracks(self.radar))
+
+    def _fir_select_track(self, track_id):
+        """Click en un avión de la vista FIR -> selecciona el track en el PPI."""
+        if hasattr(self.radar, 'focused_target_id'):
+            self.radar.focused_target_id = track_id
+            self.radar.update()
 
     def _on_fir_closed(self, *_a):
         if getattr(self, '_fir_timer', None) is not None:

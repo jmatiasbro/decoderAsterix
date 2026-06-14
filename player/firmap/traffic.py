@@ -40,6 +40,26 @@ def draw_traffic(painter: QPainter, view, tracks, margin: float = 40.0):
             continue
         rgb = tr.get("color") or _DEFAULT_COLOR
         col = QColor(rgb[0], rgb[1], rgb[2])
+        # Estela (puntos históricos, color tenue)
+        trail = tr.get("trail") or []
+        if len(trail) >= 2:
+            painter.save()
+            tcol = QColor(rgb[0], rgb[1], rgb[2], 110)
+            painter.setPen(QPen(tcol, 1.0))
+            prev = None
+            for (la, lo) in trail:
+                q = view._lonlat_to_screen(la, lo)
+                if prev is not None:
+                    painter.drawLine(prev, q)
+                prev = q
+            painter.restore()
+        # Halo STCA (rojo de alerta)
+        if tr.get("alert"):
+            painter.save()
+            painter.setPen(QPen(QColor(230, 60, 60), 1.6))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(sp, 13.0, 13.0)
+            painter.restore()
         # Icono rotado por proa
         painter.save()
         painter.translate(sp)
