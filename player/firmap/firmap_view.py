@@ -7,7 +7,7 @@ sobreescribiendo `draw_overlay`.
 import math
 import os
 
-from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtCore import Qt, QPointF, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPixmap, QFont
 from PyQt6.QtWidgets import QWidget
 
@@ -18,10 +18,16 @@ TILE = wm.TILE_SIZE
 
 
 class FirMapView(QWidget):
+    track_selected = pyqtSignal(str)   # id del track clickeado
+
     def __init__(self, mbtiles_path: str = None, parent=None):
         super().__init__(parent)
         self.setMinimumSize(640, 480)
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._home = None              # (lon, lat) para el preset 'A'
+        self._press_pos = None
+        self._moved = False
         # Centro inicial: Argentina aprox.
         self.center_lon = -64.0
         self.center_lat = -38.0
@@ -58,6 +64,41 @@ class FirMapView(QWidget):
         """Reemplaza el set de tráfico a dibujar (lista de dicts) y repinta."""
         self.tracks = tracks or []
         self.update()
+
+    def set_home(self, lon, lat):
+        """Fija el centro de referencia (aeropuerto/área) para el preset 'A'."""
+        self._home = (lon, lat)
+
+    def fit_to_tracks(self):
+        """Encuadra la cámara a la nube de tráfico actual."""
+        pts = [(t["lon"], t["lat"]) for t in self.tracks]
+        if not pts:
+            return
+        lons = [p[0] for p in pts]
+        lats = [p[1] for p in pts]
+        self.center_lon = (min(lons) + max(lons)) / 2.0
+        self.center_lat = (min(lats) + max(lats)) / 2.0
+        # zoom que entra el bbox (margen): busca el mayor z que quepa
+        span_lon = max(1e-4, max(lons) - min(lons))
+        span_lat = max(1e-4, max(lats) - min(lats))
+        for z in range(self.max_zoom, self.min_zoom - 1, -1):
+            wpx = abs(wm.lonlat_to_pixel(max(lons), 0, z)[0] - wm.lonlat_to_pixel(min(lons), 0, z)[0])
+            hpx = abs(wm.lonlat_to_pixel(0, min(lats), z)[1] - wm.lonlat_to_pixel(0, max(lats), z)[1])
+            if wpx <= self.width() * 0.85 and hpx <= self.height() * 0.85:
+                self.zoom = z
+                break
+        self.update()
+
+    def _hit_test(self, pos, radius=14.0):
+        best, best_d = None, radius
+        for t in self.tracks:
+            if "id" not in t:
+                continue
+            sp = self._lonlat_to_screen(t["lat"], t["lon"])
+            d = ((sp.x() - pos.x()) ** 2 + (sp.y() - pos.y()) ** 2) ** 0.5
+            if d < best_d:
+                best, best_d = t["id"], d
+        return best
 
     # ---------- Tiles ----------
     def _tile_pixmap(self, z, x, y):
@@ -139,21 +180,42 @@ class FirMapView(QWidget):
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
             self._drag_last = e.position()
+            self._press_pos = e.position()
+            self._moved = False
 
     def mouseMoveEvent(self, e):
         if self._drag_last is not None:
             d = e.position() - self._drag_last
+            if abs(d.x()) + abs(d.y()) > 2:
+                self._moved = True
             self._drag_last = e.position()
             cpx, cpy = wm.lonlat_to_pixel(self.center_lon, self.center_lat, self.zoom)
             self.center_lon, self.center_lat = wm.pixel_to_lonlat(
                 cpx - d.x(), cpy - d.y(), self.zoom)
             self.update()
 
-    def mouseReleaseEvent(self, _e):
+    def mouseReleaseEvent(self, e):
+        # Click sin arrastre => selección de track
+        if (e.button() == Qt.MouseButton.LeftButton and not self._moved
+                and self._press_pos is not None):
+            tid = self._hit_test(self._press_pos)
+            if tid is not None:
+                self.track_selected.emit(str(tid))
         self._drag_last = None
+        self._press_pos = None
 
     def wheelEvent(self, e):
         self.set_zoom(self.zoom + (1 if e.angleDelta().y() > 0 else -1))
+
+    def keyPressEvent(self, e):
+        k = e.key()
+        if k == Qt.Key.Key_A and self._home is not None:   # volver al área
+            self.set_center(*self._home)
+            self.set_zoom(8)
+        elif k == Qt.Key.Key_F:                            # encuadrar tráfico
+            self.fit_to_tracks()
+        else:
+            super().keyPressEvent(e)
 
 
 if __name__ == "__main__":

@@ -26,8 +26,12 @@ class Plane:
         self.vrate = random.choice([-1, 0, 0, 1])
         self.cs = f"{random.choice(CARRIERS)}{random.randint(100, 9999)}"
         self.estado = random.choice(list(COLORS))
+        self.trail = []
 
     def step(self, dt_s):
+        self.trail.append((self.lat, self.lon))
+        if len(self.trail) > 10:
+            self.trail.pop(0)
         nm = self.gs * (dt_s / 3600.0)
         self.lat += nm / 60.0 * math.cos(math.radians(self.hdg))
         self.lon += nm / 60.0 * math.sin(math.radians(self.hdg)) / max(0.2, math.cos(math.radians(self.lat)))
@@ -42,6 +46,8 @@ class Demo(FirMapView):
         self.planes = [Plane(random.uniform(-52, -24), random.uniform(-71, -56))
                        for _ in range(40)]
         self.selected_idx = 0
+        self.set_home(-64.0, -38.0)
+        self.track_selected.connect(self._on_select)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(100)
@@ -54,13 +60,20 @@ class Demo(FirMapView):
                 pl.hdg = (pl.hdg + 150) % 360
             arrow = "↑" if pl.vrate > 0 else ("↓" if pl.vrate < 0 else "=")
             tracks.append({
-                "lat": pl.lat, "lon": pl.lon, "heading": pl.hdg,
+                "id": pl.cs, "lat": pl.lat, "lon": pl.lon, "heading": pl.hdg,
                 "color": COLORS[pl.estado],
                 "selected": (i == self.selected_idx),
+                "alert": (i < 2),                       # demo: 2 en "conflicto"
+                "trail": list(pl.trail),
                 "lines": [pl.cs, f"F{int(pl.fl):03d}{arrow} {int(pl.gs):03d}",
                           f"{int(pl.hdg):03d}°"],
             })
         self.set_tracks(tracks)
+
+    def _on_select(self, tid):
+        for i, pl in enumerate(self.planes):
+            if pl.cs == tid:
+                self.selected_idx = i
 
 
 def main():

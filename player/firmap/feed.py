@@ -16,12 +16,38 @@ def _heading(plot):
     return 0.0
 
 
+def _alert_ids(radar):
+    ids = set()
+    for c in getattr(radar, "conflictos_activos", []) or []:
+        try:
+            ids.add(c[0]); ids.add(c[1])
+        except (IndexError, TypeError):
+            pass
+    return ids
+
+
+def _trail(radar, proy, plot, max_pts=10):
+    hist = getattr(radar, "history", {}).get(plot.id)
+    if not hist:
+        return []
+    pts = []
+    for hp in list(hist)[-max_pts:]:
+        try:
+            lat, lon = proy.xy_to_latlon(hp.x, hp.y)
+            if lat is not None and not (lat == 0.0 and lon == 0.0):
+                pts.append((lat, lon))
+        except Exception:
+            continue
+    return pts
+
+
 def build_tracks(radar):
     """Devuelve la lista de tracks (dicts) para FirMapView.set_tracks()."""
     proy = getattr(radar, "proy", None)
     if proy is None or not getattr(proy, "activo", False) or getattr(proy, "proj", None) is None:
         return []
     focused = getattr(radar, "focused_target_id", None)
+    alerts = _alert_ids(radar)
     from player.ods import track_state as _ts, palette as _pal
 
     out = []
@@ -39,11 +65,14 @@ def build_tracks(radar):
             except Exception:
                 rgb = _pal.TOOL_RBL
             out.append({
+                "id": plot.id,
                 "lat": lat, "lon": lon,
                 "heading": _heading(plot),
                 "lines": lines,
                 "color": rgb,
                 "selected": (plot.id == focused),
+                "alert": (plot.id in alerts),
+                "trail": _trail(radar, proy, plot),
             })
         except Exception:
             continue
