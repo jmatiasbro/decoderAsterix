@@ -31,24 +31,43 @@ def _squawk(plot) -> str:
     return "" if s in ("", "----", "0000") else s
 
 
-def build_lines(plot, full: bool = True, vrate=None):
+def _mode_s_addr(plot) -> str:
+    adr = getattr(plot, "mode_s", None)
+    if adr is None:
+        return ""
+    s = str(adr).strip()
+    return "" if s in ("", "----") else s
+
+
+def build_lines(plot, full: bool = True, vrate=None, fields=None):
     """Devuelve líneas del data block.
 
-    L1: callsign (o squawk si no hay). L2: FL+tendencia. L3 (solo FDB): GS.
+    L1: callsign [+ dirección Mode S] (o squawk si no hay callsign).
+    L2: FL+tendencia. L3 (solo FDB): GS.
     `vrate` (ft/min) permite pasar la tendencia cuando el plot no la expone como
     atributo (p. ej. RadarPlot con __slots__); si es None se lee del plot.
+    `fields` (dict del filtro de etiquetas): si es None, todos los campos visibles
+    (comportamiento histórico); si se pasa, cada campo se gatea por su toggle.
     """
-    callsign = (getattr(plot, "callsign", "") or "").strip()
-    squawk = _squawk(plot)
+    def on(key: str) -> bool:
+        return True if fields is None else bool(fields.get(key, True))
+
+    callsign = (getattr(plot, "callsign", "") or "").strip() if on("identific_aeronave") else ""
+    squawk = _squawk(plot) if on("codigo_a") else ""
     l1 = callsign or squawk
+    if on("direccion_aeronave"):
+        adr = _mode_s_addr(plot)
+        if adr:
+            l1 = f"{l1} {adr}".strip()
     lines = []
     if l1:
         lines.append(l1)
-    v = vrate if vrate is not None else getattr(plot, "vertical_rate_ftmin", None)
-    lvl = format_level(getattr(plot, "flight_level", None), v)
-    if lvl:
-        lines.append(lvl)
-    if full:
+    if on("codigo_c") or on("altitud_adsb"):
+        v = vrate if vrate is not None else getattr(plot, "vertical_rate_ftmin", None)
+        lvl = format_level(getattr(plot, "flight_level", None), v)
+        if lvl:
+            lines.append(lvl)
+    if full and on("velocidad"):
         gs = getattr(plot, "ground_speed", None)
         if gs is not None:
             try:
