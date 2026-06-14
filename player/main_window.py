@@ -984,7 +984,9 @@ class MainWindow(QMainWindow):
 
         # Menú Modo (Playback / Consola)
         menu_modo = menu_bar.addMenu("Modo")
-        menu_modo.addAction(_icon("fa5s.play-circle"), "Modo Playback", self._abrir_modo_playback)
+        # El controlador trabaja online: no puede activar playback (se gatea en _aplicar_rol).
+        self.act_modo_playback = menu_modo.addAction(
+            _icon("fa5s.play-circle"), "Modo Playback", self._abrir_modo_playback)
         menu_modo.addAction(_icon("fa5s.network-wired"), "Modo Consola", self._abrir_modo_consola)
         menu_modo.addSeparator()
         # --- Vista EUROCONTROL ODS (controlador) ---
@@ -1077,6 +1079,12 @@ class MainWindow(QMainWindow):
 
     def _abrir_modo_playback(self):
         """Abre el reproductor flotante y permite elegir el archivo a reproducir."""
+        # El controlador trabaja online: el playback está vedado.
+        if self.profile_manager.get_rol() == "controlador":
+            QMessageBox.information(self, "Modo Playback",
+                                    "El rol Controlador trabaja en vivo (UDP). "
+                                    "El modo Playback es exclusivo del rol Técnico.")
+            return
         from player.playback_player_widget import PlaybackPlayerWidget
         if getattr(self, '_playback_player', None) is None:
             w = PlaybackPlayerWidget(self)
@@ -3137,6 +3145,10 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'btn_cargar'):
             self.btn_cargar.setEnabled(not es_controlador)
             self.btn_cargar.setVisible(not es_controlador)
+        # Acción de menú "Modo Playback": también vedada al controlador.
+        if hasattr(self, 'act_modo_playback'):
+            self.act_modo_playback.setEnabled(not es_controlador)
+            self.act_modo_playback.setVisible(not es_controlador)
 
         # Controlador: enmarcar el área de control en el aeropuerto del perfil
         if es_controlador:
