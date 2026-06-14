@@ -3803,12 +3803,24 @@ class RadarWidget(_RadarBase):
             painter.end()
 
     def _draw_compass_rose(self, painter):
-        """Rosa de rumbos en el borde + leyenda de alcance, en píxeles de pantalla."""
+        """Rosa de rumbos sobre el anillo de área de control (centrada en el
+        aeropuerto, radio = radio_incumbencia). Se recentra y escala al cambiar
+        de perfil. Si no hay proyección/aeropuerto, cae al borde del widget."""
         import math as _m
         from player.ods import compass as _c, palette as _pal
         w, h = self.width(), self.height()
+        # Fallback: borde del widget centrado en el pan.
         cx, cy = w / 2.0 + self.pan_x, h / 2.0 + self.pan_y
         radius = min(w, h) * 0.46
+        # Adaptar al área de incumbencia si está disponible.
+        if self.projection_set and self.proy.activo \
+                and getattr(self, 'aeropuerto_lat', None) is not None \
+                and getattr(self, 'aeropuerto_lon', None) is not None:
+            acx, acy = self.proy.latlon_to_xy(self.aeropuerto_lat, self.aeropuerto_lon)
+            sp = self._world_to_screen(acx, acy)
+            if sp is not None and is_valid_coord(acx, acy):
+                cx, cy = sp.x(), sp.y()
+                radius = float(getattr(self, 'radio_incumbencia', 50.0)) * METERS_PER_NM * self.zoom_factor
         intens = getattr(self, 'ods_layer_intensity', _pal.LAYER_DEFAULT)
         a = _pal.layer_alpha("compass", intens.get("compass", _pal.LAYER_DEFAULT["compass"]))
         col = QColor(200, 208, 200, a)
