@@ -50,8 +50,14 @@ def build_tracks(radar):
     alerts = _alert_ids(radar)
     from player.ods import track_state as _ts, palette as _pal
 
+    # Igual que el PPI: combinar tracks confirmados + pendientes (en vista técnica
+    # con barrido activo, los plots viven en pending_tracks hasta ser iluminados).
+    plots = {}
+    plots.update(getattr(radar, "pending_tracks", {}) or {})
+    plots.update(getattr(radar, "tracks", {}) or {})
+
     out = []
-    for plot in list(getattr(radar, "tracks", {}).values()):
+    for plot in list(plots.values()):
         try:
             if not plot.is_alive():
                 continue
