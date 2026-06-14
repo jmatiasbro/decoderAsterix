@@ -952,44 +952,33 @@ class MainWindow(QMainWindow):
             "Análisis y Calibración (Técnico)…", self._abrir_calibracion)
         self.act_calibracion.setEnabled(self.profile_manager.get_rol() == "tecnico")
 
-        # Menú Mapas
+        # Menú Mapas — capas generadas dinámicamente desde la base ATM (atm.duckdb)
+        from player import atm_db, atm_maps
         self.menu_mapas = menu_bar.addMenu("Mapas")
-        submenu_inf = self.menu_mapas.addMenu("Rutas Inferiores")
-        
-        for name, path in [
-            ("INFERIOR.json (Todo)", "files/INFERIOR/INFERIOR.json"),
-            ("RNAV_INF.json (Rutas)", "files/INFERIOR/RNAV_INF.json"),
-            ("NO_RNAV_INF.json (Rutas)", "files/INFERIOR/NO_RNAV_INF.json"),
-            ("Nombres Fix RNAV_INF.json (Fixes)", "files/INFERIOR/fix_nombres_RNAV_INF.json"),
-            ("Nombres Fix NO_RNAV_INF.json (Fixes)", "files/INFERIOR/fix_nombres_NO_RNAV_INF.json")
-        ]:
-            base_project = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            abs_path = os.path.abspath(os.path.join(base_project, path))
-            
-            action = submenu_inf.addAction(name)
-            action.setCheckable(True)
-            action.triggered.connect(lambda checked, p=abs_path: self._on_map_action_triggered(p))
-            self.map_actions[abs_path] = action
-            
-        submenu_waypoints = self.menu_mapas.addMenu("Puntos y Fixes (Waypoints)")
-        for name, path in [
-            ("Nombres Ruta (ROU)", "files/fixpoints_rou_name.json"),
-            ("Símbolos Ruta (ROU)", "files/fixpoints_rou_symbol.json"),
-            ("Nombres Terminal (APP)", "files/fixpoints_app_name.json"),
-            ("Símbolos Terminal (APP)", "files/fixpoints_app_symbol.json"),
-            ("Nombres VOR", "files/fixpoints_vor_name.json"),
-            ("Símbolos VOR", "files/fixpoints_vor_symbol.json"),
-            ("Nombres NDB", "files/fixpoints_ndb_name.json"),
-            ("Símbolos NDB", "files/fixpoints_ndb_symbol.json")
-        ]:
-            base_project = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            abs_path = os.path.abspath(os.path.join(base_project, path))
-            
-            action = submenu_waypoints.addAction(name)
-            action.setCheckable(True)
-            action.triggered.connect(lambda checked, p=abs_path: self._on_map_action_triggered(p))
-            self.map_actions[abs_path] = action
-        
+        self.atm_map_actions = {}
+
+        if atm_db.available():
+            sub_aero = self.menu_mapas.addMenu("Aerovías")
+            for label, cat in [("Superiores", "SUP"), ("Inferiores", "INF"), ("RNAV", "RNAV")]:
+                self._add_atm_action(sub_aero, f"AERO_{cat}", label,
+                                     (lambda c=cat: atm_maps.airway_segments(c)))
+
+            sub_proc = self.menu_mapas.addMenu("Procedimientos por Aeropuerto")
+            for icao in atm_db.airports_with_procedures():
+                sub_ap = sub_proc.addMenu(icao)
+                for kind in ("SID", "STAR", "IAP"):
+                    self._add_atm_action(sub_ap, f"{icao}_{kind}", kind,
+                                         (lambda i=icao, k=kind: atm_maps.procedure_segments(i, k)))
+
+            sub_fix = self.menu_mapas.addMenu("Puntos y Fixes (Waypoints)")
+            for label, kinds in [("VOR", ["VO"]), ("NDB", ["ND"]), ("DME", ["DM"]),
+                                 ("Ruta (ROU)", ["RO"]), ("Terminal (APP)", ["AP"])]:
+                self._add_atm_action(sub_fix, f"FIX_{label}", label,
+                                     (lambda k=kinds: atm_maps.fix_segments(k)))
+        else:
+            act_na = self.menu_mapas.addAction("Base ATM no encontrada (data/atm/atm.duckdb)")
+            act_na.setEnabled(False)
+
         self.menu_mapas.addSeparator()
         self.menu_mapas.addAction("Cargar Mapa Personalizado (.geojson)...", self._cargar_mapa_personalizado)
 
@@ -3442,6 +3431,34 @@ class MainWindow(QMainWindow):
         if abs_path in self._active_map_paths:
             self._active_map_paths.remove(abs_path)
         self._rebuild_and_draw_maps()
+
+    def _add_atm_action(self, menu, key, label, builder):
+        act = menu.addAction(label)
+        act.setCheckable(True)
+        act.toggled.connect(lambda on, k=key, b=builder: self._toggle_atm_layer(k, on, b))
+        self.atm_map_actions[key] = act
+
+    def _toggle_atm_layer(self, key, on, builder):
+        """Agrega/quita una capa ATM (aerovía/procedimiento/fixes) en el PPI."""
+        mm = getattr(self.radar, 'map_manager', None)
+        if mm is None:
+            return
+        layer_name = f"ATM::{key}"
+        if on:
+            try:
+                segs = builder()
+            except Exception as e:
+                print(f"[ATM Mapas] Error generando capa {key}: {e}")
+                return
+            if not segs:
+                print(f"[ATM Mapas] Capa {key} sin geometría")
+                return
+            mm.add_layer(layer_name, segs, "TACTICO")
+            if getattr(self.radar, 'proy', None) is not None:
+                mm.reproject_all(self.radar.proy)
+        else:
+            mm.layers.pop(layer_name, None)
+        self.radar.update()
 
     def _rebuild_and_draw_maps(self):
         # 1. Limpiar SOLO las capas gestionadas por estos menús (no las del perfil/cartografía)
