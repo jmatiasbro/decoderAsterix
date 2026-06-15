@@ -69,10 +69,15 @@ class CentroTecnicoWindow(QMainWindow):
         return "duckdb" if self.rb_duckdb.isChecked() else "session"
 
     def source_provider(self):
-        """Devuelve la DataSource activa según el conmutador."""
+        """Devuelve la DataSource activa según el conmutador.
+
+        Para DuckDB reutiliza la conexión viva del app (repo_db.conn) —los mismos
+        datos que el PASS— y así evita una segunda conexión que DuckDB rechazaría.
+        """
         from player.stats.data_source import DuckDBSource, SessionSource
         if self.current_source_kind() == "duckdb":
-            return DuckDBSource(self._db_path)
+            conn = getattr(self._repo_db, "conn", None) if self._repo_db else None
+            return DuckDBSource(self._db_path, conn=conn)
         return SessionSource(self._session_records)
 
     def _on_source_changed(self, _checked):

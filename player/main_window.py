@@ -3117,12 +3117,23 @@ class MainWindow(QMainWindow):
     def _abrir_centro_tecnico(self):
         """Abre el Centro Técnico ATSEP (solo rol técnico)."""
         from player.centro_tecnico.window import CentroTecnicoWindow
-        repo_db = getattr(self, "repo_db", None)
         worker = getattr(self, "worker", None)
+        # repo_db (con la conexión DuckDB viva) cuelga del engine del worker.
+        repo_db = getattr(getattr(worker, "engine", None), "repo_db", None)
+        # Plots de la sesión en memoria desde el radar (RadarPlot -> dict normalizado).
         records = []
         try:
-            if hasattr(self, "track_manager") and self.track_manager:
-                records = [p.to_dict() for p in self.track_manager.all_plots()]
+            radar = getattr(self, "radar", None)
+            for t in list(getattr(radar, "tracks", {}).values()):
+                records.append({
+                    "sac_sic": getattr(t, "sac_sic", None),
+                    "timestamp": getattr(t, "timestamp", None),
+                    "lat": t.lat, "lon": t.lon,
+                    "flight_level": getattr(t, "flight_level", None),
+                    "mode3a": getattr(t, "mode3a", None),
+                    "raw_range": getattr(t, "raw_range", None),
+                    "raw_azimuth": getattr(t, "raw_azimuth", None),
+                })
         except Exception:
             records = []
         self._centro_tecnico_win = CentroTecnicoWindow(

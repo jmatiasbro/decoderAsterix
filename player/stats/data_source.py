@@ -62,10 +62,22 @@ import duckdb
 
 
 class DuckDBSource(DataSource):
-    def __init__(self, db_path="pass_analytics.duckdb"):
+    def __init__(self, db_path="pass_analytics.duckdb", conn=None):
+        # `conn`: conexión DuckDB viva del app (repo_db.conn). Si se provee, se
+        # reutiliza —los mismos datos que ve el PASS— evitando abrir una segunda
+        # conexión, que DuckDB rechaza si la config (read_only) difiere.
         self.db_path = db_path
+        self._conn = conn
 
     def _query(self, sql, params=()):
+        if self._conn is not None:
+            cur = self._conn.cursor()
+            try:
+                cur.execute(sql, params)
+                cols = [d[0] for d in cur.description]
+                return [dict(zip(cols, row)) for row in cur.fetchall()]
+            finally:
+                cur.close()
         with duckdb.connect(self.db_path, read_only=True) as con:
             cur = con.execute(sql, params)
             cols = [d[0] for d in cur.description]
