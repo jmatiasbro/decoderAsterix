@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
 
 from player.centro_tecnico.stats_widget import StatsWidget
 from player.centro_tecnico.coverage_widget import CoverageWidget
+from player.technical_monitor import TechnicalMonitorWidget
 
 
 class CentroTecnicoWindow(QMainWindow):
@@ -26,7 +27,8 @@ class CentroTecnicoWindow(QMainWindow):
         self.coverage_tab = CoverageWidget(self.source_provider, db_path=db_path)
         self.tabs.addTab(self.stats_tab, "📊 Estadísticas")
         self.tabs.addTab(QWidget(), "✅ PASS / SASS-C")     # poblada en Task 11
-        self.tabs.addTab(QWidget(), "📡 Monitor ATSEP")     # poblada en Task 10
+        self.monitor_tab = TechnicalMonitorWidget(self)
+        self.tabs.addTab(self.monitor_tab, "📡 Monitor ATSEP")
         self.tabs.addTab(self._inspector_placeholder(), "🔬 Inspector")  # Task 12
         self.tabs.addTab(self.coverage_tab, "🛰 Cobertura")
 

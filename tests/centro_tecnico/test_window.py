@@ -43,3 +43,12 @@ def test_window_has_five_tabs(app):
 def test_source_toggle_default_duckdb(app):
     w = CentroTecnicoWindow()
     assert w.current_source_kind() in ("duckdb", "session")
+
+
+from player.technical_monitor import TechnicalMonitorWidget
+
+
+def test_monitor_tab_is_technical_monitor(app):
+    w = CentroTecnicoWindow()
+    idx = next(i for i in range(w.tabs.count()) if "Monitor" in w.tabs.tabText(i))
+    assert isinstance(w.tabs.widget(idx), TechnicalMonitorWidget)
