@@ -32,6 +32,9 @@ class STCADialog(QDialog):
         self.lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.lbl_titulo)
 
+        self._drag_pos = None
+        self._user_moved = False
+
         self.lista_alertas = QListWidget()
         self.lista_alertas.setStyleSheet("""
             QListWidget {
@@ -74,12 +77,26 @@ class STCADialog(QDialog):
             self.lista_alertas.addItem(item)
 
         if not self.isVisible():
-            if self.parent():
+            if self.parent() and not self._user_moved:
                 parent = self.parent()
                 # Posicionar en la esquina superior izquierda del widget del radar
                 pos = parent.mapToGlobal(parent.rect().topLeft())
                 self.move(pos.x() + 15, pos.y() + 15)
             self.show()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            e.accept()
+
+    def mouseMoveEvent(self, e):
+        if self._drag_pos is not None and (e.buttons() & Qt.MouseButton.LeftButton):
+            self.move(e.globalPosition().toPoint() - self._drag_pos)
+            self._user_moved = True
+            e.accept()
+
+    def mouseReleaseEvent(self, e):
+        self._drag_pos = None
 
     def limpiar(self):
         self.lista_alertas.clear()
