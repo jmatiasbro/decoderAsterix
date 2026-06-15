@@ -263,6 +263,19 @@ def restricted_airspaces(kinds=None):
     return out
 
 
+def msaw_params():
+    """MsawParams desde la tabla msaw_parameters (look-ahead, ROCD, cfl_thold)."""
+    from player.msaw.model import MsawParams
+    if not available():
+        return MsawParams()
+    row = _con().execute(
+        "SELECT time_to_prediction, rocd, cfl_thold FROM msaw_parameters LIMIT 1").fetchone()
+    if not row:
+        return MsawParams()
+    return MsawParams(time_to_prediction=int(row[0] or 120),
+                      rocd=int(row[1] or 1500), cfl_thold=int(row[2] or 5))
+
+
 def _dms_image(val, is_lon: bool) -> str:
     """Decimal -> imagen DMS entera compatible con parse_dms ('DDMMSSH')."""
     hemi = ("E" if val >= 0 else "W") if is_lon else ("N" if val >= 0 else "S")
