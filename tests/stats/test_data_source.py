@@ -46,3 +46,19 @@ def test_duckdb_source_load_and_radars(db):
     assert len(rows) == 1 and rows[0]["timestamp"] == 100.0
     assert set(rows[0].keys()) >= {"sac_sic","timestamp","lat","lon",
                                    "flight_level","mode3a","raw_range","raw_azimuth"}
+
+
+def test_duckdb_source_reuses_injected_connection():
+    """Con una conexión viva inyectada, no abre una segunda conexión al archivo."""
+    import duckdb
+    from player.stats.data_source import DuckDBSource
+    con = duckdb.connect(":memory:")
+    con.execute("CREATE TABLE asterix_plots(timestamp DOUBLE, sac_sic VARCHAR, "
+                "lat DOUBLE, lon DOUBLE, flight_level VARCHAR, mode3a VARCHAR, "
+                "raw_range DOUBLE, raw_azimuth DOUBLE)")
+    con.execute("INSERT INTO asterix_plots VALUES "
+                "(1.0,'25/01',-31.0,-64.0,'100','7000',120.0,45.0)")
+    src = DuckDBSource(db_path="/nonexistent/should-not-be-opened.duckdb", conn=con)
+    assert src.radars() == ["25/01"]
+    rows = src.load(radars=["25/01"])
+    assert len(rows) == 1 and rows[0]["timestamp"] == 1.0
