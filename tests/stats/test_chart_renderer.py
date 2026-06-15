@@ -27,3 +27,24 @@ def test_render_unknown_type_raises():
     import pytest
     with pytest.raises(ValueError):
         render(Figure(), DATA, "nope")
+
+def test_render_box():
+    fig = Figure()
+    render(fig, [("25/01", [1.0, 2.0, 3.0]), ("07/10", [2.0, 4.0])], "box")
+    assert fig.axes
+
+def test_render_stacked100():
+    fig = Figure()
+    render(fig, [("25/01", 12.0), ("07/10", 8.0)], "stacked100")
+    assert fig.axes
+
+def test_render_spider():
+    fig = Figure()
+    render(fig, [("Pd", 0.9), ("RMS", 0.7), ("Disp", 0.8)], "spider")
+    assert fig.axes
+
+def test_render_heatmap_hourday():
+    fig = Figure()
+    data = [("00:00", "Lun", 5.0), ("01:00", "Lun", 3.0), ("00:00", "Mar", 1.0)]
+    render(fig, data, "heatmap_hourday")
+    assert fig.axes
