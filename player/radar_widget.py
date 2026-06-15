@@ -322,7 +322,10 @@ class RadarPlot:
                  # de __slots__: el AttributeError silencioso deshabilitaba el
                  # cross-fill de identidad y la acumulación de reporting_sensors).
                  '_smooth_vx', '_smooth_vy', '_vel_prev_x', '_vel_prev_y', '_vel_prev_t',
-                 '_last_fl_time', '_last_gs_time', 'vx', 'vy')
+                 '_last_fl_time', '_last_gs_time', 'vx', 'vy',
+                 # Tasa vertical (ft/min) que el motor MSAW lee del track; sin esto
+                 # la asignación en evaluar_msaw lanzaba AttributeError por __slots__.
+                 'vertical_rate')
 
     def __init__(self, x: float, y: float, sac_sic: str, category: int,
                  timestamp: float, mode3a: str, callsign: str,
