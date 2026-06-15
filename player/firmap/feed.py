@@ -81,6 +81,11 @@ def _alert_ids(radar):
             ids.add(a.track_id)
         except AttributeError:
             pass
+    for a in getattr(radar, "msaw_activos", []) or []:
+        try:
+            ids.add(a.track_id)
+        except AttributeError:
+            pass
     return ids
 
 

@@ -947,6 +947,11 @@ class MainWindow(QMainWindow):
         self.act_apw_habilitado.setChecked(self.radar.apw_habilitado if hasattr(self, 'radar') and self.radar else True)
         self.act_apw_habilitado.toggled.connect(self._toggle_apw_habilitado)
 
+        self.act_msaw_habilitado = menu_ver.addAction("Habilitar MSAW")
+        self.act_msaw_habilitado.setCheckable(True)
+        self.act_msaw_habilitado.setChecked(self.radar.msaw_habilitado if hasattr(self, 'radar') and self.radar else True)
+        self.act_msaw_habilitado.toggled.connect(self._toggle_msaw_habilitado)
+
         # Submenú: horizonte del vector velocidad (1/2/3 min)
         menu_vector = menu_ver.addMenu("Vector Velocidad")
         from PyQt6.QtGui import QActionGroup
@@ -2018,6 +2023,11 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'radar') and self.radar:
             self.radar.apw_habilitado = checked
             self.radar.evaluar_stca()
+
+    def _toggle_msaw_habilitado(self, checked: bool):
+        if hasattr(self, 'radar') and self.radar:
+            self.radar.msaw_habilitado = checked
+            self.radar.evaluar_msaw()
 
     def _abrir_map_editor(self):
         # Toggle: si ya está abierto, cerrarlo desde el mismo botón
