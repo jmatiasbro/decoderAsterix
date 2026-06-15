@@ -56,3 +56,36 @@ class SessionSource(DataSource):
 
     def radars(self):
         return sorted({r["sac_sic"] for r in self._rows if r["sac_sic"]})
+
+
+import duckdb
+
+
+class DuckDBSource(DataSource):
+    def __init__(self, db_path="pass_analytics.duckdb"):
+        self.db_path = db_path
+
+    def _query(self, sql, params=()):
+        with duckdb.connect(self.db_path, read_only=True) as con:
+            cur = con.execute(sql, params)
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+    def load(self, *, radars=None, t_min=None, t_max=None):
+        where, params = [], []
+        if radars:
+            where.append("sac_sic IN (" + ",".join(["?"] * len(radars)) + ")")
+            params += list(radars)
+        if t_min is not None:
+            where.append("timestamp >= ?"); params.append(t_min)
+        if t_max is not None:
+            where.append("timestamp <= ?"); params.append(t_max)
+        clause = (" WHERE " + " AND ".join(where)) if where else ""
+        sql = ("SELECT sac_sic, timestamp, lat, lon, flight_level, mode3a, "
+               "raw_range, raw_azimuth FROM asterix_plots" + clause)
+        return self._query(sql, params)
+
+    def radars(self):
+        rows = self._query("SELECT DISTINCT sac_sic FROM asterix_plots "
+                           "WHERE sac_sic IS NOT NULL ORDER BY sac_sic")
+        return [r["sac_sic"] for r in rows]
