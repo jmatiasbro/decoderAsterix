@@ -919,6 +919,8 @@ class RadarWidget(_RadarBase):
         self.tracks_en_alerta = set()
         self.conflictos_activos = []
         self.logged_conflicts = {}
+        # Tracks resaltados al clickear un renglón de los paneles de alerta.
+        self._alert_focus_ids = set()
         
         # Activar seguimiento de cursor y HUD geodésico (FASE 4)
         self.setMouseTracking(True)
@@ -1351,6 +1353,12 @@ class RadarWidget(_RadarBase):
         self.map_min_x, self.map_min_y = min_x, min_y
         self.map_max_x, self.map_max_y = max_x, max_y
         self.map_has_data = True
+        self.update()
+
+    def resaltar_tracks_alerta(self, ids):
+        """Resalta en el PPI los tracks indicados (click en un renglón de alerta).
+        No mueve la vista (ni pan ni zoom); solo dibuja un anillo de selección."""
+        self._alert_focus_ids = set(i for i in (ids or []) if i)
         self.update()
 
     def _set_default_view(self):
@@ -2563,7 +2571,7 @@ class RadarWidget(_RadarBase):
 
         # 2. Actualizar la UI flotante
         if hasattr(self, 'stca_dialog') and self.stca_dialog:
-            self.stca_dialog.actualizar_alertas(conflictos)
+            self.stca_dialog.actualizar_alertas(conflictos, self)
 
         # 3. Evaluar alertas APW
         self.evaluar_apw()
@@ -5296,6 +5304,20 @@ class RadarWidget(_RadarBase):
                     painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
                     box_size = safe_divide(30.0, z, 1.0)
                     painter.drawRect(QRectF(-box_size / 2, -box_size / 2, box_size, box_size))
+                    painter.restore()
+                except Exception:
+                    pass
+
+            # 4b. Anillo de selección al clickear el renglón en un panel de alerta.
+            if plot.id in self._alert_focus_ids:
+                try:
+                    painter.save()
+                    painter.translate(x, y)
+                    pen_sel = QPen(QColor("#00E5FF"), safe_divide(2.5, z, 0.6))
+                    painter.setPen(pen_sel)
+                    painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                    r_sel = safe_divide(24.0, z, 1.0)
+                    painter.drawEllipse(QPointF(0.0, 0.0), r_sel, r_sel)
                     painter.restore()
                 except Exception:
                     pass

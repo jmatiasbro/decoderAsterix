@@ -30,8 +30,10 @@ class MSAWDialog(QDialog):
 
         self._drag_pos = None
         self._user_moved = False
+        self._radar_ref = None
 
         self.lista_alertas = QListWidget()
+        self.lista_alertas.itemClicked.connect(self._on_item_clicked)
         self.lista_alertas.setStyleSheet("""
             QListWidget { background-color: rgba(11, 14, 20, 230);
                 border: 1px solid rgba(200, 40, 40, 180);
@@ -43,6 +45,7 @@ class MSAWDialog(QDialog):
         layout.addWidget(self.lista_alertas)
 
     def actualizar_alertas(self, alertas, radar_ref=None):
+        self._radar_ref = radar_ref
         self.lista_alertas.clear()
         if not alertas:
             if self.isVisible():
@@ -63,6 +66,7 @@ class MSAWDialog(QDialog):
                 color = QColor("#FFB040")
             item = QListWidgetItem(txt)
             item.setForeground(QBrush(color))
+            item.setData(Qt.ItemDataRole.UserRole, a.track_id)
             self.lista_alertas.addItem(item)
 
         if not self.isVisible():
@@ -71,6 +75,11 @@ class MSAWDialog(QDialog):
                 pos = parent.mapToGlobal(parent.rect().topLeft())
                 self.move(pos.x() + 15, pos.y() + 250)
             self.show()
+
+    def _on_item_clicked(self, item):
+        tid = item.data(Qt.ItemDataRole.UserRole)
+        if tid and self._radar_ref is not None:
+            self._radar_ref.resaltar_tracks_alerta([tid])
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
