@@ -34,8 +34,10 @@ class STCADialog(QDialog):
 
         self._drag_pos = None
         self._user_moved = False
+        self._radar_ref = None
 
         self.lista_alertas = QListWidget()
+        self.lista_alertas.itemClicked.connect(self._on_item_clicked)
         self.lista_alertas.setStyleSheet("""
             QListWidget {
                 background-color: rgba(11, 14, 20, 230);
@@ -53,11 +55,12 @@ class STCADialog(QDialog):
         """)
         layout.addWidget(self.lista_alertas)
 
-    def actualizar_alertas(self, conflictos):
+    def actualizar_alertas(self, conflictos, radar_ref=None):
         """
         Actualiza el listado interactivo de alertas.
         conflictos: lista de tuplas (t1, t2, estado, tiempo)
         """
+        self._radar_ref = radar_ref
         self.lista_alertas.clear()
         if not conflictos:
             if self.isVisible(): 
@@ -74,6 +77,7 @@ class STCADialog(QDialog):
 
             item = QListWidgetItem(item_text)
             item.setForeground(QBrush(color))
+            item.setData(Qt.ItemDataRole.UserRole, (t1, t2))
             self.lista_alertas.addItem(item)
 
         if not self.isVisible():
@@ -83,6 +87,11 @@ class STCADialog(QDialog):
                 pos = parent.mapToGlobal(parent.rect().topLeft())
                 self.move(pos.x() + 15, pos.y() + 15)
             self.show()
+
+    def _on_item_clicked(self, item):
+        par = item.data(Qt.ItemDataRole.UserRole)
+        if par and self._radar_ref is not None:
+            self._radar_ref.resaltar_tracks_alerta(list(par))
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:

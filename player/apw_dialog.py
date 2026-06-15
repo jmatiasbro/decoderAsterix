@@ -32,8 +32,10 @@ class APWDialog(QDialog):
 
         self._drag_pos = None
         self._user_moved = False
+        self._radar_ref = None
 
         self.lista_alertas = QListWidget()
+        self.lista_alertas.itemClicked.connect(self._on_item_clicked)
         self.lista_alertas.setStyleSheet("""
             QListWidget {
                 background-color: rgba(11, 14, 20, 230);
@@ -56,6 +58,7 @@ class APWDialog(QDialog):
         Actualiza el listado interactivo de alertas.
         alertas: lista de objetos AlertaAPW
         """
+        self._radar_ref = radar_ref
         self.lista_alertas.clear()
         if not alertas:
             if self.isVisible():
@@ -85,6 +88,7 @@ class APWDialog(QDialog):
 
             item = QListWidgetItem(item_text)
             item.setForeground(QBrush(color))
+            item.setData(Qt.ItemDataRole.UserRole, a.track_id)
             self.lista_alertas.addItem(item)
 
         if not self.isVisible():
@@ -94,6 +98,11 @@ class APWDialog(QDialog):
                 pos = parent.mapToGlobal(parent.rect().topLeft())
                 self.move(pos.x() + 15, pos.y() + 130)
             self.show()
+
+    def _on_item_clicked(self, item):
+        tid = item.data(Qt.ItemDataRole.UserRole)
+        if tid and self._radar_ref is not None:
+            self._radar_ref.resaltar_tracks_alerta([tid])
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
