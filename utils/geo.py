@@ -543,9 +543,15 @@ class GeoTools:
         return _calculate_distance_and_azimuth_jit(lat1, lon1, lat2, lon2)
 
     @staticmethod
-    def vincenty_forward(lat: float, lon: float, azimuth_deg: float, 
+    def vincenty_forward(lat: float, lon: float, azimuth_deg: float,
                          distance_m: float) -> Tuple[float, float]:
         """Calcula punto destino usando Vincenty directa."""
+        if HAS_PYPROJ:
+            try:
+                lon2, lat2, _ = WGS84_GEOD.fwd(lon, lat, azimuth_deg, distance_m)
+                return lat2, lon2
+            except Exception:
+                pass
         return _vincenty_forward_jit(lat, lon, azimuth_deg, distance_m)
     
     @staticmethod
