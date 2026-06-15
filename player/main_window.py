@@ -3663,6 +3663,38 @@ class MainWindow(QMainWindow):
                 act_empty = submenu.addAction("(vacío)")
                 act_empty.setEnabled(False)
 
+        # Capa de referencia: sectores de Altitud Mínima de Sector (MSAW)
+        self.menu_areas.addSeparator()
+        self.act_msa_sectores = self.menu_areas.addAction("Mostrar sectores MSA")
+        self.act_msa_sectores.setCheckable(True)
+        self.act_msa_sectores.setChecked(getattr(self, '_msa_sectores_on', False))
+        self.act_msa_sectores.toggled.connect(self._toggle_msa_sectores)
+
+    def _toggle_msa_sectores(self, on):
+        """Muestra/oculta los sectores MSA (anillo+radiales+MSA) como referencia."""
+        from player.msaw import render as _mr
+        self._msa_sectores_on = on
+        mm = getattr(self.radar, 'map_manager', None)
+        if mm is None:
+            return
+        name = "MSA::SECTORS"
+        if on:
+            try:
+                segs = _mr.msa_segments()
+            except Exception as e:
+                print(f"[MSA] Error generando sectores: {e}")
+                return
+            if not segs:
+                return
+            mm.add_layer(name, segs, "TACTICO")
+            if name in mm.layers:
+                mm.layers[name].color = _mr.MSA_COLOR
+            if getattr(self.radar, 'proy', None) is not None:
+                mm.reproject_all(self.radar.proy)
+        else:
+            mm.layers.pop(name, None)
+        self.radar.update()
+
     def _toggle_individual_db_area(self, area, on):
         """Muestra u oculta una área de base de datos específica en el PPI/ODS."""
         from player.areas import render as _ar
