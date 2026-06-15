@@ -4,6 +4,8 @@
 `data` para bar/line/pie/box/stacked100/spider es list[(label, value)].
 Para heatmap_hourday es list[(hour_label, day_label, value)].
 """
+import numpy as np
+
 CHART_TYPES = ("bar", "line", "pie", "box", "stacked100", "heatmap_hourday", "spider")
 
 
@@ -41,5 +43,43 @@ def render(figure, data, chart_type, *, title="", xlabel="", ylabel=""):
 
 
 def _render_extended(figure, data, chart_type, xlabel, ylabel):
-    # implementado en Task 8
-    raise ValueError(f"tipo de gráfico no implementado aún: {chart_type}")
+    if chart_type == "box":
+        ax = figure.add_subplot(111)
+        labels = [str(d[0]) for d in data]
+        series = [list(d[1]) for d in data]
+        ax.boxplot(series, tick_labels=labels)
+        ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+    elif chart_type == "stacked100":
+        ax = figure.add_subplot(111)
+        labels, values = _labels_values(data)
+        total = sum(values) or 1.0
+        bottom = 0.0
+        for lab, val in zip(labels, values):
+            pct = 100.0 * val / total
+            ax.bar(["total"], [pct], bottom=[bottom], label=lab)
+            bottom += pct
+        ax.legend(fontsize=7); ax.set_ylabel("%")
+    elif chart_type == "spider":
+        labels, values = _labels_values(data)
+        ang = np.linspace(0, 2 * np.pi, len(labels), endpoint=False).tolist()
+        vals = values + values[:1]
+        ang = ang + ang[:1]
+        ax = figure.add_subplot(111, projection="polar")
+        ax.plot(ang, vals, marker="o")
+        ax.fill(ang, vals, alpha=0.25)
+        ax.set_xticks(ang[:-1]); ax.set_xticklabels(labels, fontsize=8)
+    elif chart_type == "heatmap_hourday":
+        ax = figure.add_subplot(111)
+        hours = sorted({d[0] for d in data})
+        days = sorted({d[1] for d in data})
+        hi = {h: i for i, h in enumerate(hours)}
+        di = {d: i for i, d in enumerate(days)}
+        grid = np.zeros((len(days), len(hours)))
+        for h, d, v in data:
+            grid[di[d], hi[h]] = v
+        im = ax.imshow(grid, aspect="auto")
+        ax.set_xticks(range(len(hours))); ax.set_xticklabels(hours, rotation=90, fontsize=7)
+        ax.set_yticks(range(len(days))); ax.set_yticklabels(days, fontsize=7)
+        figure.colorbar(im, ax=ax)
+    else:
+        raise ValueError(f"tipo de gráfico no implementado aún: {chart_type}")
