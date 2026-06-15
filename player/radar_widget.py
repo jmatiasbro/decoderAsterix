@@ -845,6 +845,14 @@ class RadarWidget(_RadarBase):
         self.timer.timeout.connect(self._on_timer)
         self.timer.start(50)
 
+        # Coalescción de safety-nets (STCA/APW/MSAW): correrlos sincrónicamente en
+        # cada batch de plots satura el hilo GUI con CAT62 (cientos de tracks ×
+        # look-ahead). Se limita a ~1 Hz con un disparo "trailing" para evaluar el
+        # estado final. Throttle de UI (wall-clock), NO toca el ciclo de vida/ToD.
+        self._safety_interval = 1.0       # s entre evaluaciones completas
+        self._safety_last = 0.0
+        self._safety_pending = False
+
         # Enable mouse tracking for tooltip on history points
         self.setMouseTracking(True)
 
@@ -2126,7 +2134,7 @@ class RadarWidget(_RadarBase):
         # renderizado doble (o triple si BLINDAJE también está activo).
         self._process_plot_data(plot)
         self._reconciliar_pistas()
-        self.evaluar_stca()
+        self._schedule_safety()
         if trigger_update:
             self.update()
 
@@ -2137,7 +2145,7 @@ class RadarWidget(_RadarBase):
         for data in batch:
             self._process_plot_data(data)
         self._reconciliar_pistas()
-        self.evaluar_stca()
+        self._schedule_safety()
         self.update()
 
     # ================================================================
@@ -2330,6 +2338,29 @@ class RadarWidget(_RadarBase):
             
             track.vx = vx
             track.vy = vy
+
+    def _schedule_safety(self):
+        """Coalescce la cadena STCA→APW→MSAW a ~1 Hz para no bloquear la GUI.
+
+        Corre de inmediato si pasó el intervalo; si no, agenda un disparo trailing
+        para no perder la última actualización. El repintado (self.update) sigue
+        siendo por batch e independiente de esto.
+        """
+        import time
+        now = time.monotonic()
+        if now - self._safety_last >= self._safety_interval:
+            self._safety_last = now
+            self.evaluar_stca()
+        elif not self._safety_pending:
+            self._safety_pending = True
+            delay_ms = int((self._safety_interval - (now - self._safety_last)) * 1000)
+            QTimer.singleShot(max(0, delay_ms), self._safety_trailing)
+
+    def _safety_trailing(self):
+        import time
+        self._safety_pending = False
+        self._safety_last = time.monotonic()
+        self.evaluar_stca()
 
     def evaluar_apw(self):
         """
