@@ -1,7 +1,7 @@
 """Centro Técnico ATSEP: ventana hub con pestañas de herramientas técnicas."""
 from PyQt6.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QStatusBar, QRadioButton, QButtonGroup,
-    QHBoxLayout, QLabel,
+    QHBoxLayout, QLabel, QVBoxLayout,
 )
 
 from player.centro_tecnico.stats_widget import StatsWidget
@@ -26,13 +26,23 @@ class CentroTecnicoWindow(QMainWindow):
         self.stats_tab = StatsWidget(self.source_provider)
         self.coverage_tab = CoverageWidget(self.source_provider, db_path=db_path)
         self.tabs.addTab(self.stats_tab, "📊 Estadísticas")
-        self.tabs.addTab(QWidget(), "✅ PASS / SASS-C")     # poblada en Task 11
+        self.tabs.addTab(self._build_pass_page(), "✅ PASS / SASS-C")
         self.monitor_tab = TechnicalMonitorWidget(self)
         self.tabs.addTab(self.monitor_tab, "📡 Monitor ATSEP")
         self.tabs.addTab(self._inspector_placeholder(), "🔬 Inspector")  # Task 12
         self.tabs.addTab(self.coverage_tab, "🛰 Cobertura")
 
         self._build_statusbar()
+
+    def _build_pass_page(self) -> QWidget:
+        from player.pass_dashboard import PassDashboardDialog
+        container = QWidget(self)
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        dialog = PassDashboardDialog({}, self)
+        dialog.tabs.setParent(container)
+        layout.addWidget(dialog.tabs)
+        return container
 
     def _inspector_placeholder(self):
         return QWidget()

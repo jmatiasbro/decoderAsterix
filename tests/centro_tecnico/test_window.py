@@ -52,3 +52,14 @@ def test_monitor_tab_is_technical_monitor(app):
     w = CentroTecnicoWindow()
     idx = next(i for i in range(w.tabs.count()) if "Monitor" in w.tabs.tabText(i))
     assert isinstance(w.tabs.widget(idx), TechnicalMonitorWidget)
+
+
+from PyQt6.QtWidgets import QTabWidget
+
+
+def test_pass_tab_embeds_dashboard_tabs(app):
+    w = CentroTecnicoWindow()
+    idx = next(i for i in range(w.tabs.count()) if "PASS" in w.tabs.tabText(i))
+    page = w.tabs.widget(idx)
+    assert page.findChild(QTabWidget) is not None, \
+        "PASS tab debe contener un QTabWidget interno del PassDashboardDialog"
