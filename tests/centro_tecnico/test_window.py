@@ -27,3 +27,19 @@ def test_stats_widget_generate_renders(app):
     sw.generate()
     assert sw.figure.axes               # algo se dibujó
     assert len(sw.figure.axes[0].patches) == 1   # 1 radar -> 1 barra
+
+
+from player.centro_tecnico.window import CentroTecnicoWindow
+
+
+def test_window_has_five_tabs(app):
+    w = CentroTecnicoWindow()
+    assert w.tabs.count() == 5
+    titles = [w.tabs.tabText(i) for i in range(5)]
+    assert any("Estad" in t for t in titles)
+    assert any("Cobertura" in t for t in titles)
+
+
+def test_source_toggle_default_duckdb(app):
+    w = CentroTecnicoWindow()
+    assert w.current_source_kind() in ("duckdb", "session")
