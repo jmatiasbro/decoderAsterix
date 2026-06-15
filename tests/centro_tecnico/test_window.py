@@ -63,3 +63,17 @@ def test_pass_tab_embeds_dashboard_tabs(app):
     page = w.tabs.widget(idx)
     assert page.findChild(QTabWidget) is not None, \
         "PASS tab debe contener un QTabWidget interno del PassDashboardDialog"
+
+
+from player.centro_tecnico.inspector_widget import InspectorWidget
+
+
+def test_inspector_widget_builds_without_db(app):
+    iw = InspectorWidget(repo_db=None, worker=None)
+    assert iw is not None    # no debe lanzar sin repo_db
+
+
+def test_inspector_tab_is_inspector_widget(app):
+    w = CentroTecnicoWindow()
+    idx = next(i for i in range(w.tabs.count()) if "Inspector" in w.tabs.tabText(i))
+    assert isinstance(w.tabs.widget(idx), InspectorWidget)

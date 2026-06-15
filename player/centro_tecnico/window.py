@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
 
 from player.centro_tecnico.stats_widget import StatsWidget
 from player.centro_tecnico.coverage_widget import CoverageWidget
+from player.centro_tecnico.inspector_widget import InspectorWidget
 from player.technical_monitor import TechnicalMonitorWidget
 
 
@@ -29,7 +30,8 @@ class CentroTecnicoWindow(QMainWindow):
         self.tabs.addTab(self._build_pass_page(), "✅ PASS / SASS-C")
         self.monitor_tab = TechnicalMonitorWidget(self)
         self.tabs.addTab(self.monitor_tab, "📡 Monitor ATSEP")
-        self.tabs.addTab(self._inspector_placeholder(), "🔬 Inspector")  # Task 12
+        self.inspector_tab = InspectorWidget(self._repo_db, self._worker, self)
+        self.tabs.addTab(self.inspector_tab, "🔬 Inspector")
         self.tabs.addTab(self.coverage_tab, "🛰 Cobertura")
 
         self._build_statusbar()
@@ -43,9 +45,6 @@ class CentroTecnicoWindow(QMainWindow):
         dialog.tabs.setParent(container)
         layout.addWidget(dialog.tabs)
         return container
-
-    def _inspector_placeholder(self):
-        return QWidget()
 
     def _build_statusbar(self):
         bar = QStatusBar()
