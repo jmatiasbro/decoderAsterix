@@ -979,6 +979,9 @@ class MainWindow(QMainWindow):
         self.act_calibracion = menu_config.addAction(
             "Análisis y Calibración (Técnico)…", self._abrir_calibracion)
         self.act_calibracion.setEnabled(self.profile_manager.get_rol() == "tecnico")
+        self.act_centro_tecnico = menu_config.addAction(
+            "Centro Técnico ATSEP…", self._abrir_centro_tecnico)
+        self.act_centro_tecnico.setEnabled(self.profile_manager.get_rol() == "tecnico")
 
         # Menú Mapas — capas generadas dinámicamente desde la base ATM (atm.duckdb)
         from player import atm_db, atm_maps
@@ -3085,6 +3088,8 @@ class MainWindow(QMainWindow):
         # La calibración de registración es exclusiva del rol técnico
         if hasattr(self, 'act_calibracion'):
             self.act_calibracion.setEnabled(rol == "tecnico")
+        if hasattr(self, 'act_centro_tecnico'):
+            self.act_centro_tecnico.setEnabled(rol == "tecnico")
         self.radar.update()
         print(f"[ROL] Cambiado en caliente a: {rol}")
 
@@ -3108,6 +3113,21 @@ class MainWindow(QMainWindow):
         self._calib_dialog.accepted.connect(self._recargar_sensores_calib)
         self._calib_dialog.finished.connect(lambda _=0: setattr(self, '_calib_dialog', None))
         self._calib_dialog.show()
+
+    def _abrir_centro_tecnico(self):
+        """Abre el Centro Técnico ATSEP (solo rol técnico)."""
+        from player.centro_tecnico.window import CentroTecnicoWindow
+        repo_db = getattr(self, "repo_db", None)
+        worker = getattr(self, "worker", None)
+        records = []
+        try:
+            if hasattr(self, "track_manager") and self.track_manager:
+                records = [p.to_dict() for p in self.track_manager.all_plots()]
+        except Exception:
+            records = []
+        self._centro_tecnico_win = CentroTecnicoWindow(
+            repo_db=repo_db, worker=worker, session_records=records, parent=self)
+        self._centro_tecnico_win.show()
 
     def _recargar_sensores_calib(self):
         """Recarga sensores con los offsets recién guardados por el calibrador."""
