@@ -75,3 +75,23 @@ def compute_coverage(plots, radar_lat, radar_lon, *, percentile=95, bands=FL_BAN
         levels[band] = ranges
     return CoverageResult(radar_lat=radar_lat, radar_lon=radar_lon,
                           levels=levels, plot_count=count)
+
+
+def level_polygon_latlon(result, fl):
+    """Anillo [(lat, lon), ...] cerrado para la banda fl, o [] si vacía."""
+    ranges = result.levels.get(fl)
+    if not ranges:
+        return []
+    ring = []
+    for az in range(360):
+        r_nm = ranges[az]
+        if r_nm <= 0.0:
+            continue
+        lat, lon = GeoTools.vincenty_forward(
+            result.radar_lat, result.radar_lon, float(az), GeoTools.nm_to_meters(r_nm))
+        ring.append((lat, lon))
+    if len(ring) >= 3:
+        ring.append(ring[0])             # cerrar
+    else:
+        return []
+    return ring

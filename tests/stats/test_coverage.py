@@ -46,3 +46,23 @@ def test_compute_coverage_requires_min_plots():
     plots = [(_point_at(rlat, rlon, 10.0, 50.0) + ("50",)) for _ in range(3)]
     res = compute_coverage(plots, rlat, rlon)
     assert all(r == 0.0 for r in res.levels[50])
+
+from analysis.coverage import level_polygon_latlon
+
+def test_level_polygon_closed_ring():
+    rlat, rlon = -31.31, -64.21
+    plots = []
+    for az in range(0, 360, 2):           # cobertura uniforme ~80 NM
+        plat, plon = _point_at(rlat, rlon, float(az), 80.0)
+        plots.append((plat, plon, "150"))
+    res = compute_coverage(plots, rlat, rlon)
+    ring = level_polygon_latlon(res, 150)
+    assert len(ring) >= 4
+    assert ring[0] == ring[-1]            # anillo cerrado
+    # cada vértice ~80 NM del radar
+    d_m, _ = GeoTools.calculate_distance_and_azimuth(rlat, rlon, *ring[0])
+    assert abs(GeoTools.meters_to_nm(d_m) - 80.0) < 3.0
+
+def test_level_polygon_empty_band_returns_empty():
+    res = compute_coverage([], -31.31, -64.21)
+    assert level_polygon_latlon(res, 100) == []
