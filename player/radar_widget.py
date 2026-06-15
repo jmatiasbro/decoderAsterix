@@ -875,6 +875,7 @@ class RadarWidget(_RadarBase):
         from analysis.stca_analyzer import STCA_Engine
         from player.stca_dialog import STCADialog
         from player.apw_dialog import APWDialog
+        from player.msaw_dialog import MSAWDialog
         from analysis.quality_manager import QualityManager
         self.stca_engine = STCA_Engine()
         self.stca_dialog = STCADialog(self)
@@ -882,6 +883,12 @@ class RadarWidget(_RadarBase):
         self.apw_dialog = APWDialog(self)
         self.apw_habilitado = True
         self.apw_activos = []
+        self.msaw_dialog = MSAWDialog(self)
+        self.msaw_habilitado = True
+        self.msaw_activos = []
+        self.msaw_exentos = set()      # categorías de vuelo inhibidas (configurable)
+        self._msaw_zones = None
+        self._msaw_params = None
         self.quality_manager = QualityManager()
         # Silenciar el logger interno del QM: registra en cada ciclo y satura el
         # archivo. El registro de eventos de calidad ahora es deduplicado y vive
@@ -1053,9 +1060,12 @@ class RadarWidget(_RadarBase):
                 self.stca_dialog.hide()
             if hasattr(self, 'apw_dialog') and self.apw_dialog:
                 self.apw_dialog.hide()
+            if hasattr(self, 'msaw_dialog') and self.msaw_dialog:
+                self.msaw_dialog.hide()
             self.tracks_en_alerta = set()
             self.conflictos_activos = []
             self.apw_activos = []
+            self.msaw_activos = []
             self.logged_conflicts = {}
             
             self.update()
@@ -1101,9 +1111,12 @@ class RadarWidget(_RadarBase):
             self.stca_dialog.hide()
         if hasattr(self, 'apw_dialog') and self.apw_dialog:
             self.apw_dialog.hide()
+        if hasattr(self, 'msaw_dialog') and self.msaw_dialog:
+            self.msaw_dialog.hide()
         self.tracks_en_alerta = set()
         self.conflictos_activos = []
         self.apw_activos = []
+        self.msaw_activos = []
         self.logged_conflicts = {}
         
         self.update()
@@ -2323,6 +2336,7 @@ class RadarWidget(_RadarBase):
             self.apw_activos = []
             if hasattr(self, 'apw_dialog') and self.apw_dialog:
                 self.apw_dialog.actualizar_alertas([])
+            self.evaluar_msaw()
             return
 
         import datetime
@@ -2337,6 +2351,38 @@ class RadarWidget(_RadarBase):
                 self.apw_dialog.actualizar_alertas(alertas, self)
         except Exception as e:
             print(f"[APW ERROR] Error al evaluar APW: {e}")
+        self.evaluar_msaw()
+
+    def evaluar_msaw(self):
+        """Evalúa MSAW (altitud mínima de sector) para las pistas en TMA."""
+        if not getattr(self, 'msaw_habilitado', True):
+            self.msaw_activos = []
+            if getattr(self, 'msaw_dialog', None):
+                self.msaw_dialog.actualizar_alertas([])
+            return
+        try:
+            from player.msaw.engine import evaluar_msaw as _engine
+            if self._msaw_zones is None:
+                from player.msaw import data as _md
+                self._msaw_zones = _md.msa_zones()
+            if self._msaw_params is None:
+                from player import atm_db
+                self._msaw_params = atm_db.msaw_params()
+            if not self._msaw_zones:
+                self.msaw_activos = []
+                return
+            # Tasa vertical: el motor la lee de track.vertical_rate (ft/min).
+            for t in self.tracks.values():
+                try:
+                    t.vertical_rate = self._estimar_vrate(t)
+                except Exception:
+                    t.vertical_rate = 0.0
+            self.msaw_activos = _engine(self.tracks.values(), self._msaw_zones,
+                                        self._msaw_params, self.msaw_exentos)
+            if getattr(self, 'msaw_dialog', None):
+                self.msaw_dialog.actualizar_alertas(self.msaw_activos, self)
+        except Exception as e:
+            print(f"[MSAW ERROR] {e}")
 
     def evaluar_stca(self):
         """
@@ -3504,6 +3550,15 @@ class RadarWidget(_RadarBase):
                         alertas_dict[tid] = (tipo, eta, 'APW')
                 else:
                     alertas_dict[tid] = (tipo, eta, 'APW')
+
+            # Combinar con alertas MSAW activas (misma severidad VIOLATION/PREDICTED)
+            for a in getattr(self, 'msaw_activos', []):
+                tid = a.track_id
+                if tid in alertas_dict:
+                    if alertas_dict[tid][0] != 'VIOLATION' and a.tipo == 'VIOLATION':
+                        alertas_dict[tid] = (a.tipo, a.eta_s, 'MSAW')
+                else:
+                    alertas_dict[tid] = (a.tipo, a.eta_s, 'MSAW')
 
             all_active_plots = list(self.tracks.items()) + list(self.pending_tracks.items())
 
