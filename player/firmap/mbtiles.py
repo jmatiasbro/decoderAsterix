@@ -13,7 +13,13 @@ def _tms_y(z: int, y: int) -> int:
 
 class MBTilesReader:
     def __init__(self, path: str):
-        self.conn = sqlite3.connect(path)
+        # Solo-lectura + tolerante a locks (por si el seeder está escribiendo).
+        try:
+            uri = "file:" + path.replace("\\", "/") + "?mode=ro"
+            self.conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
+        except sqlite3.OperationalError:
+            self.conn = sqlite3.connect(path, check_same_thread=False)
+        self.conn.execute("PRAGMA busy_timeout=2000")
 
     def get_tile(self, z: int, x: int, y: int):
         """Devuelve los bytes del tile XYZ (z,x,y) o None si no existe."""

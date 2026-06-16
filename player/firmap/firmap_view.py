@@ -7,7 +7,7 @@ sobreescribiendo `draw_overlay`.
 import math
 import os
 
-from PyQt6.QtCore import Qt, QPointF, pyqtSignal
+from PyQt6.QtCore import Qt, QPointF, QRect, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPixmap, QFont
 from PyQt6.QtWidgets import QWidget
 
@@ -118,7 +118,8 @@ class FirMapView(QWidget):
         return best
 
     # ---------- Tiles ----------
-    def _tile_pixmap(self, z, x, y):
+    def _raw_tile(self, z, x, y):
+        """Pixmap exacto del tile (z,x,y) o None. Cacheado."""
         key = (z, x, y)
         if key in self._cache:
             return self._cache[key]
@@ -131,6 +132,37 @@ class FirMapView(QWidget):
                     pm = None
         self._cache[key] = pm
         return pm
+
+    def _tile_pixmap(self, z, x, y):
+        """Tile (z,x,y) con overzoom: si falta, recorta del tile padre escalado.
+
+        Cubre el hueco entre el zoom nacional (z<=11) y el de aeropuerto (z>=13).
+        """
+        pm = self._raw_tile(z, x, y)
+        if pm is not None:
+            return pm
+        ckey = ("oz", z, x, y)
+        if ckey in self._cache:
+            return self._cache[ckey]
+        # Subir por la pirámide buscando un ancestro presente.
+        for d in range(1, 9):
+            sub = TILE >> d
+            if sub < 1:
+                break
+            pz = z - d
+            if pz < self.min_zoom:
+                break
+            parent = self._raw_tile(pz, x >> d, y >> d)
+            if parent is None:
+                continue
+            cx = (x & ((1 << d) - 1)) * sub
+            cy = (y & ((1 << d) - 1)) * sub
+            crop = parent.copy(QRect(cx, cy, sub, sub)).scaled(
+                TILE, TILE, Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            self._cache[ckey] = crop
+            return crop
+        return None
 
     def _lonlat_to_screen(self, lat, lon):
         cpx, cpy = wm.lonlat_to_pixel(self.center_lon, self.center_lat, self.zoom)
