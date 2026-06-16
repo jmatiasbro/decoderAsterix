@@ -17,6 +17,7 @@ import os
 import sys
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from player.firmap import webmercator as wm  # noqa: E402
@@ -49,32 +50,48 @@ def fetch(url, retries=3, backoff=2.0):
     return None
 
 
-def seed_bbox(writer, url_tpl, bbox, z_min, z_max, delay, label):
+def seed_bbox(writer, url_tpl, bbox, z_min, z_max, delay, label, workers=12):
     lon_min, lat_min, lon_max, lat_max = bbox
     total = sum(wm.count_tiles_for_bbox(*bbox, z) for z in range(z_min, z_max + 1))
-    print(f"[{label}] z{z_min}..{z_max}: ~{total} tiles")
-    done = skipped = failed = 0
+    print(f"[{label}] z{z_min}..{z_max}: ~{total} tiles ({workers} hilos)")
+
+    # Lista de tiles faltantes (la lectura de la DB es solo del hilo principal).
+    pending = []
+    skipped = 0
     for z in range(z_min, z_max + 1):
         x0, y0, x1, y1 = wm.tile_range_for_bbox(lon_min, lat_min, lon_max, lat_max, z)
         for x in range(x0, x1 + 1):
             for y in range(y0, y1 + 1):
                 if writer.has_tile(z, x, y):
                     skipped += 1
-                    continue
-                url = url_tpl.format(z=z, x=x, y=y)
-                try:
-                    data = fetch(url)
-                    if data:
-                        writer.put_tile(z, x, y, data)
-                        done += 1
-                        if done % 200 == 0:
-                            writer.commit()
-                            print(f"  ...{done} bajados, {skipped} saltados, {failed} fallidos")
-                        time.sleep(delay)
-                except Exception as e:
+                else:
+                    pending.append((z, x, y))
+
+    done = failed = 0
+
+    def _dl(zxy):
+        z, x, y = zxy
+        try:
+            return zxy, fetch(url_tpl.format(z=z, x=x, y=y))
+        except Exception:
+            return zxy, None
+
+    # Los workers solo bajan (red); la escritura en SQLite queda en el hilo principal.
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for (z, x, y), data in ex.map(_dl, pending):
+            try:
+                if data:
+                    writer.put_tile(z, x, y, data)
+                    done += 1
+                    if done % 200 == 0:
+                        writer.commit()
+                        print(f"  ...{done}/{len(pending)} bajados, {skipped} saltados, {failed} fallidos")
+                else:
                     failed += 1
-                    print(f"  ! falló z{z}/{x}/{y}: {e}")
-        writer.commit()
+            except Exception as e:
+                failed += 1
+                print(f"  ! falló z{z}/{x}/{y}: {e}")
+    writer.commit()
     print(f"[{label}] OK: {done} nuevos, {skipped} ya estaban, {failed} fallidos")
 
 
@@ -89,6 +106,7 @@ def main():
     ap.add_argument("--z-airport", type=int, default=16)
     ap.add_argument("--z-airport-min", type=int, default=13)
     ap.add_argument("--delay", type=float, default=0.1, help="seg entre requests")
+    ap.add_argument("--workers", type=int, default=12, help="descargas concurrentes")
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
@@ -98,7 +116,7 @@ def main():
                         minzoom=args.z_nation_min, maxzoom=max(args.z_airport, args.z_nation))
 
     seed_bbox(writer, args.url, ARGENTINA_BBOX, args.z_nation_min, args.z_nation,
-              args.delay, "NACIONAL")
+              args.delay, "NACIONAL", args.workers)
 
     for spec in args.airport:
         try:
@@ -109,7 +127,7 @@ def main():
         d = km_to_deg(rkm)
         bbox = (lon - d, lat - d, lon + d, lat + d)
         seed_bbox(writer, args.url, bbox, args.z_airport_min, args.z_airport,
-                  args.delay, f"AERO {lat:.3f},{lon:.3f}")
+                  args.delay, f"AERO {lat:.3f},{lon:.3f}", args.workers)
 
     writer.close()
     print(f"Listo -> {args.out}")
