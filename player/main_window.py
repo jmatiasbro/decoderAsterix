@@ -3136,8 +3136,13 @@ class MainWindow(QMainWindow):
                 })
         except Exception:
             records = []
+        # Misma config que el PASS de la consola: registración/altimetría + RPM reales,
+        # para que el PASS de la suite coincida con el de la consola.
+        profile_config = getattr(getattr(self, "profile_manager", None), "profile", None)
+        sensor_rpms = dict(getattr(self, "_sensor_rpms", {}) or {})
         self._centro_tecnico_win = CentroTecnicoWindow(
-            repo_db=repo_db, worker=worker, session_records=records, parent=self)
+            repo_db=repo_db, worker=worker, session_records=records,
+            profile_config=profile_config, sensor_rpms=sensor_rpms, parent=self)
         self._centro_tecnico_win.show()
 
     def _recargar_sensores_calib(self):

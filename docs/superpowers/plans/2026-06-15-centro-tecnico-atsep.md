@@ -68,7 +68,7 @@ def test_classify_fl_buckets():
     assert classify_fl("120") == 100    # 125 > x >= 75 -> 100
     assert classify_fl("300") == 300
     assert classify_fl("400") == 300    # >=275 -> 300
-    assert classify_fl("25000") == 300  # pies: 25000/100=250 -> banda 250? -> ver abajo
+    assert classify_fl("25000") == 250  # pies: 25000/100=250 -> banda 250
 
 def test_classify_fl_feet_normalization():
     # valores > 450 se interpretan como pies y se dividen por 100

@@ -165,7 +165,7 @@ class IndraRDCUReader:
 class DataEngine:
     """Motor de decodificación ASTERIX — SIN dependencias Qt."""
     
-    def __init__(self, sensores: Dict = None, cache_dir: str = None, profile_config: Dict = None):
+    def __init__(self, sensores: Dict = None, cache_dir: str = None, profile_config: Dict = None, repo_db: Any = None):
         self.router = AsterixRouter()
         self.sensores = sensores or {}
         # Toggle global de la corrección de registración por sensor (Fase 4).
@@ -187,10 +187,11 @@ class DataEngine:
         self.on_radar_health_changed: Optional[Callable[[Tuple[int, int], Dict], None]] = None
         
         self._running = True
-
+ 
         # Inicializar repositorio analítico DuckDB
         from storage.duckdb_repo import DuckDBRepository
-        self.repo_db = DuckDBRepository()
+        self.repo_db = repo_db or DuckDBRepository()
+        self.bulk_import_mode = False
 
         # Arquitectura dual de ingestión
         self.ingestion_mode = "LIVE"
@@ -450,7 +451,8 @@ class DataEngine:
                 # CAT065 SDPS Service Status Reports: mensaje de estado, sin track.
                 # Se persiste para el analizador/inspector y se marca en la timeline.
                 import time
-                self.repo_db.guardar_plot(rec)
+                if not self.bulk_import_mode:
+                    self.repo_db.guardar_plot(rec)
                 sac, sic = rec.get('sac'), rec.get('sic')
                 if sac is not None and sic is not None:
                     t_val = rec.get('timestamp') or rec.get('time') or (
@@ -467,7 +469,8 @@ class DataEngine:
 
             if cat in (23, 34):
                 import time
-                self.repo_db.guardar_plot(rec)
+                if not self.bulk_import_mode:
+                    self.repo_db.guardar_plot(rec)
                 sac, sic = rec.get('sac'), rec.get('sic')
                 if sac is not None and sic is not None:
                     t_val = rec.get('timestamp') or rec.get('time') or (rec.get('pcap_time') % 86400.0 if rec.get('pcap_time') is not None else time.time())
@@ -541,7 +544,8 @@ class DataEngine:
                 return
 
             # Guardar el plot proyectado con sus coordenadas lat/lon correctas
-            self.repo_db.guardar_plot(plot.to_dict())
+            if not self.bulk_import_mode:
+                self.repo_db.guardar_plot(plot.to_dict())
 
             try:
                 parts = plot.sac_sic.split('/')
@@ -717,6 +721,7 @@ class DataEngine:
         Retorna (plots, duración total, sensores_detectados).
         """
         self.set_playback_mode(True)
+        self.bulk_import_mode = True
         if isinstance(pcap_files, str):
             pcap_files = [pcap_files]
             
@@ -733,8 +738,10 @@ class DataEngine:
             if cached_plots is not None:
                 print(f"[DataEngine] Usando caché para {pcap_file} ({len(cached_plots)} plots)")
                 all_plots.extend(cached_plots)
+                if not self.bulk_import_mode:
+                    for plot in cached_plots:
+                        self.repo_db.guardar_plot(plot.to_dict())
                 for plot in cached_plots:
-                    self.repo_db.guardar_plot(plot.to_dict())
                     try:
                         parts = plot.sac_sic.split('/')
                         sk = (int(parts[0]), int(parts[1]))
@@ -809,40 +816,22 @@ class DataEngine:
                     print(f"[DataEngine] Error en escaneo RDCU para {pcap_file}: {rdcu_err}")
 
             if not es_rdcu:
+                success = False
+                total_pkts = 0
+
+                # 1. Intentar como PCAP estándar (tanto apertura como iteración)
+                f = None
                 try:
                     f = open(pcap_file, 'rb')
                     pcap = dpkt.pcap.Reader(f)
-                except Exception as e:
-                    try:
-                        if f: f.close()
-                        f = open(pcap_file, 'rb')
-                        pcap = dpkt.pcapng.Reader(f)
-                    except Exception as e2:
-                        if f: f.close()
-                        # Fallback a decodificador binario directo (raw / wrapped)
-                        es_raw = True
-                        try:
-                            self._scan_raw(
-                                pcap_file,
-                                file_idx,
-                                total_files,
-                                10000,
-                                proy_cache,
-                                sensores_vistos,
-                                plots_file
-                            )
-                        except Exception as raw_err:
-                            print(f"[DataEngine] Error en escaneo raw fallback para {pcap_file}: {raw_err}")
-            
-            if not es_raw:
-                try:
-                    file_size = os.path.getsize(pcap_file)
-                    estimated_total = max(1, file_size // 200)
-                except Exception:
-                    estimated_total = 10000
-                print(f"[DataEngine] Escaneando archivo PCAP {file_idx + 1}/{total_files}: {pcap_file}")
 
-                try:
+                    try:
+                        file_size = os.path.getsize(pcap_file)
+                        estimated_total = max(1, file_size // 200)
+                    except Exception:
+                        estimated_total = 10000
+
+                    print(f"[DataEngine] Escaneando archivo PCAP {file_idx + 1}/{total_files}: {pcap_file}")
                     datalink_type = getattr(pcap, 'datalink', lambda: 1)()
                     is_sll = (datalink_type == 113) # DLT_LINUX_SLL
 
@@ -877,16 +866,93 @@ class DataEngine:
                                 self._procesar_registro(rec, proy_cache, sensores_vistos, plots_file)
                         except Exception:
                             continue
+                    success = True
                 except Exception as e:
-                    print(f"[DataEngine] Error procesando loop de decodificación PCAP: {e}")
+                    print(f"[DataEngine] Error procesando como PCAP estándar: {e}. Reintentando como PCAPNG...")
                 finally:
                     if f:
                         try: f.close()
                         except: pass
 
+                # 2. Si falló, intentar PCAPNG
+                if not success and self._running:
+                    plots_file.clear()
+                    total_pkts = 0
+                    f = None
+                    try:
+                        f = open(pcap_file, 'rb')
+                        pcap = dpkt.pcapng.Reader(f)
+
+                        try:
+                            file_size = os.path.getsize(pcap_file)
+                            estimated_total = max(1, file_size // 200)
+                        except Exception:
+                            estimated_total = 10000
+
+                        print(f"[DataEngine] Escaneando archivo PCAPNG {file_idx + 1}/{total_files}: {pcap_file}")
+                        datalink_type = getattr(pcap, 'datalink', lambda: 1)()
+                        is_sll = (datalink_type == 113) # DLT_LINUX_SLL
+
+                        for timestamp, buf in pcap:
+                            if not self._running:
+                                break
+                            try:
+                                if is_sll:
+                                    packet = dpkt.sll.SLL(buf)
+                                else:
+                                    packet = dpkt.ethernet.Ethernet(buf)
+                                    
+                                if not isinstance(packet.data, dpkt.ip.IP): continue
+                                ip = packet.data
+                                if not isinstance(ip.data, dpkt.udp.UDP): continue
+                                udp = ip.data
+                                asterix_payload = udp.data
+                                
+                                if len(asterix_payload) < 3: continue
+                                total_pkts += 1
+
+                                if total_pkts % 1000 == 0 and self.on_progress:
+                                    progreso_base = int((file_idx / total_files) * estimated_total)
+                                    progreso_actual = progreso_base + min(estimated_total // total_files, total_pkts // total_files)
+                                    self.on_progress(progreso_actual, estimated_total)
+
+                                records = self.router.procesar_paquete_udp(asterix_payload)
+                                if not records: continue
+
+                                for rec in records:
+                                    rec['pcap_time'] = timestamp  # PCAP arrival epoch
+                                    self._procesar_registro(rec, proy_cache, sensores_vistos, plots_file)
+                            except Exception:
+                                continue
+                        success = True
+                    except Exception as e:
+                        print(f"[DataEngine] Error procesando como PCAPNG: {e}. Reintentando con fallback raw...")
+                    finally:
+                        if f:
+                            try: f.close()
+                            except: pass
+
+                # 3. Si falló, intentar fallback a decodificador binario directo (raw / wrapped)
+                if not success and self._running:
+                    plots_file.clear()
+                    try:
+                        self._scan_raw(
+                            pcap_file,
+                            file_idx,
+                            total_files,
+                            10000,
+                            proy_cache,
+                            sensores_vistos,
+                            plots_file
+                        )
+                    except Exception as raw_err:
+                        print(f"[DataEngine] Error en escaneo raw fallback para {pcap_file}: {raw_err}")
+
             if plots_file:
                 self._write_cache(pcap_file, plots_file)
                 all_plots.extend(plots_file)
+
+        self.bulk_import_mode = False
 
         # Disparar callback para todos los sensores detectados para combo box y autocentrado
         if self.on_sensor_detected:

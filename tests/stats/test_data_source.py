@@ -32,10 +32,13 @@ def db(tmp_path):
     con = duckdb.connect(str(p))
     con.execute("""CREATE TABLE asterix_plots(
         timestamp DOUBLE, sac_sic VARCHAR, lat DOUBLE, lon DOUBLE,
-        flight_level VARCHAR, mode3a VARCHAR, raw_range DOUBLE, raw_azimuth DOUBLE)""")
+        flight_level VARCHAR, mode3a VARCHAR, raw_range DOUBLE, raw_azimuth DOUBLE,
+        category INTEGER, callsign VARCHAR, mode_s VARCHAR, track_id VARCHAR, altitude_ft DOUBLE,
+        ground_speed DOUBLE, track_angle DOUBLE, vertical_rate DOUBLE,
+        garbled BOOLEAN, frequency DOUBLE, pd DOUBLE)""")
     con.execute("INSERT INTO asterix_plots VALUES "
-                "(100.0,'25/01',-31.0,-64.0,'100','7000',120.0,45.0),"
-                "(200.0,'07/10',-30.0,-63.0,'150','7001',80.0,90.0)")
+                "(100.0,'25/01',-31.0,-64.0,'100','7000',120.0,45.0,48,'ARG123','7C1234','track_1',10000.0,250.0,180.0,0.0,false,1030.0,100.0),"
+                "(200.0,'07/10',-30.0,-63.0,'150','7001',80.0,90.0,48,'ARG456','7C5678','track_2',15000.0,300.0,90.0,500.0,false,1030.0,100.0)")
     con.close()
     return str(p)
 
@@ -45,7 +48,10 @@ def test_duckdb_source_load_and_radars(db):
     rows = src.load(radars=["25/01"])
     assert len(rows) == 1 and rows[0]["timestamp"] == 100.0
     assert set(rows[0].keys()) >= {"sac_sic","timestamp","lat","lon",
-                                   "flight_level","mode3a","raw_range","raw_azimuth"}
+                                   "flight_level","mode3a","raw_range","raw_azimuth",
+                                   "category","callsign","mode_s","altitude_ft",
+                                   "ground_speed","track_angle","vertical_rate",
+                                   "garbled","frequency","pd"}
 
 
 def test_duckdb_source_reuses_injected_connection():
@@ -55,9 +61,12 @@ def test_duckdb_source_reuses_injected_connection():
     con = duckdb.connect(":memory:")
     con.execute("CREATE TABLE asterix_plots(timestamp DOUBLE, sac_sic VARCHAR, "
                 "lat DOUBLE, lon DOUBLE, flight_level VARCHAR, mode3a VARCHAR, "
-                "raw_range DOUBLE, raw_azimuth DOUBLE)")
+                "raw_range DOUBLE, raw_azimuth DOUBLE, category INTEGER, "
+                "callsign VARCHAR, mode_s VARCHAR, track_id VARCHAR, altitude_ft DOUBLE, "
+                "ground_speed DOUBLE, track_angle DOUBLE, vertical_rate DOUBLE, "
+                "garbled BOOLEAN, frequency DOUBLE, pd DOUBLE)")
     con.execute("INSERT INTO asterix_plots VALUES "
-                "(1.0,'25/01',-31.0,-64.0,'100','7000',120.0,45.0)")
+                "(1.0,'25/01',-31.0,-64.0,'100','7000',120.0,45.0,48,'ARG123','7C1234','track_1',10000.0,250.0,180.0,0.0,false,1030.0,100.0)")
     src = DuckDBSource(db_path="/nonexistent/should-not-be-opened.duckdb", conn=con)
     assert src.radars() == ["25/01"]
     rows = src.load(radars=["25/01"])

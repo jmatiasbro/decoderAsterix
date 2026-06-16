@@ -17,10 +17,26 @@ class Metric:
     dims: tuple           # ids de dimensión admitidos
 
 
+ALL_DIMS = ("radar", "hour", "mode3a", "fl_band", "category", "callsign", "mode_s", "garbled")
+
+
 METRICS = [
-    Metric("count",     "Nº detecciones",   "",          "count", ("radar", "hour", "mode3a", "fl_band")),
-    Metric("avg_range", "Rango medio (NM)", "raw_range", "avg",   ("radar", "hour", "fl_band")),
-    Metric("p95_range", "Rango p95 (NM)",   "raw_range", "p95",   ("radar", "hour", "fl_band")),
+    Metric("count",     "Nº detecciones",   "",          "count", ALL_DIMS),
+    Metric("avg_range", "Rango medio (NM)", "raw_range", "avg",   ALL_DIMS),
+    Metric("p95_range", "Rango p95 (NM)",   "raw_range", "p95",   ALL_DIMS),
+    Metric("raw_azimuth", "Azimut (°)", "raw_azimuth", "avg", ALL_DIMS),
+    Metric("raw_range", "Rango (NM)", "raw_range", "avg", ALL_DIMS),
+    Metric("timestamp", "Tiempo (s)", "timestamp", "avg", ALL_DIMS),
+    Metric("altitude_ft", "Modo C / Altitud (ft)", "altitude_ft", "avg", ALL_DIMS),
+    Metric("mode3a", "Modo A / SSR (Código)", "mode3a", "count", ALL_DIMS),
+    Metric("pd", "Probabilidad de Detección (Pd, %)", "pd", "avg", ALL_DIMS),
+    Metric("garbled", "Garbling", "garbled", "avg", ALL_DIMS),
+    Metric("sac_sic", "SIC/SAC", "sac_sic", "count", ALL_DIMS),
+    Metric("mode_s", "Aircraft Address (Mode S)", "mode_s", "count", ALL_DIMS),
+    Metric("callsign", "Callsign", "callsign", "count", ALL_DIMS),
+    Metric("lat", "Latitud (°)", "lat", "avg", ALL_DIMS),
+    Metric("lon", "Longitud (°)", "lon", "avg", ALL_DIMS),
+    Metric("frequency", "Frecuencia (MHz)", "frequency", "avg", ALL_DIMS),
 ]
 
 
@@ -49,6 +65,10 @@ DIMENSIONS = {
     "hour":   _hour_bucket,
     "mode3a": lambda r: r.get("mode3a") or "—",
     "fl_band": _fl_band,
+    "category": lambda r: str(r.get("category")) if r.get("category") is not None else "—",
+    "callsign": lambda r: r.get("callsign") or "—",
+    "mode_s": lambda r: r.get("mode_s") or "—",
+    "garbled": lambda r: "Garbled" if r.get("garbled") else "Normal",
 }
 
 
