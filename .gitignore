@@ -10,7 +10,9 @@ venv/
 
 # Bases de datos / artefactos de análisis
 *.duckdb
+*.duckdb.wal
 *_fallback_*.duckdb
+*_fallback_*.duckdb.wal
 
 # Datos de runtime / config local
 config/udp_presets.json
