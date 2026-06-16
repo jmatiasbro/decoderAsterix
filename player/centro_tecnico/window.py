@@ -261,13 +261,10 @@ class CentroTecnicoWindow(QMainWindow):
         # 1) Archivo importado para análisis -> esos plots. 2) Sesión actual -> los
         # mismos plots en memoria que la consola. 3) Fallback -> la fuente activa.
         plot_dicts = getattr(self, "_imported_records", None)
-        origen = "importado"
         if not plot_dicts:
             plot_dicts = self._console_plots()
-            origen = "worker._plots (consola)"
         if not plot_dicts:
             plot_dicts = self.source_provider().load()
-            origen = "DuckDB/fuente"
         if not plot_dicts:
             QMessageBox.warning(self, "Análisis PASS", "No hay datos cargados para analizar.")
             return
@@ -287,8 +284,6 @@ class CentroTecnicoWindow(QMainWindow):
         # y analyze_data estima el período real de los datos (~detección de antena).
         raw_rpms = dict(getattr(self.parent(), "_sensor_rpms", {}) or {})
         rpms = {k: v for k, v in raw_rpms.items() if v and abs(v - 12.0) > 1e-6}
-        print(f"[Suite PASS v2] origen={origen} | plots={len(plot_dicts)} | "
-              f"rpms_usados={rpms}")
         self.pass_calc_worker = TechnicalPASSAnalysisWorker(
             plot_dicts, sensores, rpms, self)
         self.pass_calc_worker.finished.connect(self._on_lazy_pass_finished)
