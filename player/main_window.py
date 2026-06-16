@@ -3745,7 +3745,8 @@ class MainWindow(QMainWindow):
             return
         name = "MAGVAR::ISOGONAS"
         if on:
-            path = "data/magnetic/isogonic_lines.geojson"
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            path = os.path.join(base_dir, "data", "magnetic", "isogonic_lines.geojson")
             if not os.path.exists(path):
                 print("[MAGVAR] Falta data/magnetic/isogonic_lines.geojson "
                       "(corré tools/gen_declination_grid.py)")
