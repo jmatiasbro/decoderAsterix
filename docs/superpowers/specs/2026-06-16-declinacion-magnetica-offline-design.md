@@ -38,6 +38,8 @@ agregan llamadas de red**: una caja ATC offline no debe acceder a internet.
 - Para cada nodo llama a `pygeomag` (`alt=0`, época = año decimal actual) y toma
   `res.d` (grados, **oeste negativo**).
 - Escribe `data/magnetic/declination_grid.json`.
+- Además genera la cartografía de isógonas (ver componente 5):
+  `data/magnetic/isogonic_lines.geojson`.
 - Se re-ejecuta manualmente para actualizar la época. Requiere `pygeomag` (solo
   en tiempo de generación, no en runtime).
 
@@ -77,6 +79,29 @@ Versionado en git. Estructura:
 
 Los consumidores (RBL y rumbos del PPI en `radar_widget.py`) no se modifican.
 
+### 5. Capa visual de líneas isógonas
+Curvas de igual declinación (como la imagen de referencia), dibujadas en **PPI +
+satélite** reusando el pipeline de cartografía.
+
+- **Extracción de contornos** — `player/geo/isogonic.py`
+  Marching squares en Python puro: dada la grilla, devuelve polilíneas
+  `[(lat,lon),...]` por nivel entero (cada **1°**, p. ej. de +5° a −12° según el
+  rango real). Sin dependencias.
+- **Artefacto** — `data/magnetic/isogonic_lines.geojson`
+  Generado por `tools/gen_declination_grid.py`. `LineString` por contorno
+  (property `layer = "ISOGONAS"`) + `Point` `type:"text"` con la etiqueta del
+  nivel (`"-10°"`) en el medio de cada contorno. Formato ya soportado por
+  `VideoMapManager.load_geojson`.
+- **Toggle** — acción de menú en `main_window.py` (junto a áreas / sectores MSA):
+  carga el geojson como capa `MAGVAR::ISOGONAS` (`tipo="TACTICO"`, color propio
+  p. ej. magenta `#FF40FF` para no chocar con áreas/aerovías) y reproyecta.
+  Al ser una capa visible del `map_manager`, el PPI la pinta (reproyectada) y la
+  vista FIR vía `build_maps` la incluye **automáticamente en ambas**. Off → se
+  quita la capa.
+
+No requiere tocar `radar_widget`/`firmap` salvo, si hace falta, distinguir la
+capa por nombre para estilo (línea fina, no relleno).
+
 ## Tests — `tests/geo/test_declination_grid.py`
 - **Interpolación vs WMM**: para una muestra de coordenadas dentro del bbox, la
   grilla interpolada coincide con `pygeomag` dentro de ~0.1° (se omite si
@@ -86,9 +111,10 @@ Los consumidores (RBL y rumbos del PPI en `radar_widget.py`) no se modifican.
   grilla; con grilla ausente usa el offset estático. Se simula la ausencia de
   cada fuente.
 - **Carga**: archivo faltante → `declinacion` devuelve `None` sin excepción.
+- **Isógonas** (`tests/geo/test_isogonic.py`): marching squares sobre una grilla
+  sintética con gradiente conocido produce polilíneas en los niveles esperados y
+  monótonas; cada contorno cae cerca del valor de su nivel al muestrear la grilla.
 
 ## Fuera de alcance (YAGNI)
-- Capa visual de líneas isógonas sobre el mapa (la imagen de referencia).
-  Agregado posterior independiente si se requiere.
 - Variación con altitud (despreciable para los FL de interés; `alt=0`).
 - Actualización automática de la época / descarga de coeficientes.
