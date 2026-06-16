@@ -30,6 +30,12 @@ def test_cordoba_este_4100_oeste_8300():
     assert z.msa_en(clat, clon - dlon) == 8300
 
 
+def test_declinacion_desde_compensador():
+    # Antes _DECL_W hardcodeaba ~5.0; ahora sale del WMM/grilla (Salta ~9.2° W).
+    z = {x.icao: x for x in msaw_data.msa_zones()}["SASA"]
+    assert z.mag_decl_w > 7.0
+
+
 def test_msaw_params():
     p = atm_db.msaw_params()
     assert p.time_to_prediction == 120
