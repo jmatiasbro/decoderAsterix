@@ -3706,6 +3706,11 @@ class MainWindow(QMainWindow):
         self.act_msa_sectores.setChecked(getattr(self, '_msa_sectores_on', False))
         self.act_msa_sectores.toggled.connect(self._toggle_msa_sectores)
 
+        self.act_isogonas = self.menu_areas.addAction("Mostrar isógonas (declinación)")
+        self.act_isogonas.setCheckable(True)
+        self.act_isogonas.setChecked(getattr(self, '_isogonas_on', False))
+        self.act_isogonas.toggled.connect(self._toggle_isogonas)
+
     def _toggle_msa_sectores(self, on):
         """Muestra/oculta los sectores MSA (anillo+radiales+MSA) como referencia."""
         from player.msaw import render as _mr
@@ -3725,6 +3730,29 @@ class MainWindow(QMainWindow):
             mm.add_layer(name, segs, "TACTICO")
             if name in mm.layers:
                 mm.layers[name].color = _mr.MSA_COLOR
+            if getattr(self.radar, 'proy', None) is not None:
+                mm.reproject_all(self.radar.proy)
+        else:
+            mm.layers.pop(name, None)
+        self.radar.update()
+
+    def _toggle_isogonas(self, on):
+        """Muestra/oculta las líneas isógonas (declinación magnética) en PPI y FIR."""
+        import os
+        self._isogonas_on = on
+        mm = getattr(self.radar, 'map_manager', None)
+        if mm is None:
+            return
+        name = "MAGVAR::ISOGONAS"
+        if on:
+            path = "data/magnetic/isogonic_lines.geojson"
+            if not os.path.exists(path):
+                print("[MAGVAR] Falta data/magnetic/isogonic_lines.geojson "
+                      "(corré tools/gen_declination_grid.py)")
+                return
+            mm.load_geojson(path, name, "TACTICO")
+            if name in mm.layers:
+                mm.layers[name].color = "#FF40FF"
             if getattr(self.radar, 'proy', None) is not None:
                 mm.reproject_all(self.radar.proy)
         else:
