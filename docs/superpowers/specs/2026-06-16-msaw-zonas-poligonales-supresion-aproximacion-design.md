@@ -71,7 +71,9 @@ Mejorar el MSAW (Minimum Safe Altitude Warning) con dos capacidades:
   `profile_parameters`, `profiles_kernel`, `profile_points`,
   `apm_profiles_kernel`.
 - Fuente: los dos archivos SQL provistos (`msaw_profiles_schema-1.sql`,
-  `msaw_profiles_data.sql`) ubicados bajo `data/atm/`.
+  `msaw_profiles_data.sql`). **Pendiente**: estos archivos llegaron como
+  adjuntos y aún no están en disco; el primer paso de implementación es
+  escribirlos bajo `data/atm/` con el contenido provisto.
 
 **Readers** en `player/atm_db.py` (con `TRIM` y `dms_to_dd`; el helper
 `dms_to_dd` ya existe en `queries_map.py` y se replica/importa):
@@ -175,6 +177,8 @@ No se implementa en esta iteración; se documenta como trabajo futuro.
 
 ## Secuencia de construcción
 
+0. Escribir `data/atm/msaw_profiles_schema-1.sql` y
+   `data/atm/msaw_profiles_data.sql` con el contenido provisto.
 1. `tools/load_msaw_profiles.py` + cargar datos a `atm.duckdb`.
 2. Readers en `atm_db.py` (+ test rápido de lectura).
 3. Helpers de geometría + `MsaPolygon` (+ tests).
