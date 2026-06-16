@@ -80,6 +80,17 @@ class PASSAnalyticsEngine:
         Returns:
             Dict con los resultados resumidos por sensor y gráficos espaciales.
         """
+        # Normalizar claves de tiempo para admitir tanto 'time' como 'timestamp'
+        normalized_plots = []
+        for p in plots:
+            np = p.copy()
+            if 'time' not in np and 'timestamp' in np:
+                np['time'] = np['timestamp']
+            elif 'timestamp' not in np and 'time' in np:
+                np['timestamp'] = np['time']
+            normalized_plots.append(np)
+        plots = normalized_plots
+
         sensor_rpms = sensor_rpms or {}
         from utils.geo import _calculate_distance_and_azimuth_jit
         
@@ -89,10 +100,20 @@ class PASSAnalyticsEngine:
         def get_fl(pt):
             fl = pt.get('flight_level')
             if fl is not None:
-                return fl
+                if isinstance(fl, str):
+                    if fl == '---' or fl.strip() == '':
+                        return None
+                    try:
+                        return float(fl)
+                    except ValueError:
+                        return None
+                return float(fl)
             alt = pt.get('altitude_ft')
             if alt is not None:
-                return alt / 100.0
+                try:
+                    return float(alt) / 100.0
+                except (ValueError, TypeError):
+                    return None
             return None
         
         # 1. Agrupar ploteos por SAC/SIC y por aeronave (Target ID)
@@ -180,18 +201,51 @@ class PASSAnalyticsEngine:
                 # Tomar la mediana de los ploteos si es necesario, o omitir
                 continue
 
+            # Dividir ploteos de este sensor por aeronave
+            sensor_plots_by_target = collections.defaultdict(list)
+            for p in s_plots:
+                t_key = p.get('mode_s') or p.get('callsign') or p.get('mode3a')
+                if t_key:
+                    sensor_plots_by_target[t_key].append(p)
+
+            # Estimación automática del período de rotación
+            estimated_period = None
+            diffs = []
+            for t_key, t_s_plots in sensor_plots_by_target.items():
+                if len(t_s_plots) >= 2:
+                    sorted_t = sorted([pt.get('time') or 0.0 for pt in t_s_plots])
+                    for t1, t2 in zip(sorted_t, sorted_t[1:]):
+                        dt = t2 - t1
+                        if 1.5 < dt < 15.0:
+                            diffs.append(dt)
+            if diffs:
+                rounded_diffs = [round(d, 1) for d in diffs]
+                mode_dt = collections.Counter(rounded_diffs).most_common(1)[0][0]
+                close_diffs = [d for d in diffs if abs(d - mode_dt) <= 0.3]
+                if close_diffs:
+                    estimated_period = sum(close_diffs) / len(close_diffs)
+
             # Período de rotación de antena (RPM)
             rpm = sensor_rpms.get(sac_sic, 0.0)
             if rpm <= 0.0:
-                # Fallbacks de sitio comunes en Argentina
-                if sensor_cat == "CAT021":
-                    period = 1.0 # ADS-B transmite rápido
-                elif sac_sic == (226, 230): # Ezeiza
-                    period = 3.8
-                    rpm = 15.8
+                if estimated_period is not None and estimated_period > 0.1:
+                    period = estimated_period
+                    rpm = 60.0 / period
                 else:
-                    period = 7.6
-                    rpm = 7.9
+                    # Intentar leer desde default-site-params
+                    rpm = s_info.get('rpm', 0.0) or 0.0
+                    if rpm > 0.0:
+                        period = 60.0 / rpm
+                    else:
+                        # Fallbacks de sitio comunes en Argentina
+                        if sensor_cat == "CAT021":
+                            period = 1.0 # ADS-B transmite rápido
+                        elif sac_sic == (226, 230): # Ezeiza
+                            period = 3.8
+                            rpm = 15.8
+                        else:
+                            period = 7.6
+                            rpm = 7.9
             else:
                 period = 60.0 / rpm
 
@@ -220,12 +274,7 @@ class PASSAnalyticsEngine:
             vertical_bins_expected = collections.defaultdict(int)
             vertical_bins_actual = collections.defaultdict(int)
 
-            # Dividir ploteos de este sensor por aeronave
-            sensor_plots_by_target = collections.defaultdict(list)
-            for p in s_plots:
-                t_key = p.get('mode_s') or p.get('callsign') or p.get('mode3a')
-                if t_key:
-                    sensor_plots_by_target[t_key].append(p)
+            # (sensor_plots_by_target ya agrupados al estimar el período de rotación)
 
             # 4. Cálculo de Sesgos y Jitter (Residuos contra Trayectorias de Referencia)
             total_plots = len(s_plots)
@@ -531,6 +580,7 @@ class PASSAnalyticsEngine:
                 ref_a = consensus_mode_a.get(t_key)
                 ref_track = reference_tracks.get(t_key)
                 ref_pts = ref_track['points'] if ref_track else None
+                ref_times = [pt.get('time') or 0.0 for pt in ref_pts] if ref_pts else None
                 for p in t_s_plots:
                     m3a = p.get('mode3a')
                     if m3a not in (None, "", "----"):
@@ -540,9 +590,20 @@ class PASSAnalyticsEngine:
                     fl = get_fl(p)
                     if fl is not None:
                         mode_c_valid += 1
-                        if ref_pts:
+                        if ref_pts and ref_times:
                             tp = p.get('time') or 0.0
-                            nearest = min(ref_pts, key=lambda r: abs((r.get('time') or 0.0) - tp))
+                            idx = bisect.bisect_left(ref_times, tp)
+                            if idx == 0:
+                                nearest = ref_pts[0]
+                            elif idx == len(ref_times):
+                                nearest = ref_pts[-1]
+                            else:
+                                t_prev = ref_times[idx - 1]
+                                t_next = ref_times[idx]
+                                if abs(t_prev - tp) < abs(t_next - tp):
+                                    nearest = ref_pts[idx - 1]
+                                else:
+                                    nearest = ref_pts[idx]
                             ref_fl = get_fl(nearest)
                             if (ref_fl is not None
                                     and abs((nearest.get('time') or 0.0) - tp) <= period
@@ -867,6 +928,17 @@ class PASSAnalyticsEngine:
         Utiliza los códigos SSR (Squawk) coincidentes en ventanas temporales estrechas
         para determinar la presencia real del blanco sin requerir ground truth absoluto.
         """
+        # Normalizar claves de tiempo para admitir tanto 'time' como 'timestamp'
+        normalized_plots = []
+        for p in plots:
+            np = p.copy()
+            if 'time' not in np and 'timestamp' in np:
+                np['time'] = np['timestamp']
+            elif 'timestamp' not in np and 'time' in np:
+                np['timestamp'] = np['time']
+            normalized_plots.append(np)
+        plots = normalized_plots
+
         from utils.geo import cargar_sensores, GeoTools, _calculate_distance_and_azimuth_jit
         import collections
         import bisect
@@ -874,10 +946,20 @@ class PASSAnalyticsEngine:
         def get_fl_local(pt):
             fl = pt.get('flight_level')
             if fl is not None:
-                return fl
+                if isinstance(fl, str):
+                    if fl == '---' or fl.strip() == '':
+                        return None
+                    try:
+                        return float(fl)
+                    except ValueError:
+                        return None
+                return float(fl)
             alt = pt.get('altitude_ft')
             if alt is not None:
-                return alt / 100.0
+                try:
+                    return float(alt) / 100.0
+                except (ValueError, TypeError):
+                    return None
             return None
             
         # 1. Agrupar ploteos por SAC/SIC y filtrar por rango operativo de 200 NM

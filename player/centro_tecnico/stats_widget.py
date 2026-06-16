@@ -10,6 +10,18 @@ from player.stats.metric_registry import METRICS, DIMENSIONS, aggregate, metric_
 from player.stats.chart_renderer import render, CHART_TYPES
 
 
+DIMENSION_LABELS = {
+    "radar": "SIC/SAC",
+    "hour": "Tiempo (Hora)",
+    "mode3a": "Modo A / SSR",
+    "fl_band": "Nivel (FL50, FL150, FL200, FL300)",
+    "category": "Categoría ASTERIX",
+    "callsign": "Callsign",
+    "mode_s": "Aircraft Address (Mode S)",
+    "garbled": "Garbling (Interferencia)",
+}
+
+
 class StatsWidget(QWidget):
     def __init__(self, source_provider, parent=None):
         super().__init__(parent)
@@ -22,7 +34,8 @@ class StatsWidget(QWidget):
             self.cmb_metric.addItem(m.label, m.id)
         self.cmb_dim = QComboBox()
         for d in DIMENSIONS:
-            self.cmb_dim.addItem(d, d)
+            label = DIMENSION_LABELS.get(d, d)
+            self.cmb_dim.addItem(label, d)
         self.cmb_chart = QComboBox()
         for c in CHART_TYPES:
             self.cmb_chart.addItem(c, c)
@@ -63,7 +76,7 @@ class StatsWidget(QWidget):
         self.lbl_rows.setText(f"Filas: {len(data)}")
         try:
             render(self.figure, data, chart, title=metric.label,
-                   xlabel=dim, ylabel=metric.label)
+                   xlabel=DIMENSION_LABELS.get(dim, dim), ylabel=metric.label)
         except Exception as e:
             self.figure.clear()
             ax = self.figure.add_subplot(111)

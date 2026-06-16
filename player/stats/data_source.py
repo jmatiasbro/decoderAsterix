@@ -9,7 +9,10 @@ Python puro, sin pandas.
 from abc import ABC, abstractmethod
 
 NORMALIZED_KEYS = ("sac_sic", "timestamp", "lat", "lon", "flight_level",
-                   "mode3a", "raw_range", "raw_azimuth")
+                   "mode3a", "raw_range", "raw_azimuth",
+                   "category", "callsign", "mode_s", "altitude_ft",
+                   "ground_speed", "track_angle", "vertical_rate",
+                   "garbled", "frequency", "pd")
 
 
 def _filter(rows, radars, t_min, t_max):
@@ -49,6 +52,16 @@ class SessionSource(DataSource):
             "mode3a": r.get("mode3a"),
             "raw_range": r.get("raw_range"),
             "raw_azimuth": r.get("raw_azimuth"),
+            "category": r.get("category"),
+            "callsign": r.get("callsign"),
+            "mode_s": r.get("mode_s") or r.get("track_id") or r.get("target_address"),
+            "altitude_ft": r.get("altitude_ft"),
+            "ground_speed": r.get("ground_speed"),
+            "track_angle": r.get("track_angle"),
+            "vertical_rate": r.get("vertical_rate"),
+            "garbled": r.get("garbled"),
+            "frequency": r.get("frequency"),
+            "pd": r.get("pd"),
         }
 
     def load(self, *, radars=None, t_min=None, t_max=None):
@@ -94,7 +107,8 @@ class DuckDBSource(DataSource):
             where.append("timestamp <= ?"); params.append(t_max)
         clause = (" WHERE " + " AND ".join(where)) if where else ""
         sql = ("SELECT sac_sic, timestamp, lat, lon, flight_level, mode3a, "
-               "raw_range, raw_azimuth FROM asterix_plots" + clause)
+               "raw_range, raw_azimuth, category, callsign, COALESCE(NULLIF(mode_s, ''), track_id) AS mode_s, altitude_ft, "
+               "ground_speed, track_angle, vertical_rate, garbled, frequency, pd FROM asterix_plots" + clause)
         return self._query(sql, params)
 
     def radars(self):
