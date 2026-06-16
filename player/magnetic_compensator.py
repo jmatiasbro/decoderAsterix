@@ -36,10 +36,13 @@ class MagneticCompensator:
         self._cache = {}
         self._geomag = GeoMag() if _PYGEOMAG_OK else None
         self.disponible = _PYGEOMAG_OK
+        if not self.disponible:
+            from player.geo import declination_grid as _dg
+            self.disponible = _dg.load() is not None
 
     def obtener_declinacion(self, latitud, longitud, altitud_ft: float = 0.0) -> float:
-        """Declinación en grados decimales (oeste negativo). Fallback si no hay modelo."""
-        if latitud is None or longitud is None or self._geomag is None:
+        """Declinación en grados (oeste negativo). Cascada: WMM -> grilla -> estático."""
+        if latitud is None or longitud is None:
             return self.fallback_deg
 
         clave = (round(latitud, 2), round(longitud, 2))  # celda ~1 km
@@ -47,15 +50,21 @@ class MagneticCompensator:
         if cached is not None:
             return cached
 
-        try:
-            alt_km = (altitud_ft or 0.0) * 0.0003048
-            res = self._geomag.calculate(
-                glat=float(latitud), glon=float(longitud),
-                alt=alt_km, time=_anio_decimal()
-            )
-            dec = float(res.d)
-        except Exception:
-            dec = self.fallback_deg
+        dec = None
+        # 1) WMM exacto (modelo local, sin red)
+        if self._geomag is not None:
+            try:
+                alt_km = (altitud_ft or 0.0) * 0.0003048
+                dec = float(self._geomag.calculate(
+                    glat=float(latitud), glon=float(longitud),
+                    alt=alt_km, time=_anio_decimal()).d)
+            except Exception:
+                dec = None
+        # 2) Grilla offline
+        if dec is None:
+            from player.geo import declination_grid as _dg
+            g = _dg.declinacion(latitud, longitud)
+            dec = g if g is not None else self.fallback_deg  # 3) estático
 
         self._cache[clave] = dec
         return dec
