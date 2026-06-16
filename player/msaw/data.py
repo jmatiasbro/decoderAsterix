@@ -2,7 +2,8 @@
 
 Centros (ARP/VOR) tomados de la base ATM por ICAO; radiales MAGNÉTICOS y MSA
 transcritos de las cartas de Altitud Mínima de Vigilancia ATC-OACI. Radio 25 NM.
-La declinación magnética oeste es aproximada por región (~5–6° W) y ajustable.
+La declinación magnética de cada zona sale del compensador (WMM/grilla) en el ARP;
+`_DECL_W` queda solo como respaldo estático.
 """
 from player.msaw.model import MsaZone, MsaSector
 
@@ -30,18 +31,29 @@ RADIUS_NM = 25.0
 
 
 def msa_zones():
-    """[MsaZone] de la FIR Córdoba, anclando el centro a la base ATM (ARP)."""
+    """[MsaZone] de la FIR Córdoba, anclando el centro a la base ATM (ARP).
+
+    La declinación magnética de cada zona sale del compensador (WMM/grilla) en
+    el ARP; `_DECL_W` queda solo como respaldo si no hay ninguna fuente.
+    """
     from player import atm_db
+    from player.magnetic_compensator import MagneticCompensator
     ap = atm_db.airports() if atm_db.available() else {}
+    comp = MagneticCompensator(fallback_deg=0.0)
     zones = []
     for icao, secs in _SECTORS.items():
         info = ap.get(icao)
         if not info:
             continue
+        lat, lon = info["lat"], info["lon"]
+        if comp.disponible:
+            decl_w = -comp.obtener_declinacion(lat, lon)   # oeste positivo
+        else:
+            decl_w = _DECL_W.get(icao, 5.0)
         zones.append(MsaZone(
-            icao=icao, center=(info["lat"], info["lon"]), radius_nm=RADIUS_NM,
+            icao=icao, center=(lat, lon), radius_nm=RADIUS_NM,
             elev_ft=int(info.get("alt_ft") or 0), trans_alt_ft=_TRANS_ALT.get(icao, 0),
-            mag_decl_w=_DECL_W.get(icao, 5.0),
+            mag_decl_w=decl_w,
             sectors=[MsaSector(d, h, m) for (d, h, m) in secs],
         ))
     return zones
