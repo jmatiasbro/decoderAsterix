@@ -254,6 +254,34 @@ DEFAULT_NM_RANGE = 250
 # Límite de plots renderizados
 MAX_PLOTS_RENDERED = 2000
 
+# Instrumentación de rendimiento (diagnóstico). Activar con DECODE_PERF=1 en el
+# entorno; sin la variable no agrega ningún overhead (devuelve la función tal cual).
+# Registra en consola cualquier llamada al hilo de UI que supere DECODE_PERF_MS ms.
+_PERF_ON = bool(os.environ.get("DECODE_PERF"))
+_PERF_MS = float(os.environ.get("DECODE_PERF_MS", "40"))
+
+
+def _timed(label):
+    def deco(fn):
+        if not _PERF_ON:
+            return fn
+        import functools
+
+        @functools.wraps(fn)
+        def wrap(self, *a, **k):
+            t0 = time_module.perf_counter()
+            try:
+                return fn(self, *a, **k)
+            finally:
+                dt = (time_module.perf_counter() - t0) * 1000.0
+                if dt >= _PERF_MS:
+                    n = len(getattr(self, "tracks", ()) or ())
+                    p = len(getattr(self, "pending_tracks", ()) or ())
+                    print(f"[PERF] {label} {dt:.0f}ms tracks={n} pending={p}",
+                          flush=True)
+        return wrap
+    return deco
+
 # Historial
 HISTORY_LENGTH = 15  # Últimos 15 puntos de trayectoria (estela de puntos)
 
@@ -790,6 +818,14 @@ class RadarWidget(_RadarBase):
         self.blink_timer.timeout.connect(self._toggle_blink)
         self.blink_timer.start(500)  # Parpadeo cada 500ms
 
+        # Throttle de repintados: el paint redibuja toda la escena (~40 ms) y los
+        # caminos calientes (ingesta de plots, tick a 20 Hz) pedían update() más
+        # rápido de lo que el paint puede completar, saturando el hilo de UI con
+        # archivos densos/multisensor. Limitamos los repintados de esos caminos a
+        # ~15 FPS; las interacciones del usuario siguen llamando update() directo.
+        self._last_repaint = 0.0
+        self._repaint_min_dt = 1.0 / 15.0
+
         # Filtros
         self.active_sensors: Set[Tuple[int, int]] = set()
         self.squawk_filter = ""
@@ -1021,6 +1057,18 @@ class RadarWidget(_RadarBase):
     def _toggle_blink(self):
         self.blink_flag = not self.blink_flag
         self.update()
+
+    def _request_repaint(self):
+        """Repintado throttleado (~15 FPS) para caminos de alta frecuencia.
+
+        Coalesce las peticiones de los caminos calientes (ingesta de plots, tick
+        del timer) para que el paint —que redibuja toda la escena— no se pida más
+        rápido de lo que tarda en completarse. El timer a 20 Hz garantiza que un
+        repintado pospuesto se atienda en el tick siguiente (latencia ≤ ~66 ms)."""
+        now = time_module.monotonic()
+        if now - self._last_repaint >= self._repaint_min_dt:
+            self._last_repaint = now
+            self.update()
 
     @pyqtSlot()
     def play(self):
@@ -2036,9 +2084,10 @@ class RadarWidget(_RadarBase):
             return None
 
     @pyqtSlot(object)
+    @_timed("on_new_plot")
     def on_new_plot(self, data: Dict[str, Any]):
         self._process_plot_data(data)
-        self.update()
+        self._request_repaint()
 
     def normalizar_coordenadas_wgs84(self, plot: Dict[str, Any]):
         """
@@ -2145,9 +2194,10 @@ class RadarWidget(_RadarBase):
         self._reconciliar_pistas()
         self._schedule_safety()
         if trigger_update:
-            self.update()
+            self._request_repaint()
 
     @pyqtSlot(list)
+    @_timed("on_new_plot_batch")
     def on_new_plot_batch(self, batch: List[Dict[str, Any]]):
         if not batch:
             return
@@ -2155,7 +2205,7 @@ class RadarWidget(_RadarBase):
             self._process_plot_data(data)
         self._reconciliar_pistas()
         self._schedule_safety()
-        self.update()
+        self._request_repaint()
 
     # ================================================================
     # FUSIÓN MULTISENSOR: extrapolación cinemática y reconciliación de
@@ -2775,6 +2825,7 @@ class RadarWidget(_RadarBase):
     # TIMER
     # ================================================================
 
+    @_timed("_on_timer")
     def _on_timer(self):
         try:
             sim_time = SimulationTime.instance()
@@ -2954,7 +3005,7 @@ class RadarWidget(_RadarBase):
                 self.evaluar_stca()
 
             self.plot_count = len(self.tracks) + len(self.pending_tracks)
-            self.update()
+            self._request_repaint()
         except Exception:
             pass
 
@@ -3133,6 +3184,7 @@ class RadarWidget(_RadarBase):
     # PAINT EVENT
     # ================================================================
 
+    @_timed("paintEvent")
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -5526,8 +5578,19 @@ class RadarWidget(_RadarBase):
         self._draw_oaci_track(painter, plot, z, inv_z, alertas_dict)
 
     def get_all_areas(self):
-        """Devuelve la combinación de áreas de la base de datos y de usuario."""
-        from player import atm_db
-        db_a = atm_db.restricted_airspaces() if atm_db.available() else []
-        usr_a = getattr(self, 'user_areas', [])
-        return db_a + usr_a
+        """Devuelve la combinación de áreas de la base de datos y de usuario.
+
+        Las áreas de la base son estáticas en la sesión: se cachean tras la
+        primera lectura (antes se reconsultaba la DB —una query por área— en cada
+        pasada de APW, ~75 ms/seg en el hilo de UI). `invalidar_cache_areas()`
+        fuerza relectura si cambian.
+        """
+        if getattr(self, '_db_areas_cache', None) is None:
+            from player import atm_db
+            self._db_areas_cache = (atm_db.restricted_airspaces()
+                                    if atm_db.available() else [])
+        return self._db_areas_cache + getattr(self, 'user_areas', [])
+
+    def invalidar_cache_areas(self):
+        """Fuerza relectura de las áreas de la base en la próxima evaluación."""
+        self._db_areas_cache = None
