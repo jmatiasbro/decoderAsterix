@@ -6,8 +6,9 @@ class STCADialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("⚠️ STCA")
-        # Establecer flags de ventana de herramienta, sin bordes y que permanezca al frente
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
+        # Ventana de herramienta sin bordes. Sin WindowStaysOnTopHint: flota sobre
+        # la app (Tool con parent) pero no sobre otras aplicaciones del escritorio.
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         
         # Tamaño fijo mucho más fino y compacto para el panel táctico
