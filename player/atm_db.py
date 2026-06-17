@@ -435,7 +435,8 @@ def apm_corridors(airport=None):
     """Corredores APM con near/far no nulos. Distancias en NM, slopes en °."""
     if not available():
         return []
-    where = f"WHERE TRIM(ap.airport_id) = '{airport}'" if airport else ""
+    where = "WHERE TRIM(ap.airport_id) = ?" if airport else ""
+    params = [airport] if airport else []
     try:
         rows = _con().execute(f"""
             SELECT TRIM(ap.airport_id), TRIM(ap.runway_id),
@@ -448,7 +449,7 @@ def apm_corridors(airport=None):
             JOIN airports_kernel ak ON ap.airport_id = ak.identifier_name
             {where}
             ORDER BY ap.airport_id, ap.runway_id
-        """).fetchall()
+        """, params).fetchall()
     except Exception:
         return []
     out = []
@@ -476,7 +477,8 @@ def profile_corridors(airport=None):
     """[{profile, airport, runway, kind, points:[(lat,lon,min_ft,dlat,az)...]}]."""
     if not available():
         return []
-    where = f"WHERE TRIM(pk.airport) = '{airport}'" if airport else ""
+    where = "WHERE TRIM(pk.airport) = ?" if airport else ""
+    params = [airport] if airport else []
     try:
         rows = _con().execute(f"""
             SELECT TRIM(pk.name), TRIM(pk.airport), TRIM(pk.runway), TRIM(pk.kind),
@@ -486,7 +488,7 @@ def profile_corridors(airport=None):
             JOIN profile_points pp ON pk.name = pp.perfil_id
             {where}
             ORDER BY pk.name, pp.seq_num
-        """).fetchall()
+        """, params).fetchall()
     except Exception:
         return []
     out = {}
