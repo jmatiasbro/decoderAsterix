@@ -66,3 +66,41 @@ def test_params_lookahead_personalizado():
     # 5000 ft, -2000 ft/min: a 30s baja 1000 -> 4000 < 4100 -> PREDICTED dentro de 30s
     al = evaluar_msaw([_trk(flight_level=50, vertical_rate=-2000)], [_zona()], params=p)
     assert len(al) == 1 and al[0].eta_s <= 30
+
+
+from player.msaw.model import MsaPolygon, ApmCorridor, SuppressionSet
+
+
+def test_cascada_poligono_tiene_prioridad():
+    # Polígono alrededor del origen con MSA 9000; el círculo daría 4100 al este.
+    poly = MsaPolygon("SACO", 9000,
+                      [(-0.05, -0.05), (-0.05, 0.05), (0.05, 0.05), (0.05, -0.05)])
+    al = evaluar_msaw([_trk(lat=0.0, lon=0.01, flight_level=80)], [poly, _zona()])
+    assert len(al) == 1 and al[0].msa_ft == 9000
+
+
+def test_cascada_cae_a_circulo_fuera_del_poligono():
+    poly = MsaPolygon("P", 9000,
+                      [(0.40, 0.40), (0.40, 0.45), (0.45, 0.45), (0.45, 0.40)])
+    al = evaluar_msaw([_trk(lat=0.0, lon=0.05, flight_level=30)], [poly, _zona()])
+    assert len(al) == 1 and al[0].msa_ft == 4100
+
+
+def test_supresion_inhibe_violacion():
+    import math
+    apm = ApmCorridor("T", "01", near=(0.0, 0.0), far=(0.2, 0.0),
+                      half_wide_nm=1.0, min_dist=3.0, max_dist=12.0,
+                      lower_slope=2.5, upper_slope=4.8, glide_slope=3.0,
+                      thr_elev_ft=0)
+    ss = SuppressionSet(apm=[apm], profiles=[], params={"tol_altitude_ft": 300})
+    d = 6.0
+    lat = d / 60.0
+    alt = d * 6076.12 * math.tan(math.radians(3.0))
+    fl = alt / 100.0
+    poly = MsaPolygon("T", 9000,
+                      [(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)])
+    sin_sup = evaluar_msaw([_trk(lat=lat, lon=0.0, flight_level=fl)], [poly])
+    assert len(sin_sup) == 1                      # sin supresión: alerta
+    con_sup = evaluar_msaw([_trk(lat=lat, lon=0.0, flight_level=fl)], [poly],
+                           suppression=ss)
+    assert con_sup == []                          # suprimida
