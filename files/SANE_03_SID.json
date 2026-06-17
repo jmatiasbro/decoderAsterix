@@ -1,0 +1,72 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.27777777777777,
+            -27.711666666666666
+          ],
+          [
+            -64.60444444444444,
+            -27.345555555555553
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ANGEN1G",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.27777777777777,
+            -27.711666666666666
+          ],
+          [
+            -64.06055555555555,
+            -27.90138888888889
+          ],
+          [
+            -64.16000000000001,
+            -28.260833333333334
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "DIKOR1G",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.27777777777777,
+            -27.711666666666666
+          ],
+          [
+            -64.65305555555557,
+            -27.530833333333334
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "PUBER1G",
+        "type": "polyline"
+      }
+    }
+  ]
+}

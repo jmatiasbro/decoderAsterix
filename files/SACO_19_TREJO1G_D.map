@@ -1,0 +1,19 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                6    [TREJO1G]
+312346.68S0640259.21W        [TREJO1G]
+312335.40S0634829.43W        [TREJO1G]
+312326.00S0633755.00W        [TREJO1G]
+311530.54S0632655.26W        [TREJO1G]
+310410.00S0632444.00W        [TREJO1G]
+304633.00S0632017.00W        [TREJO1G]

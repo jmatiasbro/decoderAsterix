@@ -1,0 +1,52 @@
+<USER_REQUEST>
+PROMPT DE INGENIERÍA: GESTOR DE PERFILES OPERATIVOS (CRUD), MAPAS PREEXISTENTES Y CARGA EN CALIENTE
+
+**Contexto:** Se requiere implementar un sistema de gestión de perfiles de usuario de trabajo (`ProfileManager`) con capacidades CRUD completas (Crear, Leer, Editar, Borrar) en PyQt, junto con un mecanismo de carga dinámica en caliente (Hot-Swapping). El perfil debe determinar la posición geográfica central, la carga automática de capas de mapas preexistentes y el techo vertical de propiedad de los vuelos, desactivando explícitamente las alertas STCA en sectores de Torre.
+
+### 🗂️ FASE 1: MODELO DE DATOS Y ESQUEMA JSON (`player/profile_manager.py`)
+1. Los perfiles se guardarán de forma individual como archivos `.json` dentro del directorio `profiles/`.
+2. Estructura estricta del esquema JSON del perfil de trabajo:
+```json
+{
+  "nombre_usuario": "Matias_TWR",
+  "aeropuerto_trabajo": "SACO",
+  "coordenadas_centro": {"lat": -31.31, "lon": -64.21},
+  "nivel_incumbencia": 95,
+  "frecuencias_sector": ["118.50", "121.90", "119.85"],
+  "mapas_visibles": ["ar_asp.geojson", "ar_apt.geojson", "ar_nav.geojson"],
+  "stca_habilitado": false
+}
+Implementa los métodos esenciales del CRUD: guardar_perfil(nombre, datos_dict), leer_perfil(nombre), eliminar_perfil(nombre) y listar_perfiles() (que retorne los nombres de todos los archivos .json disponibles).
+
+🎛️ FASE 2: INTERFAZ GRÁFICA DE ADMINISTRACIÓN (player/profile_dialog.py)
+Diseña un QDialog llamado ProfileAdminDialog organizado con un QFormLayout que contenga:
+
+Selector Maestro de Perfiles: Un QComboBox (cmb_lista_perfiles) en la parte superior que llame a listar_perfiles(). Al seleccionar un perfil de esta lista, el sistema debe leer el JSON y auto-completar el resto del formulario con sus datos (función Read/Load para edición).
+
+Identificador: Un QLineEdit (txt_nombre) para el nombre del perfil/usuario al crear o editar.
+
+Selector de Aeropuerto ICAO: Un QComboBox (cmb_aeropuerto). Al inicializarse, debe leer en segundo plano el archivo car
+<truncated 823 bytes>
+n Caliente".
+
+🔗 FASE 3: MECANISMO DE CARGA EN CALIENTE (HOT-SWAPPING) Y MAPAS
+En la ventana principal (MainWindow), conecta el botón de carga en caliente a un método receptor self.hot_load_profile(profile_name).
+
+Al ejecutarse la acción, el sistema debe reconfigurar los componentes en tiempo real sin reiniciar la aplicación:
+
+Ancla y Zoom Geográfico: Invoca a RadarWidget.configurar_vista_perfil(lat, lon) para desplazar el centro del PPI al aeródromo de trabajo y recalcular el factor de escala de píxeles por milla náutica.
+
+Carga de Mapas Preexistentes: Invoca al MapManager para limpiar las capas anteriores y cargar en caliente únicamente los archivos GeoJSON estructurales listados en el array "mapas_visibles" del perfil, además de los mapas tácticos de uso general.
+
+Lógica de Propiedad (Jurisdicción): Exporta la variable de control self.techo_incumbencia = perfil_data["nivel_incumbencia"]. El motor de procesamiento de pistas determinará que un vuelo es propiedad de la consola (track.en_jurisdiccion = True) si se encuentra simultáneamente dentro de las 50 NM geodésicas y por debajo de este nivel de vuelo.
+
+Seguridad Operativa: Desactiva de forma mandatoria el procesamiento de alertas de proximidad en el lazo principal si stca_habilitado es False.
+
+"Antigravity: Implementa esta arquitectura modular de perfiles en PyQt. Asegura que el parsing del GeoJSON de aeropuertos maneje correctamente las excepciones y que el sistema de señales de Qt actualice las coordenadas de centro, la visibilidad de los mapas preexistentes y las reglas de propiedad de las pistas en el RadarWidget de forma inmediata."
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-04T14:36:48-03:00.
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Claude Sonnet 4.6 (Thinking). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

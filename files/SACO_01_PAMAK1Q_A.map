@@ -1,0 +1,20 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                7    [PAMAK1Q]
+312324.00S0651614.00W        [PAMAK1Q]
+311843.00S0644749.00W        [PAMAK1Q]
+311846.42S0642934.33W        [PAMAK1Q]
+311848.00S0641213.00W        [PAMAK1Q]
+311913.00S0635733.00W        [PAMAK1Q]
+312606.00S0635733.00W        [PAMAK1Q]
+312606.00S0640256.00W        [PAMAK1Q]

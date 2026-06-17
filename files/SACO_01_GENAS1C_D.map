@@ -1,0 +1,17 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                4    [GENAS1C]
+311429.85S0640655.16W        [GENAS1C]
+311427.90S0640154.47W        [GENAS1C]
+311850.58S0634437.08W        [GENAS1C]
+312755.00S0630851.00W        [GENAS1C]

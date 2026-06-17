@@ -1,0 +1,229 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.20368611111111,
+            -31.313219444444446
+          ],
+          [
+            -64.08733333333333,
+            -31.10982777777778
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ILS_X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.21199444444444,
+            -31.08616111111111
+          ],
+          [
+            -64.21049444444445,
+            -31.178016666666668
+          ],
+          [
+            -64.20857222222223,
+            -31.29565555555556
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "LINEAS_DE_MAPA",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.20857222222223,
+            -31.29565555555556
+          ],
+          [
+            -64.20780277777779,
+            -31.344144444444442
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "FRUSTRADA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.19760000000001,
+            -31.357722222222225
+          ],
+          [
+            -64.09619166666666,
+            -31.390130555555555
+          ],
+          [
+            -64.00025833333333,
+            -31.458927777777777
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "LINEAS_DE_MAPA",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.97734444444445,
+            -31.433469444444444
+          ],
+          [
+            -63.917563888888886,
+            -31.47413333333333
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.94116666666666,
+            -31.499111111111112
+          ],
+          [
+            -64.00025833333333,
+            -31.458927777777777
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.08733333333333,
+          -31.10982777777778
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "CBA",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.21199444444444,
+          -31.08616111111111
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "EDPAK",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.21049444444445,
+          -31.178016666666668
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "UBNOR",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.08733333333333,
+          -31.10982777777778
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "CBA",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.21199444444444,
+          -31.08616111111111
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "EDPAK",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.21049444444445,
+          -31.178016666666668
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "UBNOR",
+        "type": "symbol"
+      }
+    }
+  ]
+}

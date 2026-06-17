@@ -1,0 +1,17 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                4    [SORTI1G]
+284114.00S0654626.00W        [SORTI1G]
+283653.00S0654808.00W        [SORTI1G]
+282858.00S0654329.00W        [SORTI1G]
+274305.00S0652534.00W        [SORTI1G]

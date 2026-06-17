@@ -1,0 +1,35 @@
+#!/bin/bash
+
+VIRTUAL_ENV=/home/administrador/venv/tail2ax
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+binpath=/home/administrador/.tail2ax-1/tail2ax.py
+workdir=/home/administrador/.tail2ax-1
+logdir=/tmp/tail2ax/RMD-1.logs
+errstr="tail2ax fue llamado sin argumento (start|stop|reload|-fg|--foreground)"
+errfile=$logdir/tail2ax.log.err
+
+test -f $binpath || exit 0
+mkdir -p $logdir
+source $VIRTUAL_ENV/bin/activate
+cd $workdir
+
+case "$1" in
+	start|stop|restart|enable_blips_c|disable_blips_c|enable_blips_s|disable_blips_s|keepalive)
+		$binpath $1
+		;;
+
+	reload|force-reload)
+		$0 stop
+		sleep 2
+		$0 start
+		;;
+	-fg|--foreground)
+		$binpath asdfg qwerty
+		;;
+	*)
+		echo $errstr  >$errfile
+		echo $errstr
+		;;
+esac
+exit 0
+

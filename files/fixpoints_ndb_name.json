@@ -1,0 +1,155 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -58.56472222222222,
+          -34.816944444444445
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "CC",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.27583333333334,
+          -31.43777777777778
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "ESC",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -57.02333333333333,
+          -37.23416666666667
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "GES",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -58.24027777777778,
+          -34.71083333333333
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "ILM",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -58.36888888888889,
+          -34.585
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "NN",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -58.505833333333335,
+          -34.890277777777776
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "OA",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -58.63333333333333,
+          -34.80472222222222
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "OC",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -58.486666666666665,
+          -34.518055555555556
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "OP",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -58.43944444444444,
+          -34.546388888888885
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "PP",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -60.80638888888888,
+          -31.711388888888887
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "SVO",
+        "type": "text"
+      }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.92166666666667,
+            -27.030833333333334
+          ],
+          [
+            -64.60444444444444,
+            -27.345555555555553
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ANGEN1E",
+        "type": "polyline"
+      }
+    }
+  ]
+}

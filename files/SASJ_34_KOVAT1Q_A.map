@@ -1,0 +1,17 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                4    [KOVAT1Q]
+242845.00S0642704.00W        [KOVAT1Q]
+242745.00S0643440.00W        [KOVAT1Q]
+243016.98S0644445.13W        [KOVAT1Q]
+243346.00S0645153.00W        [KOVAT1Q]

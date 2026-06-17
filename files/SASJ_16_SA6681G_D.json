@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.00310833333333,
+            -24.558080555555556
+          ],
+          [
+            -65.09272222222222,
+            -24.757827777777777
+          ],
+          [
+            -65.29957222222222,
+            -24.906155555555554
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "SA6681G",
+        "type": "polyline"
+      }
+    }
+  ]
+}

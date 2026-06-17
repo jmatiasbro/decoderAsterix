@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_204",
+  "name": "Radar Bariloche",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 204,
+  "location": {
+    "latitude": -41.145277,
+    "longitude": -71.155555,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

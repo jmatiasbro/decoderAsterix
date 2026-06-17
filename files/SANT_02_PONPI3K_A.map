@@ -1,0 +1,15 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                2    [PONPI3K]
+254522.00S0651855.00W        [PONPI3K]
+265045.00S0650630.00W        [PONPI3K]

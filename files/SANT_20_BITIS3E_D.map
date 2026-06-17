@@ -1,0 +1,15 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                2    [BITIS3E]
+265242.00S0644959.00W        [BITIS3E]
+265820.00S0640522.00W        [BITIS3E]

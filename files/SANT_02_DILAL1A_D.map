@@ -1,0 +1,17 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                4    [DILAL1A]
+264446.00S0650508.00W        [DILAL1A]
+263549.00S0650612.00W        [DILAL1A]
+263907.00S0651656.00W        [DILAL1A]
+260802.00S0654519.00W        [DILAL1A]

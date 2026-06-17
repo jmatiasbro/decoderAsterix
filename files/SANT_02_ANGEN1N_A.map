@@ -1,0 +1,16 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                3    [ANGEN1N]
+272044.00S0643616.00W        [ANGEN1N]
+271423.73S0644457.93W        [ANGEN1N]
+270208.00S0650143.00W        [ANGEN1N]

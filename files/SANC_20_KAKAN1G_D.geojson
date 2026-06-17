@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.77388888888889,
+            -28.68722222222222
+          ],
+          [
+            -65.8,
+            -28.915
+          ],
+          [
+            -66.37055555555555,
+            -29.06138888888889
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "KAKAN1G",
+        "type": "polyline"
+      }
+    }
+  ]
+}

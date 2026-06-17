@@ -1,0 +1,15 @@
+{
+  "radar_id": "ADSB_226_121",
+  "name": "ADS-B San Luis",
+  "type": "ADS-B",
+  "category": "CAT021",
+  "sac": 226,
+  "sic": 121,
+  "location": {
+    "latitude": -33.274444,
+    "longitude": -66.348611,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360
+}

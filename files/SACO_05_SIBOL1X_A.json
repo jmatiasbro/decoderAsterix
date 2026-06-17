@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.67861111111111,
+            -30.490833333333335
+          ],
+          [
+            -64.22200000000001,
+            -30.813272222222224
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "SIBOL1X",
+        "type": "polyline"
+      }
+    }
+  ]
+}

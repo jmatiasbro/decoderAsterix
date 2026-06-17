@@ -1,0 +1,19 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                6    [BITIS4A]
+264446.00S0650508.00W        [BITIS4A]
+263905.00S0645605.00W        [BITIS4A]
+264402.00S0645138.00W        [BITIS4A]
+264857.00S0644957.00W        [BITIS4A]
+265242.00S0644959.00W        [BITIS4A]
+265820.00S0640522.00W        [BITIS4A]

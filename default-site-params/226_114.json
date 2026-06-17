@@ -1,0 +1,15 @@
+{
+  "radar_id": "ADSB_226_114",
+  "name": "ADS-B Salta",
+  "type": "ADS-B",
+  "category": "CAT021",
+  "sac": 226,
+  "sic": 114,
+  "location": {
+    "latitude": -24.840833,
+    "longitude": -65.478888,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360
+}

@@ -1,0 +1,19 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                6    [PAMAK1C]
+311146.66S0641236.70W        [PAMAK1C]
+310711.00S0641651.00W        [PAMAK1C]
+310708.00S0643115.00W        [PAMAK1C]
+310928.45S0644232.71W        [PAMAK1C]
+311203.65S0645510.42W        [PAMAK1C]
+312324.00S0651614.00W        [PAMAK1C]

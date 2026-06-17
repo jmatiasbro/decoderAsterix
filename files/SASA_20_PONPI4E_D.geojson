@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.50525,
+            -24.942872222222224
+          ],
+          [
+            -65.45169166666668,
+            -25.025883333333333
+          ],
+          [
+            -65.31527777777778,
+            -25.75611111111111
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "PONPI4E",
+        "type": "polyline"
+      }
+    }
+  ]
+}

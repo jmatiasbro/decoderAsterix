@@ -1,0 +1,35 @@
+{
+  "radar_id": "RADAR_226_209",
+  "name": "Radar Pehuajó",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 209,
+  "location": {
+    "latitude": -35.840555,
+    "longitude": -61.861666,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12,
+  "registration": {
+    "azimuth_offset_deg": 1.994,
+    "range_offset_nm": 0.332,
+    "range_scale": 1.0,
+    "enabled": true,
+    "source": "interradar",
+    "absolute": false,
+    "stats": {
+      "coverage_az_pct": 97.2,
+      "n": 6228,
+      "residual_az_after": 0.04,
+      "residual_az_before": 1.994,
+      "residual_rng_after": 0.092,
+      "residual_rng_before": 0.345,
+      "sigma_az_deg": 0.04,
+      "sigma_rng_nm": 0.092
+    },
+    "verdict": "applicable"
+  }
+}

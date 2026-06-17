@@ -1,0 +1,16 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                3    [MUBOK2G]
+245816.68S0653041.45W        [MUBOK2G]
+252737.51S0652322.28W        [MUBOK2G]
+254522.00S0651855.00W        [MUBOK2G]

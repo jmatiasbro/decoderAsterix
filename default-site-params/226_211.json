@@ -1,0 +1,35 @@
+{
+  "radar_id": "RADAR_226_211",
+  "name": "Radar Tucumán",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 211,
+  "location": {
+    "latitude": -26.8325,
+    "longitude": -65.108611,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12,
+  "registration": {
+    "azimuth_offset_deg": 0.055,
+    "range_offset_nm": 0.125,
+    "range_scale": 1.0,
+    "enabled": true,
+    "source": "interradar",
+    "absolute": false,
+    "stats": {
+      "coverage_az_pct": 83.3,
+      "n": 2959,
+      "residual_az_after": 0.053,
+      "residual_az_before": 0.076,
+      "residual_rng_after": 0.218,
+      "residual_rng_before": 0.251,
+      "sigma_az_deg": 0.053,
+      "sigma_rng_nm": 0.218
+    },
+    "verdict": "applicable"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.08555555555554,
+            -26.746111111111112
+          ],
+          [
+            -65.10333333333332,
+            -26.596944444444443
+          ],
+          [
+            -65.28222222222222,
+            -26.651944444444442
+          ],
+          [
+            -65.75527777777778,
+            -26.133888888888887
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "DILAL1A",
+        "type": "polyline"
+      }
+    }
+  ]
+}

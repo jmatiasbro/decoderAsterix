@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.77388888888889,
+            -28.68722222222222
+          ],
+          [
+            -65.80222222222221,
+            -28.614722222222223
+          ],
+          [
+            -65.72472222222223,
+            -28.482777777777777
+          ],
+          [
+            -65.42611111111111,
+            -27.718055555555555
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "SORTI1G",
+        "type": "polyline"
+      }
+    }
+  ]
+}

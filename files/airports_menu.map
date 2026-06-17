@@ -1,0 +1,4 @@
+files/airports_symbols.map               GENERICO          AIRPORT_SYMBOLS
+files/airports_names.map                 GENERICO          AIRPORT_NAMES
+files/airports_runways.map               GENERICO          AIRPORT_RUNWAYS
+files/ILS.map                            GENERICO          ILS

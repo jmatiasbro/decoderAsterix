@@ -1,0 +1,1010 @@
+"""
+asterix_inspector.py — Inspector de bajo nivel de un registro ASTERIX.
+
+Muestra el volcado hexadecimal/ASCII de los bytes crudos del bloque (persistidos
+en DuckDB como `raw_bytes`) y un árbol con la estructura canónica
+    Data Block → Data Record → Data Item I0XX/YYY  (+ Summary)
+mapeando los campos ya decodificados a sus códigos de Item ASTERIX.
+
+Paso 2: formato/árbol con los campos disponibles. El desglose Item-por-Item con
+TODOS los subcampos, offsets y resaltado de bytes en el hex (deep-decode según
+EUROCONTROL) llega en el Paso 3.
+"""
+from typing import Optional, List, Tuple
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import (
+    QFont, QStandardItemModel, QStandardItem, QTextCursor, QColor, QTextCharFormat,
+    QPen,
+)
+from PyQt6.QtWidgets import (
+    QDialog, QHBoxLayout, QVBoxLayout, QSplitter, QTreeView, QTextEdit,
+    QLabel, QWidget, QHeaderView, QTextBrowser, QTableWidget, QTableWidgetItem,
+    QAbstractItemView, QStyledItemDelegate,
+)
+
+
+def generar_hex_dump(data: bytes) -> str:
+    """Volcado clásico: Dirección | Bytes Hex | Representación ASCII."""
+    if not data:
+        return "(sin bytes crudos para este registro)"
+    lines = []
+    for i in range(0, len(data), 16):
+        chunk = data[i:i + 16]
+        hex_vals = " ".join(f"{b:02X}" for b in chunk).ljust(47)
+        ascii_vals = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
+        lines.append(f"{i:04X}  {hex_vals}  |{ascii_vals}|")
+    return "\n".join(lines)
+
+
+def _fmt_tod(s) -> str:
+    """Segundos-del-día → HH:MM:SS.mmm (formato del visor de referencia)."""
+    try:
+        s = float(s) % 86400.0
+        h = int(s // 3600)
+        m = int((s % 3600) // 60)
+        return f"{h:02d}:{m:02d}:{s % 60:06.3f}"
+    except (TypeError, ValueError):
+        return str(s)
+
+
+def _num(v) -> str:
+    try:
+        f = float(v)
+        return f"{f:g}"
+    except (TypeError, ValueError):
+        return str(v)
+
+
+def _vacio(v) -> bool:
+    return v is None or v in ("", "---", "----")
+
+
+# Definición por categoría: (código de Item, [(etiqueta, clave_en_info), ...]).
+# El Item se muestra solo si al menos uno de sus campos tiene valor; el Summary
+# concatena los subcampos presentes. El orden imita el orden de FSPEC.
+_SPEC = {
+    1: [
+        ("I001/010", [("SAC", "sac"), ("SIC", "sic")]),
+        ("I001/141", [("TOD", "timestamp")]),
+        ("I001/040", [("RHO", "raw_range"), ("THETA", "raw_azimuth")]),
+        ("I001/070", [("MODE3A", "mode3a")]),
+        ("I001/090", [("FL", "flight_level")]),
+        ("I001/161", [("TRK", "track_number")]),
+        ("I001/130", [("LAT", "lat"), ("LON", "lon")]),
+    ],
+    21: [
+        ("I021/010", [("SAC", "sac"), ("SIC", "sic")]),
+        ("I021/080", [("ICAO", "mode_s")]),
+        ("I021/073", [("TOD", "timestamp")]),
+        ("I021/130", [("LAT", "lat"), ("LON", "lon")]),
+        ("I021/145", [("FL", "flight_level")]),
+        ("I021/070", [("MODE3A", "mode3a")]),
+        ("I021/160", [("GS", "ground_speed"), ("HDG", "track_angle")]),
+        ("I021/155", [("V/R", "vertical_rate")]),
+        ("I021/170", [("ID", "callsign")]),
+        ("I021/161", [("TRK", "track_number")]),
+    ],
+    48: [
+        ("I048/010", [("SAC", "sac"), ("SIC", "sic")]),
+        ("I048/140", [("TOD", "timestamp")]),
+        ("I048/040", [("RHO", "raw_range"), ("THETA", "raw_azimuth")]),
+        ("I048/070", [("MODE3A", "mode3a")]),
+        ("I048/090", [("FL", "flight_level")]),
+        ("I048/220", [("ICAO", "mode_s")]),
+        ("I048/240", [("ID", "callsign")]),
+        ("I048/161", [("TRK", "track_number")]),
+        ("I048/200", [("GS", "ground_speed"), ("HDG", "track_angle")]),
+    ],
+    62: [
+        ("I062/010", [("SAC", "sac"), ("SIC", "sic")]),
+        ("I062/040", [("TRK", "track_number")]),
+        ("I062/070", [("TOD", "timestamp")]),
+        ("I062/105", [("LAT", "lat"), ("LON", "lon")]),
+        ("I062/136", [("FL", "flight_level")]),
+        ("I062/060", [("MODE3A", "mode3a")]),
+        ("I062/380", [("ICAO", "mode_s")]),
+        ("I062/185", [("GS", "ground_speed"), ("HDG", "track_angle")]),
+        ("I062/220", [("V/R", "vertical_rate")]),
+        ("I062/245", [("ID", "callsign")]),
+    ],
+    34: [
+        ("I034/010", [("SAC", "sac"), ("SIC", "sic")]),
+        ("I034/000", [("TYPE", "msg_type")]),
+        ("I034/030", [("TOD", "timestamp")]),
+        ("I034/020", [("SEC", "sector_number"), ("AZI", "azimuth")]),
+        ("I034/041", [("PERIOD", "rotation_period"), ("RPM", "antenna_rpm")]),
+    ],
+    23: [
+        ("I023/010", [("SAC", "sac"), ("SIC", "sic")]),
+        ("I023/020", [("STATE", "system_state"), ("UPS", "ups_active")]),
+    ],
+    65: [
+        ("I065/010", [("SAC", "sac"), ("SIC", "sic")]),
+        ("I065/000", [("TYPE", "msg_type")]),
+        ("I065/015", [("SVC", "service_id")]),
+        ("I065/030", [("TOD", "timestamp")]),
+        ("I065/020", [("BATCH", "batch_number")]),
+        ("I065/040", [("NOGO", "sdps_nogo")]),
+        ("I065/050", [("REPORT", "service_report")]),
+    ],
+}
+
+
+def _fmt_campo(clave: str, val) -> str:
+    if clave == "timestamp":
+        return _fmt_tod(val)
+    if clave in ("lat", "lon"):
+        return f"{_num(val)}°"
+    if clave in ("raw_azimuth", "track_angle"):
+        return f"{_num(val)}°"
+    if clave == "raw_range":
+        return f"{_num(val)} NM"
+    if clave == "ground_speed":
+        return f"{_num(val)} kt"
+    if clave == "vertical_rate":
+        return f"{_num(val)} ft/min"
+    return str(val)
+
+
+# Nombres oficiales EUROCONTROL por Item (los más frecuentes; los que falten se
+# muestran solo con el código). Clave: código "I0XX/YYY".
+ITEM_NAMES = {
+    # CAT048
+    "I048/010": "Data Source Identifier", "I048/140": "Time of Day",
+    "I048/020": "Target Report Descriptor",
+    "I048/040": "Measured Position in Polar Co-ordinates",
+    "I048/070": "Mode-3/A Code in Octal Representation",
+    "I048/090": "Flight Level in Binary Representation",
+    "I048/130": "Radar Plot Characteristics", "I048/220": "Aircraft Address",
+    "I048/240": "Aircraft Identification", "I048/250": "Mode S MB Data",
+    "I048/161": "Track Number",
+    "I048/042": "Calculated Position in Cartesian Co-ordinates",
+    "I048/200": "Calculated Track Velocity in Polar Co-ordinates",
+    "I048/170": "Track Status", "I048/210": "Track Quality",
+    "I048/030": "Warning/Error Conditions",
+    "I048/080": "Mode-3/A Code Confidence Indicator",
+    "I048/100": "Mode-C Code and Confidence Indicator",
+    "I048/110": "Height Measured by 3D Radar",
+    "I048/120": "Radial Doppler Speed",
+    "I048/230": "Communications/ACAS Capability and Flight Status",
+    "I048/260": "ACAS Resolution Advisory Report",
+    "I048/055": "Mode-1 Code in Octal Representation",
+    "I048/050": "Mode-2 Code in Octal Representation",
+    "I048/065": "Mode-1 Code Confidence Indicator",
+    "I048/060": "Mode-2 Code Confidence Indicator",
+    # CAT021 (ADS-B)
+    "I021/010": "Data Source Identification", "I021/040": "Target Report Descriptor",
+    "I021/161": "Track Number", "I021/015": "Service Identification",
+    "I021/071": "Time of Applicability for Position",
+    "I021/130": "Position in WGS-84 Co-ordinates",
+    "I021/131": "High-Resolution Position in WGS-84 Co-ordinates",
+    "I021/072": "Time of Applicability for Velocity", "I021/080": "Target Address",
+    "I021/073": "Time of Message Reception of Position",
+    "I021/075": "Time of Message Reception of Velocity",
+    "I021/140": "Geometric Height", "I021/090": "Quality Indicators",
+    "I021/210": "MOPS Version", "I021/070": "Mode 3/A Code",
+    "I021/145": "Flight Level", "I021/155": "Barometric Vertical Rate",
+    "I021/160": "Airborne Ground Vector", "I021/165": "Track Angle Rate",
+    "I021/170": "Target Identification", "I021/020": "Emitter Category",
+    "I021/146": "Selected Altitude", "I021/200": "Target Status",
+    # CAT062 (system track)
+    "I062/010": "Data Source Identifier", "I062/015": "Service Identification",
+    "I062/070": "Time of Track Information",
+    "I062/105": "Calculated Position in WGS-84 Co-ordinates",
+    "I062/100": "Calculated Position in Cartesian Co-ordinates",
+    "I062/185": "Calculated Track Velocity in Cartesian Co-ordinates",
+    "I062/210": "Calculated Acceleration (Cartesian)",
+    "I062/060": "Track Mode 3/A Code", "I062/245": "Target Identification",
+    "I062/380": "Aircraft Derived Data", "I062/040": "Track Number",
+    "I062/080": "Track Status", "I062/290": "System Track Update Ages",
+    "I062/200": "Mode of Movement", "I062/295": "Track Data Ages",
+    "I062/136": "Measured Flight Level",
+    "I062/130": "Calculated Track Geometric Altitude",
+    "I062/135": "Calculated Track Barometric Altitude",
+    "I062/220": "Calculated Rate of Climb/Descent",
+    "I062/390": "Flight Plan Related Data", "I062/500": "Estimated Accuracies",
+    # CAT001
+    "I001/010": "Data Source Identifier", "I001/020": "Target Report Descriptor",
+    "I001/040": "Measured Position in Polar Co-ordinates",
+    "I001/070": "Mode-3/A Code in Octal Representation",
+    "I001/090": "Mode-C Code in Binary Representation",
+    "I001/130": "Radar Plot Characteristics", "I001/141": "Truncated Time of Day",
+    "I001/131": "Received Power", "I001/161": "Track/Plot Number",
+    "I001/170": "Track Status", "I001/120": "Measured Radial Doppler Speed",
+    # CAT034
+    "I034/010": "Data Source Identifier", "I034/000": "Message Type",
+    "I034/030": "Time of Day", "I034/020": "Sector Number",
+    "I034/041": "Antenna Rotation Speed",
+    "I034/050": "System Configuration and Status",
+    "I034/060": "System Processing Mode", "I034/070": "Message Count Values",
+    # CAT023
+    "I023/010": "Data Source Identifier", "I023/020": "System Status",
+    # CAT065 (SDPS Service Status Reports)
+    "I065/010": "Data Source Identifier", "I065/000": "Message Type",
+    "I065/015": "Service Identification", "I065/030": "Time of Message",
+    "I065/020": "Batch Number", "I065/040": "SDPS Configuration and Status",
+    "I065/050": "Service Status Report",
+}
+
+
+def _item_name(code: str) -> str:
+    return ITEM_NAMES.get(code, "")
+
+
+def _plot_a_info(p: dict) -> dict:
+    """Normaliza un plot crudo del decoder al formato que usa _items_de_registro."""
+    info = dict(p)
+    sac, sic = p.get("sac"), p.get("sic")
+    if sac is not None:
+        info["sac"] = str(sac)
+        info["sac_sic"] = f"{sac}/{sic}"
+    if sic is not None:
+        info["sic"] = str(sic)
+    m3a = p.get("mode_3a")
+    if isinstance(m3a, int):
+        info["mode3a"] = f"{m3a:04o}"
+    if p.get("latitude") is not None:
+        info["lat"] = p["latitude"]
+    if p.get("longitude") is not None:
+        info["lon"] = p["longitude"]
+    ed = p.get("extra_data", {}) or {}
+    if ed.get("ground_speed_nms") is not None:
+        info["ground_speed"] = ed["ground_speed_nms"] * 3600.0
+    elif ed.get("ground_speed_kts") is not None:
+        info["ground_speed"] = ed["ground_speed_kts"]
+    if ed.get("track_angle") is not None:
+        info["track_angle"] = ed["track_angle"]
+    if ed.get("vertical_rate_ftmin") is not None:
+        info["vertical_rate"] = ed["vertical_rate_ftmin"]
+    # Copiar llaves de extra_data directamente al info
+    for k, v in ed.items():
+        info.setdefault(k, v)
+    return info
+
+
+def deep_records(category, raw_bytes):
+    """Re-decodifica el bloque y devuelve una lista de Data Records; cada uno es
+    (info_normalizada, [(código_item, byte_ini, byte_fin), ...]). Lista vacía si la
+    categoría aún no tiene deep-decode. Usa el decoder real (camino normal intacto)."""
+    if not raw_bytes or len(raw_bytes) < 4:
+        return []
+    try:
+        cat = int(category)
+        decoder = None
+        if cat == 48:
+            from decoder.decoders import cat048 as decoder
+        elif cat == 21:
+            from decoder.decoders import cat021 as decoder
+        elif cat == 1:
+            from decoder.decoders import cat001 as decoder
+        elif cat == 34:
+            from decoder.decoders import cat034 as decoder
+        elif cat == 23:
+            from decoder.decoders import cat023 as decoder
+        elif cat == 62:
+            from decoder.decoders import cat062 as decoder
+        elif cat == 65:
+            from decoder.decoders import cat065 as decoder
+        if decoder is None:
+            return []
+        acc: list = []
+        plots = decoder.decode(bytes(raw_bytes), 3, len(raw_bytes), cat, record_offsets=acc)
+        por_rec: dict = {}
+        for ridx, code, s, e in acc:
+            por_rec.setdefault(ridx, []).append((code, s, e))
+        salida = []
+        for ridx in sorted(por_rec):
+            plot = plots[ridx] if ridx < len(plots) else {}
+            info = _plot_a_info(plot)
+            info["category"] = cat
+            salida.append((info, por_rec[ridx]))
+        return salida
+    except Exception:
+        return []
+
+
+def _items_de_registro(info: dict) -> List[Tuple[str, str]]:
+    """Lista [(código_item, summary)] del registro según su categoría."""
+    cat = info.get("category")
+    spec = _SPEC.get(int(cat)) if cat is not None else None
+    if not spec:
+        return []
+    salida = []
+    for code, campos in spec:
+        partes = []
+        for etiqueta, clave in campos:
+            v = info.get(clave)
+            if _vacio(v):
+                continue
+            partes.append(f"{etiqueta}:{_fmt_campo(clave, v)}")
+        if partes:
+            salida.append((code, "  ".join(partes)))
+    return salida
+
+
+def _u(data: bytes, a: int, b: int) -> int:
+    return int.from_bytes(data[a:b], "big")
+
+
+def _sf_sacsic(d):
+    return [("SAC (System Area Code)", d[0]), ("SIC (System Id Code)", d[1])]
+
+
+def _sf_048_140(d):
+    tod = _u(d, 0, 3) / 128.0
+    return [("Time of Day (s) LSB=1/128", f"{tod:.3f}"), ("ToD HH:MM:SS.mmm", _fmt_tod(tod))]
+
+
+def _sf_048_040(d):
+    rho = _u(d, 0, 2) / 256.0
+    theta = _u(d, 2, 4) * 360.0 / 65536.0
+    return [("RHO (NM) LSB=1/256", f"{rho:.4f}"),
+            ("THETA (deg) LSB=360/2^16", f"{theta:.4f}")]
+
+
+def _sf_048_070(d):
+    raw = _u(d, 0, 2)
+    return [("V (1=Validated)", 0 if raw & 0x8000 else 1),
+            ("G (1=Garbled)", 1 if raw & 0x4000 else 0),
+            ("L (1=Smoothed)", 1 if raw & 0x2000 else 0),
+            ("Mode-3/A code (octal)", f"{raw & 0x0FFF:04o}")]
+
+
+def _sf_048_090(d):
+    raw = _u(d, 0, 2)
+    fl = raw & 0x3FFF
+    if fl & 0x2000:
+        fl -= 0x4000
+    return [("V (1=Validated)", 0 if raw & 0x8000 else 1),
+            ("G (1=Garbled)", 1 if raw & 0x4000 else 0),
+            ("Flight Level LSB=1/4", f"{fl * 0.25:.2f}")]
+
+
+def _sf_048_220(d):
+    return [("Aircraft Address (ICAO 24-bit)", d[:3].hex().upper())]
+
+
+def _sf_048_240(d):
+    from decoder.asterix_utils import _decode_callsign
+    return [("Aircraft Identification", _decode_callsign(d[:6]))]
+
+
+def _sf_048_161(d):
+    return [("Track Number", _u(d, 0, 2))]
+
+
+def _sf_034_020(d):
+    raw = d[0]
+    return [("Sector Number (raw)", raw),
+            ("Antenna Azimuth (deg) LSB=360/256", f"{raw * 360.0 / 256.0:.4f}")]
+
+
+def _s(d, a, b):
+    return int.from_bytes(d[a:b], "big", signed=True)
+
+
+# ---- Genéricos reutilizables ----
+def _sf_tod3(d):
+    tod = _u(d, 0, 3) / 128.0
+    return [("Time of Day (s) LSB=1/128", f"{tod:.3f}"), ("ToD HH:MM:SS.mmm", _fmt_tod(tod))]
+
+
+def _sf_tod2(d):
+    tod = _u(d, 0, 2) / 128.0
+    return [("Truncated ToD (s) LSB=1/128", f"{tod:.3f}")]
+
+
+def _sf_icao3(d):
+    return [("Aircraft Address (ICAO 24-bit)", d[:3].hex().upper())]
+
+
+def _sf_mode3a(d):
+    raw = _u(d, 0, 2)
+    return [("V (1=Validated)", 0 if raw & 0x8000 else 1),
+            ("G (1=Garbled)", 1 if raw & 0x4000 else 0),
+            ("L (1=Smoothed)", 1 if raw & 0x2000 else 0),
+            ("Mode-3/A code (octal)", f"{raw & 0x0FFF:04o}")]
+
+
+def _sf_track2(d):
+    return [("Track Number", _u(d, 0, 2))]
+
+
+def _sf_fl2(d):
+    return [("Flight Level LSB=1/4", f"{_s(d, 0, 2) * 0.25:.2f}")]
+
+
+def _sf_callsign(d):
+    from decoder.asterix_utils import _decode_callsign
+    n = 6 if len(d) >= 6 else len(d)
+    return [("Aircraft Identification", _decode_callsign(d[:n]))]
+
+
+# ---- CAT048 ----
+def _sf_048_020(d):
+    b = d[0]
+    typ = {0: "No detection", 1: "PSR only", 2: "SSR only", 3: "SSR+PSR (CMB)",
+           4: "Mode S All-Call", 5: "Mode S Roll-Call",
+           6: "All-Call+PSR", 7: "Roll-Call+PSR"}.get((b >> 5) & 0x07, "?")
+    return [("TYP (detección)", f"{(b >> 5) & 0x07} ({typ})"),
+            ("SIM (1=simulado)", 1 if b & 0x10 else 0),
+            ("RDP (cadena)", 1 if b & 0x08 else 0),
+            ("SPI (1=ident)", 1 if b & 0x04 else 0),
+            ("RAB (1=field monitor)", 1 if b & 0x02 else 0),
+            ("FX (extensión)", 1 if b & 0x01 else 0)]
+
+
+# ---- CAT021 ----
+def _sf_021_130(d):
+    # v2.4: 6 bytes (LSB 180/2^23); v0.26: 8 bytes (LSB 180/2^25)
+    if len(d) >= 8:
+        lat = _s(d, 0, 4) * 180.0 / (2 ** 25)
+        lon = _s(d, 4, 8) * 180.0 / (2 ** 25)
+    else:
+        lat = _s(d, 0, 3) * 180.0 / (2 ** 23)
+        lon = _s(d, 3, 6) * 180.0 / (2 ** 23)
+    return [("Latitude (deg)", f"{lat:.6f}"), ("Longitude (deg)", f"{lon:.6f}")]
+
+
+def _sf_021_160(d):
+    val = _u(d, 0, 4)
+    gs = ((val >> 16) & 0x7FFF) * 0.00006103515625 * 3600.0
+    ta = (val & 0xFFFF) * 360.0 / 65536.0
+    return [("Ground Speed (kt)", f"{gs:.1f}"), ("Track Angle (deg)", f"{ta:.2f}")]
+
+
+# ---- CAT062 ----
+def _sf_062_105(d):
+    lat = _s(d, 0, 4) * 180.0 / 33554432.0
+    lon = _s(d, 4, 8) * 180.0 / 33554432.0
+    return [("Latitude (deg)", f"{lat:.6f}"), ("Longitude (deg)", f"{lon:.6f}")]
+
+
+def _sf_062_185(d):
+    vx = _s(d, 0, 2) * 0.25
+    vy = _s(d, 2, 4) * 0.25
+    import math as _m
+    gs = _m.hypot(vx, vy) * 1.94384
+    ta = _m.degrees(_m.atan2(vx, vy)) % 360.0
+    return [("Vx (m/s)", f"{vx:.2f}"), ("Vy (m/s)", f"{vy:.2f}"),
+            ("Ground Speed (kt)", f"{gs:.1f}"), ("Track Angle (deg)", f"{ta:.2f}")]
+
+
+def _sf_062_136(d):
+    return [("Measured Flight Level LSB=1/4", f"{_s(d, 0, 2) * 0.25:.2f}")]
+
+
+def _sf_062_220(d):
+    return [("Rate of Climb/Descent (ft/min) LSB=6.25", f"{_s(d, 0, 2) * 6.25:.0f}")]
+
+
+def _sf_062_100(d):
+    return [("X (m) LSB=0.5", f"{_s(d, 0, 3) * 0.5:.1f}"),
+            ("Y (m) LSB=0.5", f"{_s(d, 3, 6) * 0.5:.1f}")]
+
+
+def _sf_062_130(d):
+    return [("Geometric Altitude (ft) LSB=6.25", f"{_s(d, 0, 2) * 6.25:.1f}")]
+
+
+def _sf_048_042(d):
+    return [("X (NM) LSB=1/128", f"{_s(d, 0, 2) / 128.0:.4f}"),
+            ("Y (NM) LSB=1/128", f"{_s(d, 2, 4) / 128.0:.4f}")]
+
+
+def _sf_048_200(d):
+    gs = _u(d, 0, 2) * (2 ** -14) * 3600.0
+    hdg = _u(d, 2, 4) * 360.0 / 65536.0
+    return [("Ground Speed (kt) LSB=2^-14 NM/s", f"{gs:.1f}"),
+            ("Heading (deg) LSB=360/2^16", f"{hdg:.2f}")]
+
+
+def _sf_048_110(d):
+    h = _u(d, 0, 2) & 0x3FFF
+    if h & 0x2000:
+        h -= 0x4000
+    return [("Height 3D (ft) LSB=25", f"{h * 25}")]
+
+
+def _sf_021_040(d):
+    b = d[0]
+    return [("ATP (address type, bits 7-5)", (b >> 5) & 0x07),
+            ("ARC (alt resolution, bits 4-3)", (b >> 3) & 0x03),
+            ("RC (range check)", 1 if b & 0x04 else 0),
+            ("RAB (1=field monitor)", 1 if b & 0x02 else 0),
+            ("FX (extensión)", 1 if b & 0x01 else 0)]
+
+
+def _sf_021_140(d):
+    return [("Geometric Height (ft) LSB=6.25", f"{_s(d, 0, 2) * 6.25:.1f}")]
+
+
+def _sf_034_000(d):
+    tipos = {1: "North marker", 2: "Sector crossing", 3: "Geographical filtering",
+             4: "Jamming strobe", 5: "Solar storm", 6: "SSR jamming", 7: "Mode S jamming"}
+    t = d[0]
+    return [("Message Type", f"{t} ({tipos.get(t, '?')})")]
+
+
+def _sf_034_041(d):
+    period = _u(d, 0, 2) / 128.0
+    rpm = (60.0 / period) if period else 0.0
+    return [("Antenna Rotation Period (s) LSB=1/128", f"{period:.3f}"),
+            ("RPM", f"{rpm:.2f}")]
+
+
+def _sf_048_250(d):
+    """I048/250 Mode S MB Data: REP + registros BDS (4,0/5,0/6,0)."""
+    from decoder.bds import parse_mb
+    out = [("REP (cantidad de reportes)", d[0] if d else 0)]
+    for code, nombre, fields, raw in parse_mb(d):
+        out.append((f"BDS {code} — {nombre}", ""))
+        if fields:
+            for k, v in fields.items():
+                out.append((f"    {k}", v))
+        else:
+            out.append(("    registro (hex)", raw))
+    return out
+
+
+def _sf_062_380(d):
+    """I062/380 Aircraft Derived Data (compuesto): lista los subcampos presentes,
+    decodificando ADR (ICAO), ID (callsign) y MB (registros BDS)."""
+    from decoder.asterix_utils import read_fspec, _decode_callsign
+    from decoder.bds import parse_mb
+    nombres = {
+        0: "ADR Target Address", 1: "ID Target Identification", 2: "MHG Magnetic Heading",
+        3: "IAS Indicated Airspeed", 4: "TAS True Airspeed", 5: "SAL Selected Altitude",
+        6: "FSS Final State Sel Alt", 7: "TIS Trajectory Intent Status",
+        8: "TID Trajectory Intent Data", 9: "COM ACAS Comms", 10: "SAB Status",
+        11: "ACS ACAS Res Advisory", 12: "BVR Baro Vert Rate", 13: "GVR Geo Vert Rate",
+        14: "RAN Roll Angle", 15: "TAR Track Angle Rate", 16: "TAN Track Angle",
+        17: "GSP Ground Speed", 18: "VUN Vel Uncertainty", 19: "MET Meteorological",
+        20: "EMC Emitter Category", 21: "POS Position", 22: "GAL Geo Altitude",
+        23: "PUN Pos Uncertainty", 24: "MB Mode S MB Data", 25: "IAR Indicated Airspeed",
+        26: "MAC Mach Number", 27: "BPS Baro Pressure",
+    }
+    fijos = {2: 2, 3: 2, 4: 2, 5: 2, 6: 2, 9: 2, 10: 2, 11: 7, 12: 2, 13: 2, 14: 2,
+             15: 2, 16: 2, 17: 2, 18: 1, 19: 8, 20: 1, 21: 6, 22: 2, 23: 1, 25: 2,
+             26: 2, 27: 2}
+    out = []
+    try:
+        sub, off = read_fspec(d, 0)
+        for i in range(len(sub)):
+            if not sub[i]:
+                continue
+            nm = nombres.get(i, f"sub #{i + 1}")
+            if i == 0:
+                out.append((nm + " (ICAO)", d[off:off + 3].hex().upper())); off += 3
+            elif i == 1:
+                out.append((nm, _decode_callsign(d[off:off + 6]))); off += 6
+            elif i == 7:  # TIS variable (FX)
+                s = off
+                while off < len(d):
+                    b = d[off]; off += 1
+                    if not (b & 0x01):
+                        break
+                out.append((nm, d[s:off].hex().upper()))
+            elif i == 8:  # TID repetitivo 15B
+                rep = d[off]; off += 1; out.append((nm, f"{rep} reg")); off += rep * 15
+            elif i == 24:  # MB → registros BDS
+                rep = d[off]
+                blk = d[off:off + 1 + rep * 8]; off += 1 + rep * 8
+                out.append((nm, f"{rep} reporte(s)"))
+                for code, nombre, fields, raw in parse_mb(blk):
+                    out.append((f"  BDS {code}", nombre))
+                    for k, v in fields.items():
+                        out.append((f"    {k}", v))
+            else:
+                ln = fijos.get(i, 1)
+                out.append((nm, d[off:off + ln].hex().upper())); off += ln
+        return out
+    except Exception:
+        return _sf_generic(d)
+
+
+def _sf_generic(d):
+    """Desglose genérico para Items sin decodificador específico: valor entero +
+    interpretación por octeto (decimal / hex / binario)."""
+    out = [("Raw value (uint, big-endian)", int.from_bytes(d, "big") if d else 0),
+           ("Length (bytes)", len(d))]
+    for i, b in enumerate(d[:12]):
+        out.append((f"Octet {i + 1}", f"{b} = 0x{b:02X} = {b:08b}b"))
+    return out
+
+
+def _sf_065_000(d):
+    tipos = {1: "SDPS Status", 2: "End of Batch", 3: "Service Status Report"}
+    t = d[0]
+    return [("Message Type", f"{t} ({tipos.get(t, '?')})")]
+
+
+def _sf_065_015(d):
+    return [("Service Identification", d[0])]
+
+
+def _sf_065_020(d):
+    return [("Batch Number", d[0])]
+
+
+def _sf_065_040(d):
+    """I065/040 SDPS Configuration and Status (1 byte)."""
+    b = d[0]
+    nogo = {0: "Operational", 1: "Degraded", 2: "Not currently connected", 3: "Unknown"}
+    pss = {0: "Not applicable", 1: "SDPS-1 selected", 2: "SDPS-2 selected",
+           3: "SDPS-3 selected"}
+    ng = (b >> 6) & 0x03
+    ps = (b >> 2) & 0x03
+    return [("NOGO (bits 8-7)", f"{ng} ({nogo.get(ng, '?')})"),
+            ("OVL Overload (bit 6)", 1 if b & 0x20 else 0),
+            ("TSV Time Source Invalid (bit 5)", 1 if b & 0x10 else 0),
+            ("PSS (bits 4-3)", f"{ps} ({pss.get(ps, '?')})"),
+            ("STTN Track Re-numbering (bit 2)", 1 if b & 0x02 else 0)]
+
+
+def _sf_065_050(d):
+    """I065/050 Service Status Report (1 byte)."""
+    rep = {1: "Service degradation", 2: "Service degradation ended",
+           3: "Main radar out of service", 4: "Service interrupted by the operator",
+           5: "Service interrupted due to contingency",
+           6: "Ready for service restart after contingency",
+           7: "Service ended by the operator", 8: "Failure of user main radar",
+           9: "Service restarted by the operator", 10: "Main radar becoming operational",
+           11: "Main radar becoming degraded",
+           12: "Service continuity interrupted (disconnection with adjacent unit)",
+           13: "Service continuity restarted", 14: "Service synchronised on backup radar",
+           15: "Service synchronised on main radar",
+           16: "Main and backup radar, if any, failed"}
+    r = d[0]
+    return [("Report", f"{r} ({rep.get(r, '?')})")]
+
+
+def _sf_023_020(d):
+    """I023/020 System Status (1 byte): estado del sistema + bits de servicio."""
+    b = d[0]
+    estados = {0: "Running", 1: "Failed", 2: "Degraded", 3: "Undefined"}
+    st = (b >> 6) & 0x03
+    return [("System State (bits 8-7)", f"{st} ({estados.get(st, '?')})"),
+            ("UPS active (bit 3)", 1 if b & 0x04 else 0),
+            ("Byte (hex)", f"{b:02X}")]
+
+
+# Decodificadores de subcampos por Item (Detailed Description). Se amplían de a poco.
+SUBFIELD_DECODERS = {
+    # SAC/SIC (todas)
+    "I048/010": _sf_sacsic, "I021/010": _sf_sacsic, "I062/010": _sf_sacsic,
+    "I001/010": _sf_sacsic, "I034/010": _sf_sacsic, "I023/010": _sf_sacsic,
+    # CAT048
+    "I048/140": _sf_048_140, "I048/040": _sf_048_040, "I048/070": _sf_048_070,
+    "I048/090": _sf_048_090, "I048/220": _sf_048_220, "I048/240": _sf_048_240,
+    "I048/161": _sf_048_161, "I048/020": _sf_048_020,
+    # CAT021
+    "I021/130": _sf_021_130, "I021/080": _sf_icao3, "I021/070": _sf_mode3a,
+    "I021/145": _sf_fl2, "I021/160": _sf_021_160, "I021/170": _sf_callsign,
+    "I021/071": _sf_tod3, "I021/073": _sf_tod3, "I021/075": _sf_tod3,
+    "I021/250": _sf_048_250,
+    "I048/042": _sf_048_042, "I048/200": _sf_048_200, "I048/110": _sf_048_110,
+    "I048/250": _sf_048_250,
+    # CAT062
+    "I062/070": _sf_tod3, "I062/105": _sf_062_105, "I062/060": _sf_mode3a,
+    "I062/040": _sf_track2, "I062/136": _sf_062_136, "I062/185": _sf_062_185,
+    "I062/220": _sf_062_220, "I062/245": _sf_callsign, "I062/100": _sf_062_100,
+    "I062/130": _sf_062_130, "I062/380": _sf_062_380,
+    # CAT021
+    "I021/040": _sf_021_040, "I021/140": _sf_021_140,
+    # CAT001
+    "I001/040": _sf_048_040, "I001/070": _sf_mode3a, "I001/090": _sf_048_090,
+    "I001/161": _sf_track2, "I001/141": _sf_tod2,
+    # CAT034 / CAT023
+    "I034/020": _sf_034_020, "I034/000": _sf_034_000, "I034/030": _sf_tod3,
+    "I034/041": _sf_034_041, "I023/020": _sf_023_020,
+    # CAT065
+    "I065/010": _sf_sacsic, "I065/000": _sf_065_000, "I065/015": _sf_065_015,
+    "I065/030": _sf_tod3, "I065/020": _sf_065_020, "I065/040": _sf_065_040,
+    "I065/050": _sf_065_050,
+}
+
+
+def _subfields(code: str, data: bytes):
+    # Decodificador específico del Item, o desglose genérico por octeto si no hay.
+    fn = SUBFIELD_DECODERS.get(code, _sf_generic)
+    try:
+        return [(n, str(v)) for n, v in fn(data)]
+    except Exception:
+        try:
+            return [(n, str(v)) for n, v in _sf_generic(data)]
+        except Exception:
+            return []
+
+
+class _SepBloquesDelegate(QStyledItemDelegate):
+    """Dibuja una línea separadora arriba de cada Data Block (nodos de nivel raíz)."""
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        if not index.parent().isValid() and index.row() > 0:
+            painter.save()
+            pen = QPen(QColor("#00E5FF"))
+            pen.setWidth(1)
+            painter.setPen(pen)
+            r = option.rect
+            painter.drawLine(r.left(), r.top(), r.right(), r.top())
+            painter.restore()
+
+
+class AsterixInspectorDialog(QDialog):
+    """Diálogo no-modal de inspección de un registro ASTERIX."""
+
+    def __init__(self, raw_bytes: bytes = b"", info: Optional[dict] = None, parent=None,
+                 paquetes: Optional[List[Tuple[bytes, dict]]] = None):
+        super().__init__(parent)
+        # `paquetes`: lista de (raw_bytes, info) → un Data Block por elemento.
+        # Compatibilidad: si no se pasa, se arma con (raw_bytes, info) único.
+        if paquetes is None:
+            paquetes = [(raw_bytes or b"", info)]
+        self.paquetes: List[Tuple[bytes, dict]] = []
+        for rb, inf in paquetes:
+            inf = dict(inf or {})
+            ss = str(inf.get("sac_sic") or "")
+            if "/" in ss:
+                sac, sic = ss.split("/", 1)
+                inf.setdefault("sac", sac.strip())
+                inf.setdefault("sic", sic.strip())
+            self.paquetes.append((rb or b"", inf))
+        # Primer paquete como referencia (retrocompatibilidad)
+        self.raw_bytes, self.info = self.paquetes[0]
+        self.setWindowTitle("Inspector de Paquete ASTERIX — Bajo Nivel")
+        from player.ui_scaling import escalar_ventana
+        escalar_ventana(self, 980, 600)
+        self.setModal(False)
+        self._init_ui()
+        self._cargar()
+
+    def _init_ui(self):
+        layout = QHBoxLayout(self)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        # --- Panel 1: lista de paquetes seleccionados (#, ToD, bytes) ---
+        cont_lista = QWidget()
+        vlst = QVBoxLayout(cont_lista)
+        vlst.setContentsMargins(0, 0, 0, 0)
+        vlst.addWidget(QLabel("Paquetes seleccionados:"))
+        self.lista = QTableWidget(0, 3)
+        self.lista.setHorizontalHeaderLabels(["#", "ToD", "Bytes"])
+        self.lista.verticalHeader().setVisible(False)
+        self.lista.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.lista.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.lista.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.lista.setShowGrid(True)  # líneas de separación entre paquetes
+        self.lista.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents)
+        self.lista.itemSelectionChanged.connect(self._on_lista_sel)
+        vlst.addWidget(self.lista)
+        splitter.addWidget(cont_lista)
+
+        # --- Panel 2: árbol Data Block / Data Record / Data Item ---
+        izq = QWidget()
+        vizq = QVBoxLayout(izq)
+        vizq.setContentsMargins(0, 0, 0, 0)
+        self.tree = QTreeView()
+        self.tree_model = QStandardItemModel()
+        self.tree_model.setHorizontalHeaderLabels(["Dataitem", "Summary"])
+        self.tree.setModel(self.tree_model)
+        self.tree.setAlternatingRowColors(True)
+        self.tree.setItemDelegate(_SepBloquesDelegate(self.tree))
+        self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.tree.selectionModel().currentChanged.connect(self._on_sel)
+        vizq.addWidget(self.tree)
+        splitter.addWidget(izq)
+
+        # --- Panel derecho: hex dump + datos de ingeniería ---
+        der = QSplitter(Qt.Orientation.Vertical)
+
+        cont_hex = QWidget()
+        vhex = QVBoxLayout(cont_hex)
+        vhex.setContentsMargins(0, 0, 0, 0)
+        vhex.addWidget(QLabel("Volcado hexadecimal / ASCII:"))
+        self.hex_viewer = QTextEdit()
+        self.hex_viewer.setReadOnly(True)
+        self.hex_viewer.setFont(QFont("Consolas", 10))
+        self.hex_viewer.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        vhex.addWidget(self.hex_viewer)
+        der.addWidget(cont_hex)
+
+        cont_det = QWidget()
+        vdet = QVBoxLayout(cont_det)
+        vdet.setContentsMargins(0, 0, 0, 0)
+        vdet.addWidget(QLabel("Detalle del campo seleccionado:"))
+        self.detail = QTextBrowser()
+        self.detail.setOpenExternalLinks(True)
+        vdet.addWidget(self.detail)
+        der.addWidget(cont_det)
+
+        splitter.addWidget(der)
+        splitter.setSizes([180, 440, 500])
+        der.setSizes([200, 400])
+        layout.addWidget(splitter)
+
+    def _etiqueta_item(self, code: str) -> str:
+        nombre = _item_name(code)
+        return f"Data Item {code} — {nombre}" if nombre else f"Data Item {code}"
+
+    def _cargar(self):
+        # El árbol se construye por paquete; lo dispara la selección en la lista.
+        self._poblar_lista()
+        self.detail.setHtml(
+            "<p style='color:#666'>Seleccioná un <b>Data Item</b> en el árbol para ver "
+            "sus bytes (hex y binario) y su desglose.</p>")
+
+    def _cargar_arbol(self, pi: int):
+        """Construye el árbol con SOLO el Data Block del paquete `pi`."""
+        self.tree_model.removeRows(0, self.tree_model.rowCount())
+        if not (0 <= pi < len(self.paquetes)):
+            return
+        raw_bytes, info = self.paquetes[pi]
+        root = self.tree_model.invisibleRootItem()
+        cat = info.get("category")
+        nodo_block = QStandardItem(f"Data Block {pi + 1}")
+        nodo_block.setData(("blk", pi), Qt.ItemDataRole.UserRole)
+        root.appendRow([nodo_block, QStandardItem(f"CAT{cat:03d}" if cat else "")])
+
+        records = deep_records(cat, raw_bytes)
+        if records:
+            # Deep-decode: todos los Data Records del bloque, con offsets y nombres.
+            for ridx, (rinfo, items) in enumerate(records):
+                nodo_rec = QStandardItem(f"Data Record {ridx + 1}")
+                nodo_rec.setData(("blk", pi), Qt.ItemDataRole.UserRole)
+                nodo_block.appendRow([nodo_rec, QStandardItem("")])
+                summ_map = {c: s for c, s in _items_de_registro(rinfo)}
+                for code, start, end in items:
+                    summary = summ_map.get(code) or self._hex_rango(raw_bytes, start, end)
+                    n_item = QStandardItem(self._etiqueta_item(code))
+                    n_item.setData(("item", pi, code, start, end, summary),
+                                   Qt.ItemDataRole.UserRole)
+                    nodo_rec.appendRow([n_item, QStandardItem(summary)])
+        else:
+            # Fallback (categorías sin deep-decode todavía): solo campos decodificados
+            # del registro, sin offsets/resaltado.
+            nodo_rec = QStandardItem("Data Record 1")
+            nodo_rec.setData(("blk", pi), Qt.ItemDataRole.UserRole)
+            nodo_block.appendRow([nodo_rec, QStandardItem("")])
+            items = _items_de_registro(info)
+            for code, summary in items:
+                nodo_rec.appendRow([
+                    QStandardItem(self._etiqueta_item(code)), QStandardItem(summary)])
+            if not items:
+                nodo_rec.appendRow([
+                    QStandardItem("(sin desglose para esta categoría)"), QStandardItem("")])
+
+        self.tree.expandAll()
+        self.tree.resizeColumnToContents(0)
+
+    def _poblar_lista(self):
+        """Llena la tabla de paquetes seleccionados (#, ToD, bytes)."""
+        self.lista.setRowCount(len(self.paquetes))
+        for pi, (rb, info) in enumerate(self.paquetes):
+            tod = info.get("timestamp")
+            celdas = [
+                QTableWidgetItem(str(pi + 1)),
+                QTableWidgetItem(_fmt_tod(tod) if tod is not None else "—"),
+                QTableWidgetItem(str(len(rb))),
+            ]
+            for c, celda in enumerate(celdas):
+                celda.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.lista.setItem(pi, c, celda)
+        if self.paquetes:
+            self.lista.selectRow(0)
+
+    def _on_lista_sel(self):
+        filas = self.lista.selectionModel().selectedRows()
+        if filas:
+            self._ir_a_paquete(filas[0].row())
+
+    def _ir_a_paquete(self, pi: int):
+        """Muestra en el árbol y el hex SOLO el paquete `pi` de la lista."""
+        self._mostrar_hex(pi)
+        self._cargar_arbol(pi)
+
+    def _mostrar_hex(self, pi: int):
+        """Vuelca en el hex viewer los bytes crudos del paquete `pi`."""
+        if 0 <= pi < len(self.paquetes):
+            self._hex_pi = pi
+            self.hex_viewer.setText(generar_hex_dump(self.paquetes[pi][0]))
+
+    def _hex_rango(self, raw_bytes: bytes, start: int, end: int) -> str:
+        return " ".join(f"{b:02X}" for b in raw_bytes[start:end])
+
+    def _on_sel(self, current, previous):
+        if not current.isValid():
+            self.hex_viewer.setExtraSelections([])
+            return
+        idx0 = current.sibling(current.row(), 0)
+        item = self.tree_model.itemFromIndex(idx0)
+        data = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        if data and data[0] == "item":
+            _, pi, code, start, end, summary = data
+            if pi != getattr(self, "_hex_pi", -1):
+                self._mostrar_hex(pi)
+            self._resaltar(pi, int(start), int(end))
+            self.detail.setHtml(
+                self._html_detalle_item(pi, code, int(start), int(end), summary))
+        else:
+            # Nodo Data Block / Data Record: muestra el hex de su paquete sin resaltar.
+            if data and data[0] == "blk" and data[1] != getattr(self, "_hex_pi", -1):
+                self._mostrar_hex(data[1])
+            self.hex_viewer.setExtraSelections([])
+            self.detail.setHtml(
+                "<p style='color:#666'>(seleccioná un Data Item para ver su detalle)</p>")
+
+    def _html_detalle_item(self, pi: int, code: str, start: int, end: int,
+                           summary: str) -> str:
+        nombre = _item_name(code)
+        data = self.paquetes[pi][0][start:end]
+
+        # Raw Data en Hexadecimal + ASCII: una columna por octeto
+        oct_hdr = "<td bgcolor='#eef3e2'></td>" + "".join(
+            f"<td align='center' bgcolor='#eef3e2'><b>Octet {i + 1}</b></td>"
+            for i in range(len(data)))
+        hex_cells = "<td><b>Hex</b></td>" + "".join(
+            f"<td align='center'>{b:02X}</td>" for b in data)
+        ascii_cells = "<td><b>ASCII</b></td>" + "".join(
+            f"<td align='center'>{(chr(b) if 32 <= b < 127 else '.')}</td>" for b in data)
+        hex_table = (
+            "<table border='1' cellspacing='0' cellpadding='4'>"
+            f"<tr>{oct_hdr}</tr><tr>{hex_cells}</tr>"
+            f"<tr bgcolor='#fbfbf0'>{ascii_cells}</tr></table>")
+
+        # Raw Data in Binary: una fila por octeto con sus 8 bits
+        bin_rows = ""
+        for i, b in enumerate(data):
+            bits = "".join(f"<td align='center'>{(b >> k) & 1}</td>" for k in range(7, -1, -1))
+            bin_rows += (
+                f"<tr><td bgcolor='#eef3e2'><b>Octet {i + 1} — {b:02X}</b></td>{bits}</tr>")
+        bin_table = f"<table border='1' cellspacing='0' cellpadding='3'>{bin_rows}</table>"
+
+        # Detailed Description: subcampos (si hay decodificador para el Item)
+        subf = _subfields(code, data)
+        if subf:
+            filas = "".join(
+                f"<tr><td>{n}</td><td align='right'>{v}</td></tr>" for n, v in subf)
+            det = ("<table border='1' cellspacing='0' cellpadding='4'>"
+                   "<tr bgcolor='#8db84e'><td><b>Name</b></td><td><b>Value</b></td></tr>"
+                   f"{filas}</table>")
+        else:
+            det = "<i style='color:#888'>(desglose de subcampos pendiente para este Item)</i>"
+
+        titulo = f"Data Item {code}" + (f" - {nombre}" if nombre else "")
+        return (
+            f"<h3>{titulo}</h3>"
+            f"<b>Summary</b><p>{summary or '—'}</p>"
+            f"<b>Raw Data in Hexadecimal</b><br>{hex_table}<br>"
+            f"<b>Raw Data in Binary</b><br>{bin_table}<br>"
+            f"<b>Detailed Description</b><br>{det}<br><br>"
+            "<b>References</b><p>Check Eurocontrol "
+            "(<a href='https://www.eurocontrol.int'>www.eurocontrol.int</a>) "
+            "for more ASTERIX information.</p>")
+
+    def _resaltar(self, pi: int, start: int, end: int):
+        """Pinta en el hex viewer los bytes [start, end) del Item seleccionado."""
+        fmt = QTextCharFormat()
+        fmt.setBackground(QColor("#E91E63"))
+        fmt.setForeground(QColor("white"))
+        doc = self.hex_viewer.document()
+        sels = []
+        for i in range(start, end):
+            line, col = divmod(i, 16)
+            block = doc.findBlockByNumber(line)
+            if not block.isValid():
+                continue
+            pos = block.position() + 6 + col * 3  # "AAAA  " = 6 chars; cada par = 3
+            cur = QTextCursor(doc)
+            cur.setPosition(pos)
+            cur.setPosition(pos + 2, QTextCursor.MoveMode.KeepAnchor)
+            sel = QTextEdit.ExtraSelection()
+            sel.cursor = cur
+            sel.format = fmt
+            sels.append(sel)
+        self.hex_viewer.setExtraSelections(sels)
+        if sels:
+            self.hex_viewer.setTextCursor(sels[0].cursor)

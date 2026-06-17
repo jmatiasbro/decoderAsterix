@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.11532222222222,
+            -31.241625000000003
+          ],
+          [
+            -64.03179722222222,
+            -31.241083333333336
+          ],
+          [
+            -63.743633333333335,
+            -31.31405
+          ],
+          [
+            -63.1475,
+            -31.46527777777778
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "GENAS1C",
+        "type": "polyline"
+      }
+    }
+  ]
+}

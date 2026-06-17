@@ -1,0 +1,16 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                3    [ITELA1M]
+285828.00S0652327.00W        [ITELA1M]
+290001.00S0653919.00W        [ITELA1M]
+285738.00S0655023.00W        [ITELA1M]
