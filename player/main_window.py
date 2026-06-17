@@ -3706,10 +3706,73 @@ class MainWindow(QMainWindow):
         self.act_msa_sectores.setChecked(getattr(self, '_msa_sectores_on', False))
         self.act_msa_sectores.toggled.connect(self._toggle_msa_sectores)
 
+        self.act_msa_poligonos = self.menu_areas.addAction("Mostrar zonas MSA (polígonos)")
+        self.act_msa_poligonos.setCheckable(True)
+        self.act_msa_poligonos.setChecked(getattr(self, '_msa_poligonos_on', False))
+        self.act_msa_poligonos.toggled.connect(self._toggle_msa_poligonos)
+
+        self.act_apm_corredores = self.menu_areas.addAction("Mostrar corredores APM")
+        self.act_apm_corredores.setCheckable(True)
+        self.act_apm_corredores.setChecked(getattr(self, '_apm_corredores_on', False))
+        self.act_apm_corredores.toggled.connect(self._toggle_apm_corredores)
+
+        self.act_perfil_corredores = self.menu_areas.addAction("Mostrar corredores por waypoints")
+        self.act_perfil_corredores.setCheckable(True)
+        self.act_perfil_corredores.setChecked(getattr(self, '_perfil_corredores_on', False))
+        self.act_perfil_corredores.toggled.connect(self._toggle_perfil_corredores)
+
         self.act_isogonas = self.menu_areas.addAction("Mostrar isógonas (declinación)")
         self.act_isogonas.setCheckable(True)
         self.act_isogonas.setChecked(getattr(self, '_isogonas_on', False))
         self.act_isogonas.toggled.connect(self._toggle_isogonas)
+
+    def _toggle_msa_layer(self, on, name, color, gen_fn, etiqueta):
+        """Helper común: agrega/quita una capa MSAW de referencia en el PPI."""
+        from player.msaw import render as _mr
+        mm = getattr(self.radar, 'map_manager', None)
+        if mm is None:
+            return
+        if on:
+            try:
+                segs = gen_fn()
+            except Exception as e:
+                print(f"[{etiqueta}] Error generando capa: {e}")
+                return
+            if not segs:
+                return
+            mm.add_layer(name, segs, "TACTICO")
+            if name in mm.layers:
+                mm.layers[name].color = color
+            if getattr(self.radar, 'proy', None) is not None:
+                mm.reproject_all(self.radar.proy)
+        else:
+            mm.layers.pop(name, None)
+        self.radar.update()
+
+    def _toggle_msa_poligonos(self, on):
+        """Muestra/oculta las zonas MSA poligonales (minimums_zones)."""
+        from player.msaw import render as _mr
+        self._msa_poligonos_on = on
+        self._toggle_msa_layer(on, "MSA::POLY", _mr.MSA_POLY_COLOR,
+                               _mr.msa_polygon_segments, "MSA-POLY")
+
+    def _toggle_apm_corredores(self, on):
+        """Muestra/oculta los corredores APM de aproximación."""
+        from player.msaw import render as _mr
+        from player import atm_db
+        self._apm_corredores_on = on
+        self._toggle_msa_layer(
+            on, "MSA::APM", _mr.APM_COLOR,
+            lambda: _mr.apm_corridor_segments(atm_db.apm_corridors()), "APM")
+
+    def _toggle_perfil_corredores(self, on):
+        """Muestra/oculta los corredores por waypoints (profile_points)."""
+        from player.msaw import render as _mr
+        from player import atm_db
+        self._perfil_corredores_on = on
+        self._toggle_msa_layer(
+            on, "MSA::PROF", _mr.PROFILE_COLOR,
+            lambda: _mr.profile_corridor_segments(atm_db.profile_corridors()), "PROF")
 
     def _toggle_msa_sectores(self, on):
         """Muestra/oculta los sectores MSA (anillo+radiales+MSA) como referencia."""
