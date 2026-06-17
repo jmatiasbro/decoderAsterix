@@ -900,6 +900,7 @@ class RadarWidget(_RadarBase):
         self.msaw_exentos = set()      # categorías de vuelo inhibidas (configurable)
         self._msaw_zones = None
         self._msaw_params = None
+        self._msaw_suppression = None
         self.quality_manager = QualityManager()
         # Silenciar el logger interno del QM: registra en cada ciclo y satura el
         # archivo. El registro de eventos de calidad ahora es deduplicado y vive
@@ -2404,12 +2405,32 @@ class RadarWidget(_RadarBase):
             return
         try:
             from player.msaw.engine import evaluar_msaw as _engine
+            from player import atm_db
             if self._msaw_zones is None:
                 from player.msaw import data as _md
-                self._msaw_zones = _md.msa_zones()
+                from player.msaw.model import MsaPolygon
+                circulos = _md.msa_zones()
+                poligonos = [MsaPolygon(z["identifier"], z["msa_ft"], z["coords"])
+                             for z in atm_db.minimums_zones()]
+                self._msaw_zones = poligonos + circulos
             if self._msaw_params is None:
-                from player import atm_db
                 self._msaw_params = atm_db.msaw_params()
+            if getattr(self, '_msaw_suppression', None) is None:
+                from player.msaw.model import (ApmCorridor, ProfileCorridor,
+                                               SuppressionSet)
+                apm = [ApmCorridor(
+                            airport=c["airport"], runway=c["runway"],
+                            near=c["near"], far=c["far"],
+                            half_wide_nm=c["half_wide_nm"],
+                            min_dist=c["min_dist"], max_dist=c["max_dist"],
+                            lower_slope=c["lower_slope"], upper_slope=c["upper_slope"],
+                            glide_slope=c["glide_slope"], thr_elev_ft=c["thr_elev_ft"])
+                       for c in atm_db.apm_corridors()]
+                profs = [ProfileCorridor(profile=p["profile"], kind=p["kind"],
+                                         points=p["points"])
+                         for p in atm_db.profile_corridors()]
+                self._msaw_suppression = SuppressionSet(
+                    apm=apm, profiles=profs, params=atm_db.profile_parameters())
             if not self._msaw_zones:
                 self.msaw_activos = []
                 return
@@ -2420,7 +2441,8 @@ class RadarWidget(_RadarBase):
                 except Exception:
                     t.vertical_rate = 0.0
             self.msaw_activos = _engine(self.tracks.values(), self._msaw_zones,
-                                        self._msaw_params, self.msaw_exentos)
+                                        self._msaw_params, self.msaw_exentos,
+                                        suppression=self._msaw_suppression)
             if getattr(self, 'msaw_dialog', None):
                 self.msaw_dialog.actualizar_alertas(self.msaw_activos, self)
         except Exception as e:
