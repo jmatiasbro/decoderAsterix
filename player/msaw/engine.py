@@ -28,7 +28,27 @@ def _alive(track) -> bool:
     return True
 
 
-def evaluar_msaw(tracks, zones, params: MsawParams = None, exentos=None):
+def msa_lookup(zones, lat, lon):
+    """MSA aplicable en el punto. Polígonos primero, luego círculos.
+
+    `zones` es una lista que puede mezclar MsaPolygon (tienen `.identifier`) y
+    MsaZone (tienen `.icao`). Devuelve (msa_ft, ident) o (None, None).
+    """
+    polys = [z for z in zones if hasattr(z, "identifier")]
+    circles = [z for z in zones if not hasattr(z, "identifier")]
+    for z in polys:
+        msa = z.msa_en(lat, lon)
+        if msa is not None:
+            return msa, z.identifier
+    for z in circles:
+        msa = z.msa_en(lat, lon)
+        if msa is not None:
+            return msa, z.icao
+    return None, None
+
+
+def evaluar_msaw(tracks, zones, params: MsawParams = None, exentos=None,
+                 suppression=None):
     """Devuelve [AlertaMSAW].
 
     - Altitud del track: FL*100 (ft MSL, aprox; pressure≈QNH cerca de TA).
@@ -79,35 +99,36 @@ def evaluar_msaw(tracks, zones, params: MsawParams = None, exentos=None):
         except (ValueError, TypeError):
             vx = vy = vrate = None
 
-        for z in zones:
-            msa = z.msa_en(lat, lon)
-            if msa is None:                        # fuera de la TMA
-                continue
+        msa, ident = msa_lookup(zones, lat, lon)
+        if msa is None:                            # fuera de toda zona
+            continue
 
-            # 1. Violación inmediata
-            if alt_ft < msa:
-                alertas.append(AlertaMSAW(track_id, z.icao, 'VIOLATION',
-                                          int(msa), int(alt_ft), 0.0))
-                break
+        # Supresión en aproximación (corredor + envelope vertical)
+        if suppression is not None and suppression.suprime(lat, lon, alt_ft):
+            continue
 
-            # 2. Predicción de descenso (sólo si desciende)
-            if vrate is not None and vrate < 0:
-                hit = False
-                for t in range(1, look + 1):
-                    alt_t = alt_ft + vrate * (t / 60.0)
-                    if vx is not None and vy is not None:
-                        lat_t, lon_t = predecir_posicion(lat, lon, vx, vy, t)
-                    else:
-                        lat_t, lon_t = lat, lon
-                    msa_t = z.msa_en(lat_t, lon_t)
-                    if msa_t is None:
-                        msa_t = msa
-                    if alt_t < msa_t:
-                        alertas.append(AlertaMSAW(track_id, z.icao, 'PREDICTED',
-                                                  int(msa_t), int(alt_ft), float(t)))
-                        hit = True
-                        break
-                if hit:
+        # 1. Violación inmediata
+        if alt_ft < msa:
+            alertas.append(AlertaMSAW(track_id, ident, 'VIOLATION',
+                                      int(msa), int(alt_ft), 0.0))
+            continue
+
+        # 2. Predicción de descenso (sólo si desciende)
+        if vrate is not None and vrate < 0:
+            for t in range(1, look + 1):
+                alt_t = alt_ft + vrate * (t / 60.0)
+                if vx is not None and vy is not None:
+                    lat_t, lon_t = predecir_posicion(lat, lon, vx, vy, t)
+                else:
+                    lat_t, lon_t = lat, lon
+                if suppression is not None and suppression.suprime(lat_t, lon_t, alt_t):
+                    continue
+                msa_t, ident_t = msa_lookup(zones, lat_t, lon_t)
+                if msa_t is None:
+                    msa_t, ident_t = msa, ident
+                if alt_t < msa_t:
+                    alertas.append(AlertaMSAW(track_id, ident_t, 'PREDICTED',
+                                              int(msa_t), int(alt_ft), float(t)))
                     break
 
     return alertas
