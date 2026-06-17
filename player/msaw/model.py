@@ -9,7 +9,34 @@ MSA en pies MSL. Parámetros del algoritmo desde msaw_parameters (atm_db).
 from dataclasses import dataclass, field
 import math
 
-from player.areas.model import haversine_nm
+from player.areas.model import haversine_nm, point_in_poly
+
+NM_PER_DEG = 60.0
+FT_PER_NM = 6076.12
+
+
+def enu_nm(lat0, lon0, lat, lon):
+    """Desplazamiento local (este, norte) en NM desde (lat0,lon0)."""
+    dy = (lat - lat0) * NM_PER_DEG
+    dx = (lon - lon0) * NM_PER_DEG * math.cos(math.radians(lat0))
+    return dx, dy
+
+
+def cross_along_nm(lat, lon, lat1, lon1, lat2, lon2):
+    """(cross, along) en NM del punto respecto del segmento (1)->(2).
+
+    cross = distancia perpendicular (>=0); along = proyección sobre el eje
+    medida desde el extremo (1) (puede ser <0 o > largo del segmento).
+    """
+    px, py = enu_nm(lat1, lon1, lat, lon)
+    sx, sy = enu_nm(lat1, lon1, lat2, lon2)
+    seg = math.hypot(sx, sy)
+    if seg < 1e-9:
+        return math.hypot(px, py), 0.0
+    ux, uy = sx / seg, sy / seg
+    along = px * ux + py * uy
+    cross = abs(px * (-uy) + py * ux)
+    return cross, along
 
 
 def bearing_true(lat0, lon0, lat, lon) -> float:
@@ -71,3 +98,17 @@ class MsawParams:
     time_to_prediction: int = 120     # s de look-ahead
     rocd: int = 1500                  # ft/min: razón de descenso considerada
     cfl_thold: int = 5                # FL de tolerancia sobre el nivel autorizado
+
+
+@dataclass
+class MsaPolygon:
+    """Zona MSA poligonal (altitud mínima por polígono geográfico)."""
+    identifier: str
+    msa_ft: int
+    coords: list                  # [(lat,lon)...]
+
+    def contiene(self, lat, lon) -> bool:
+        return point_in_poly(lat, lon, self.coords)
+
+    def msa_en(self, lat, lon):
+        return self.msa_ft if self.contiene(lat, lon) else None
