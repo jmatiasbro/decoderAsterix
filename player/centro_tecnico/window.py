@@ -10,6 +10,7 @@ from player.centro_tecnico.stats_widget import StatsWidget
 from player.centro_tecnico.coverage_widget import CoverageWidget
 from player.centro_tecnico.inspector_widget import InspectorWidget
 from player.technical_monitor import TechnicalMonitorWidget
+from player.calib_dialog import CalibrationWidget
 
 
 class TechnicalImportWorker(QThread):
@@ -143,6 +144,13 @@ class CentroTecnicoWindow(QMainWindow):
         self.inspector_tab = InspectorWidget(self._repo_db, self._worker, self)
         self.tabs.addTab(self.inspector_tab, "🔬 Inspector")
         self.tabs.addTab(self.coverage_tab, "🛰 Cobertura")
+
+        # Análisis y Calibración de registración (antes diálogo del menú Config).
+        sensores = getattr(self.parent(), "sensores", {})
+        pcap_path = getattr(self.parent(), "pcap_path", "")
+        self.calib_tab = CalibrationWidget(sensores, pcap_path=pcap_path, parent=self)
+        self.calib_tab.cambios_guardados.connect(self._on_calib_guardado)
+        self.tabs.addTab(self.calib_tab, "🛠 Calibración")
 
         # Barra de herramientas superior prominente
         self._build_toolbar()
@@ -480,3 +488,9 @@ class CentroTecnicoWindow(QMainWindow):
             self.stats_tab.on_source_changed()
         if hasattr(self.coverage_tab, "on_source_changed"):
             self.coverage_tab.on_source_changed()
+
+    def _on_calib_guardado(self):
+        """Tras guardar/desactivar correcciones: el app recarga sus sensores."""
+        app = self.parent()
+        if app is not None and hasattr(app, "_recargar_sensores_calib"):
+            app._recargar_sensores_calib()

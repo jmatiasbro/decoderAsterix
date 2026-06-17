@@ -974,11 +974,9 @@ class MainWindow(QMainWindow):
         # Submenú para cambiar el rol operativo rápido (controlador ↔ técnico)
         self.menu_rol = menu_config.addMenu("Rol Operativo")
         self.menu_rol.aboutToShow.connect(self._rebuild_rol_menu)
-        # Calibración de registración: SOLO rol técnico (se habilita según rol)
+        # Centro Técnico ATSEP: SOLO rol técnico. Incluye la pestaña de Análisis y
+        # Calibración (antes diálogo suelto del menú).
         menu_config.addSeparator()
-        self.act_calibracion = menu_config.addAction(
-            "Análisis y Calibración (Técnico)…", self._abrir_calibracion)
-        self.act_calibracion.setEnabled(self.profile_manager.get_rol() == "tecnico")
         self.act_centro_tecnico = menu_config.addAction(
             "Centro Técnico ATSEP…", self._abrir_centro_tecnico)
         self.act_centro_tecnico.setEnabled(self.profile_manager.get_rol() == "tecnico")
@@ -3085,34 +3083,11 @@ class MainWindow(QMainWindow):
         # Persistir el nuevo rol en el perfil activo y re-aplicar
         self.profile_manager.update_profile({"rol": rol})
         self._aplicar_rol(self.profile_manager.profile)
-        # La calibración de registración es exclusiva del rol técnico
-        if hasattr(self, 'act_calibracion'):
-            self.act_calibracion.setEnabled(rol == "tecnico")
+        # El Centro Técnico (incluye calibración) es exclusivo del rol técnico
         if hasattr(self, 'act_centro_tecnico'):
             self.act_centro_tecnico.setEnabled(rol == "tecnico")
         self.radar.update()
         print(f"[ROL] Cambiado en caliente a: {rol}")
-
-    def _abrir_calibracion(self):
-        """Abre el panel técnico de calibración de registración (solo rol técnico)."""
-        if self.profile_manager.get_rol() != "tecnico":
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Acceso restringido",
-                                "La calibración de registración es exclusiva del rol técnico.")
-            return
-        from player.calib_dialog import CalibrationDialog
-        # No-modal: se mantiene la referencia para que no lo recolecte el GC y
-        # se permite seguir usando la consola mientras el calibrador está abierto.
-        if getattr(self, '_calib_dialog', None) is not None:
-            self._calib_dialog.raise_()
-            self._calib_dialog.activateWindow()
-            return
-        self._calib_dialog = CalibrationDialog(
-            self.sensores, pcap_path=getattr(self, 'pcap_path', ''), parent=self)
-        self._calib_dialog.setModal(False)
-        self._calib_dialog.accepted.connect(self._recargar_sensores_calib)
-        self._calib_dialog.finished.connect(lambda _=0: setattr(self, '_calib_dialog', None))
-        self._calib_dialog.show()
 
     def _abrir_centro_tecnico(self):
         """Abre el Centro Técnico ATSEP (solo rol técnico)."""
