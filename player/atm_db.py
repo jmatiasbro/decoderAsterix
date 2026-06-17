@@ -371,3 +371,153 @@ def fixes(kinds=None):
         if lat is not None and lon is not None:
             out.append({"name": name, "lat": lat, "lon": lon, "kind": (kind or "").strip()})
     return out
+
+
+# ── MSAW: zonas poligonales y perfiles de aproximación ──────────────────────
+
+# parse_dms ya cubre el formato DMS entero del FDP; lo exponemos con el nombre
+# usado por los readers/consumidores MSAW.
+dms_to_dd = parse_dms
+
+
+def _dms_dot_to_dd(s):
+    """DMS con segundos decimales: '312228.69S' / '0641226.21W' -> DD, o None."""
+    if not s or not isinstance(s, str):
+        return None
+    s = s.strip()
+    if not s:
+        return None
+    hemi = s[-1].upper()
+    body = s[:-1]
+    intpart = body.split(".")[0]
+    try:
+        if len(intpart) == 6:         # DDMMSS(.ss) lat
+            d, m = int(intpart[0:2]), int(intpart[2:4])
+            sec = float(body[4:])
+        elif len(intpart) == 7:       # DDDMMSS(.ss) lon
+            d, m = int(intpart[0:3]), int(intpart[3:5])
+            sec = float(body[5:])
+        else:
+            return parse_dms(s)
+        dd = d + m / 60 + sec / 3600
+        return round(-dd if hemi in ("S", "W") else dd, 6)
+    except (ValueError, TypeError):
+        return None
+
+
+def minimums_zones():
+    """[{identifier, msa_ft, coords:[(lat,lon)...]}] (msa en ft = altitude*100)."""
+    if not available():
+        return []
+    try:
+        rows = _con().execute("""
+            SELECT TRIM(mzk.identifier) AS ident, mzk.altitude,
+                   mzv.sequence_number, mzv.latitude_image, mzv.longitude_image
+            FROM minimums_zones_kernel mzk
+            JOIN minimums_zones_vertices mzv
+              ON mzk.identifier = mzv.zone_identifier
+            ORDER BY ident, mzv.sequence_number
+        """).fetchall()
+    except Exception:
+        return []
+    out = {}
+    for ident, alt, _seq, lat_i, lon_i in rows:
+        lat, lon = parse_dms(lat_i), parse_dms(lon_i)
+        if lat is None or lon is None:
+            continue
+        z = out.setdefault(ident, {"identifier": ident,
+                                   "msa_ft": int(float(alt) * 100), "coords": []})
+        z["coords"].append((lat, lon))
+    return [z for z in out.values() if len(z["coords"]) >= 3]
+
+
+def apm_corridors(airport=None):
+    """Corredores APM con near/far no nulos. Distancias en NM, slopes en °."""
+    if not available():
+        return []
+    where = f"WHERE TRIM(ap.airport_id) = '{airport}'" if airport else ""
+    try:
+        rows = _con().execute(f"""
+            SELECT TRIM(ap.airport_id), TRIM(ap.runway_id),
+                   ap.min_distance, ap.max_distance, ap.half_wide,
+                   ap.lower_slope, ap.upper_slope, ap.glide_slope,
+                   ap.near_latitude, ap.near_longitude,
+                   ap.far_latitude, ap.far_longitude,
+                   ak.place_altitude
+            FROM apm_profiles_kernel ap
+            JOIN airports_kernel ak ON ap.airport_id = ak.identifier_name
+            {where}
+            ORDER BY ap.airport_id, ap.runway_id
+        """).fetchall()
+    except Exception:
+        return []
+    out = []
+    for (apid, rwy, mind, maxd, hw, lo, up, gl,
+         nlat, nlon, flat, flon, elev) in rows:
+        if not (nlat and nlon and flat and flon):
+            continue
+        near = (_dms_dot_to_dd(nlat), _dms_dot_to_dd(nlon))
+        far = (_dms_dot_to_dd(flat), _dms_dot_to_dd(flon))
+        if None in near or None in far:
+            continue
+        out.append({
+            "airport": apid, "runway": rwy,
+            "near": near, "far": far,
+            "min_dist": float(mind), "max_dist": float(maxd),
+            "half_wide_nm": float(hw),
+            "lower_slope": float(lo), "upper_slope": float(up),
+            "glide_slope": float(gl) if gl is not None else None,
+            "thr_elev_ft": int(elev or 0),
+        })
+    return out
+
+
+def profile_corridors(airport=None):
+    """[{profile, airport, runway, kind, points:[(lat,lon,min_ft,dlat,az)...]}]."""
+    if not available():
+        return []
+    where = f"WHERE TRIM(pk.airport) = '{airport}'" if airport else ""
+    try:
+        rows = _con().execute(f"""
+            SELECT TRIM(pk.name), TRIM(pk.airport), TRIM(pk.runway), TRIM(pk.kind),
+                   pp.seq_num, pp.latitude, pp.longitude,
+                   pp.altitude, pp.distance_lateral, pp.azimut
+            FROM profiles_kernel pk
+            JOIN profile_points pp ON pk.name = pp.perfil_id
+            {where}
+            ORDER BY pk.name, pp.seq_num
+        """).fetchall()
+    except Exception:
+        return []
+    out = {}
+    for name, apid, rwy, kind, _seq, lat_i, lon_i, alt, dlat, az in rows:
+        lat, lon = parse_dms(lat_i), parse_dms(lon_i)
+        if lat is None or lon is None:
+            continue
+        p = out.setdefault(name, {"profile": name, "airport": apid,
+                                  "runway": rwy, "kind": kind, "points": []})
+        p["points"].append((lat, lon, int(float(alt) * 100),
+                            float(dlat or 0.5), int(az or 0)))
+    return [p for p in out.values() if len(p["points"]) >= 2]
+
+
+def profile_parameters():
+    """Tolerancias globales de perfiles (escalas aplicadas)."""
+    default = {"tol_heading": 18, "tol_altitude_ft": 300,
+               "tol_distance_nm": 0.5, "entorno_aerodrome_nm": 3}
+    if not available():
+        return default
+    try:
+        row = _con().execute(
+            "SELECT tol_heading, tol_altitude, tol_distance, entorno_aerodrome "
+            "FROM profile_parameters LIMIT 1").fetchone()
+    except Exception:
+        return default
+    if not row:
+        return default
+    return {
+        "tol_heading": int(row[0] or 18),
+        "tol_altitude_ft": int(float(row[1] or 3) * 100),
+        "tol_distance_nm": float(row[2] or 0.5),
+        "entorno_aerodrome_nm": float(row[3] or 3),
+    }
