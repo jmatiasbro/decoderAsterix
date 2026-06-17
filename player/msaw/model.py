@@ -112,3 +112,93 @@ class MsaPolygon:
 
     def msa_en(self, lat, lon):
         return self.msa_ft if self.contiene(lat, lon) else None
+
+
+@dataclass
+class ApmCorridor:
+    """Corredor de aproximación paramétrico (trapezoidal) por pista."""
+    airport: str
+    runway: str
+    near: tuple                   # (lat,lon) umbral
+    far: tuple                    # (lat,lon) punto lejano
+    half_wide_nm: float
+    min_dist: float
+    max_dist: float
+    lower_slope: float            # grados
+    upper_slope: float            # grados
+    glide_slope: float
+    thr_elev_ft: int
+
+    def _cross_along(self, lat, lon):
+        return cross_along_nm(lat, lon, self.near[0], self.near[1],
+                              self.far[0], self.far[1])
+
+    def en_corredor(self, lat, lon) -> bool:
+        cross, along = self._cross_along(lat, lon)
+        return (cross <= self.half_wide_nm
+                and self.min_dist <= along <= self.max_dist)
+
+    def en_envelope(self, lat, lon, alt_ft) -> bool:
+        _cross, along = self._cross_along(lat, lon)
+        if along <= 0:
+            return False
+        ft = along * FT_PER_NM
+        alt_lo = self.thr_elev_ft + ft * math.tan(math.radians(self.lower_slope))
+        alt_hi = self.thr_elev_ft + ft * math.tan(math.radians(self.upper_slope))
+        return alt_lo <= alt_ft <= alt_hi
+
+
+@dataclass
+class ProfileCorridor:
+    """Corredor de aproximación por waypoints (altitud mínima interpolada)."""
+    profile: str
+    kind: str                     # 'A' | 'D'
+    points: list                  # [(lat,lon,min_ft,dlat_nm,az)...] por seq
+
+    def _nearest_segment(self, lat, lon):
+        """(idx, cross, along, min_interp, dlat) del tramo más cercano."""
+        best = None
+        for i in range(len(self.points) - 1):
+            la1, lo1, m1, dl1, _ = self.points[i]
+            la2, lo2, m2, _dl2, _ = self.points[i + 1]
+            cross, along = cross_along_nm(lat, lon, la1, lo1, la2, lo2)
+            seg = haversine_nm(la1, lo1, la2, lo2)
+            t = max(0.0, min(1.0, along / seg)) if seg > 1e-9 else 0.0
+            min_interp = m1 + (m2 - m1) * t
+            cand = (i, cross, along, min_interp, dl1)
+            if best is None or cross < best[1]:
+                best = cand
+        return best
+
+    def en_corredor(self, lat, lon) -> bool:
+        b = self._nearest_segment(lat, lon)
+        if b is None:
+            return False
+        _i, cross, _along, _m, dlat = b
+        return cross <= dlat
+
+    def en_envelope(self, lat, lon, alt_ft, tol_ft=300) -> bool:
+        b = self._nearest_segment(lat, lon)
+        if b is None:
+            return False
+        _i, _cross, _along, min_interp, _dlat = b
+        # suprime si la aeronave sigue el perfil de mínimos (no muy por debajo)
+        return alt_ft >= (min_interp - tol_ft)
+
+
+@dataclass
+class SuppressionSet:
+    """Conjunto de corredores que inhiben la alerta MSAW en aproximación."""
+    apm: list = field(default_factory=list)        # [ApmCorridor]
+    profiles: list = field(default_factory=list)   # [ProfileCorridor]
+    params: dict = field(default_factory=dict)
+
+    def suprime(self, lat, lon, alt_ft) -> bool:
+        for c in self.apm:
+            if c.en_corredor(lat, lon) and c.en_envelope(lat, lon, alt_ft):
+                return True
+        tol = self.params.get("tol_altitude_ft", 300)
+        for p in self.profiles:
+            if p.en_corredor(lat, lon) and p.en_envelope(lat, lon, alt_ft, tol):
+                return True
+        return False
