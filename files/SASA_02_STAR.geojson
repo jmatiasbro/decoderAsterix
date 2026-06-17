@@ -1,0 +1,88 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.0925,
+            -25.699444444444445
+          ],
+          [
+            -65.28221666666667,
+            -25.408555555555555
+          ],
+          [
+            -65.35236388888889,
+            -25.300580555555555
+          ],
+          [
+            -65.44111111111111,
+            -25.163888888888888
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ILPAR2M",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.0925,
+            -25.699444444444445
+          ],
+          [
+            -65.23089444444444,
+            -25.374930555555554
+          ],
+          [
+            -65.30062777777778,
+            -25.2107
+          ],
+          [
+            -65.36305555555555,
+            -25.063055555555557
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ILPAR2N",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.09277777777777,
+            -24.39361111111111
+          ],
+          [
+            -65.29957222222222,
+            -24.906155555555554
+          ],
+          [
+            -65.36305555555555,
+            -25.063055555555557
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "JUJ2A",
+        "type": "polyline"
+      }
+    }
+  ]
+}

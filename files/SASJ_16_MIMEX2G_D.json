@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.00310833333333,
+            -24.558080555555556
+          ],
+          [
+            -64.88380555555557,
+            -24.53140833333333
+          ],
+          [
+            -64.57777777777777,
+            -24.4625
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "MIMEX2G",
+        "type": "polyline"
+      }
+    }
+  ]
+}

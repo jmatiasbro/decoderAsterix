@@ -1,0 +1,20 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                7    [LOGET1G]
+312346.68S0640259.21W        [LOGET1G]
+311847.29S0640259.23W        [LOGET1G]
+311848.00S0641213.00W        [LOGET1G]
+310046.73S0642244.64W        [LOGET1G]
+304048.00S0642313.00W        [LOGET1G]
+303328.12S0642323.57W        [LOGET1G]
+302341.00S0641403.00W        [LOGET1G]

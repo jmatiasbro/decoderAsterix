@@ -1,0 +1,116 @@
+default:
+    sysname:  &SYS RMD-1
+    exit_timeout: 1
+    keepalive: 300
+    SAC: &__SAC 253
+    SIC: &__SIC 20
+    rpc:
+        host: 127.0.0.1
+        port: 65500
+        loglevel: DEBUG
+
+# ------------------------------------------------------------------------------
+# TAIL endpoint
+# ------------------------------------------------------------------------------
+tail:
+    url: tcp://rc-1:8499
+    topic_mode_c: conventional
+    topic_mode_s: selective
+    zmq_poll_timeout: 500
+    output_queue_max_size: 20000
+    output_queue_warning_level: 0.70
+    output_queue_wait_timeout: 0.01
+    log_name: tail
+    log_level: DEBUG
+
+# ------------------------------------------------------------------------------
+# Asterix endpoint(s)
+# ------------------------------------------------------------------------------
+ax:
+    unicast: true
+    unicast_endpoints:
+        - addr: 127.0.0.1
+          port: 6661
+
+    multicast: false
+    multicast_endpoints:
+        - group: 224.1.1.1
+          port: 5555
+          ttl: 32
+
+    input_queue_wait_timeout: 0.01
+    log_name: ax
+    log_level: DEBUG
+
+# ------------------------------------------------------------------------------
+# mapper TAIL -> Asterix
+# ------------------------------------------------------------------------------
+mapper:
+    input_queue_wait_timeout: 0.01
+    output_queue_max_size: 20000
+    output_queue_warning_level: 0.70
+    output_queue_wait_timeout: 0.01
+    log_name: mapper
+    log_level: DEBUG
+    WE_C: 99
+    WE_S: 50
+    CAT048:
+        category: 48
+        I010:
+            SAC: 
+                val: *__SAC
+            SIC: 
+                val: *__SIC
+        I140:
+            ToD: 
+                val: 0.0
+        I020:
+            FX:  
+                val: 0
+            RAB: 
+                val: 0
+            RDP: 
+                val: 0
+            SIM: 
+                val: 0
+            SPI: 
+                val: 0
+            TYP: 
+                val: 2
+        I040:
+            RHO:
+                val: 0.0
+            THETA:
+                val: 0.0
+
+# ------------------------------------------------------------------------------
+# logger
+# ------------------------------------------------------------------------------
+logger:
+    # logger's name
+    name: tail2ax
+    # general level
+    level: DEBUG
+    # file handler
+    file_name: !join [/tmp/tail2ax/, *SYS, .logs/tail2ax.log]
+    file_when: midnight
+    file_interval: 1
+    file_backup_count: 365
+    file_delay: false
+    file_level: INFO
+    file_formatter: "%(asctime)s %(levelname)-8s [%(name)-14s] %(message)s"
+    file_date_format: ""
+    # stream handler
+    stream_level: DEBUG
+    stream_formatter: "%(asctime)s %(levelname)-8s [%(name)-14s] %(message)s"
+    stream_date_format: ""
+
+# -----------------------------------------------------------------------------
+# opciones para demonizar en linux
+# -----------------------------------------------------------------------------
+daemon:
+    stdin: /dev/null
+    stdout: /dev/null
+    stderr: /dev/null
+    pidfile: !join [/tmp/tail2ax/, *SYS,  .tail2ax.pid]
+

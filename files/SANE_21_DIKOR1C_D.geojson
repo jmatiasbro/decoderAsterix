@@ -1,0 +1,26 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.34194444444444,
+            -27.81972222222222
+          ],
+          [
+            -64.16000000000001,
+            -28.260833333333334
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "DIKOR1C",
+        "type": "polyline"
+      }
+    }
+  ]
+}

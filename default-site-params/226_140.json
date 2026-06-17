@@ -1,0 +1,15 @@
+{
+  "radar_id": "ADSB_226_140",
+  "name": "ADS-B Comodoro Rivadavia",
+  "type": "ADS-B",
+  "category": "CAT021",
+  "sac": 226,
+  "sic": 140,
+  "location": {
+    "latitude": -45.7925,
+    "longitude": -67.466111,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360
+}

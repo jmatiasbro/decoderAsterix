@@ -1,0 +1,87 @@
+/*
+      IAC  MAP       
+      =========================     
+*/
+BrightnessGroup IAC
+
+LineStyle     1
+
+ColorLine            10
+
+Range                2048
+
+Polyline                7    [RNP]
+310817.89S0641244.74W        [IRETI]
+312226.55S0642847.09W        [CO009]
+312624.30S0642527.93W        [CO008]
+312834.45S0642252.24W        [GUVUX]
+312509.86S0641859.76W        [CO006]
+312343.68S0641721.95W        [ESUBO]
+311923.40S0641227.01W        [RW05]
+
+BrightnessGroup IAC
+
+LineStyle     2
+
+ColorLine            10
+
+Range                2048
+
+Polyline                2    [FRUSTRADA]
+311923.40S0641227.01W        [RW05]
+310817.25S0635955.16W        [VULIG]
+
+BrightnessGroup IAC
+
+LineStyle     1
+
+ColorLine            10
+
+Range                2048
+
+Arc 310812.53S0635524.11W 310906.81S0635416.61W 311007.96S0635520.76W Arc
+
+Polyline                2    [ESPERA]
+311007.96S0635520.76W
+311012.71S0635954.00W
+
+Arc 311012.71S0635954.00W 310916.66S0640101.25W 310817.25S0635955.16W Arc
+
+Polyline                2    [ESPERA]
+310817.25S0635955.16W        [VULIG]
+310812.53S0635524.11W
+
+
+
+ColorText    1
+Font 10 0 0
+Text  310817.89S0641244.74W  "IRETI"
+Text  312226.55S0642847.09W  "CO009"
+Text  312624.30S0642527.93W  "CO008"
+Text  312834.45S0642252.24W  "GUVUX"
+Text  312509.86S0641859.76W  "CO006"
+Text  312343.68S0641721.95W  "ESUBO"
+Text  310817.25S0635955.16W  "VUGIL"
+
+
+ColorSymbol   1
+FixPointSymbol  310817.89S0641244.74W  265       IRETI
+FixPointSymbol  312226.55S0642847.09W  264       CO009
+FixPointSymbol  312624.30S0642527.93W  264       CO008
+FixPointSymbol  312834.45S0642252.24W  264       GUVUX
+FixPointSymbol  312509.86S0641859.76W  264       CO006
+FixPointSymbol  312343.68S0641721.95W  264       ESUBO
+FixPointSymbol  310817.25S0635955.16W  267       VUGIL
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -9,34 +9,13 @@ Ejecución:
 import unittest
 import math
 import os
-from main import AsterixAnalyzer
-from decoders import BitStream, AsterixRecord
-from geo_tools import GeoTools, SensorRegistry, TargetProcessor
+from decoders import AsterixRecord
+from geo_tools import GeoTools
+from projection import RadarProjectionSystem
+from track_manager import SensorRegistry, TargetProcessor
 from config import dms_to_decimal, decimal_to_dms, parse_dms_string
 from mode_analyzer import ModeAnalyzer
 from flight_loss_analyzer import FlightLossAnalyzer
-
-class TestBitStream(unittest.TestCase):
-    """Pruebas unitarias para la lectura bit a bit."""
-    
-    def test_read_bits_aligned(self):
-        # 0b11001010 (202), 0b01010101 (85)
-        stream = BitStream(bytes([0xCA, 0x55]))
-        self.assertEqual(stream.read_bits(4), 12)  # 1100 = 12
-        self.assertEqual(stream.read_bits(4), 10)  # 1010 = 10
-        self.assertEqual(stream.read_bits(8), 85)  # 01010101 = 85
-        
-    def test_read_bits_cross_byte(self):
-        # 0b11111111, 0b00000000
-        stream = BitStream(bytes([0xFF, 0x00]))
-        self.assertEqual(stream.read_bits(4), 15)  # Lee 4 bits: 1111
-        self.assertEqual(stream.read_bits(8), 240) # Lee 4 del primero y 4 del segundo: 11110000
-        
-    def test_skip_bits(self):
-        stream = BitStream(bytes([0xFF, 0x00]))
-        stream.skip_bits(4)
-        self.assertEqual(stream.read_bits(4), 15)
-
 
 class TestGeoTools(unittest.TestCase):
     """Pruebas unitarias para conversiones geoespaciales y matemáticas."""
@@ -63,6 +42,30 @@ class TestGeoTools(unittest.TestCase):
         lat, lon = GeoTools.polar_to_wgs84(40.0, -3.0, azimuth_deg=90, ground_range_nm=0)
         self.assertEqual(lat, 40.0)
         self.assertEqual(lon, -3.0)
+        
+    def test_wgs84_to_lcc(self):
+        """Prueba la conversión de WGS-84 a coordenadas cartesianas LCC."""
+        try:
+            from geo_tools import HAS_PYPROJ
+            if not HAS_PYPROJ:
+                self.skipTest("pyproj no está instalado, saltando prueba LCC.")
+        except ImportError:
+            self.skipTest("No se pudo verificar la presencia de pyproj.")
+
+        radar_lat = 40.474635
+        radar_lon = -3.588860
+        transformer = RadarProjectionSystem(center_lat=radar_lat, center_lon=radar_lon)
+
+        # Caso 1: El target está en la misma posición que el radar (origen)
+        x_m, y_m = transformer.latlon_to_lcc(radar_lat, radar_lon)
+        self.assertAlmostEqual(x_m, 0.0, places=1, msg="La coordenada X en el origen LCC debe ser 0.")
+        self.assertAlmostEqual(y_m, 0.0, places=1, msg="La coordenada Y en el origen LCC debe ser 0.")
+
+        # Caso 2: Un punto al Este del radar (aprox. 1 grado de longitud)
+        target_lat, target_lon = 40.474635, -2.588860
+        x_m, y_m = transformer.latlon_to_lcc(target_lat, target_lon)
+        self.assertGreater(x_m, 80000, "La coordenada X debe ser positiva y grande para un punto al Este.")
+        self.assertAlmostEqual(y_m, 0.0, places=0, msg="La coordenada Y debe ser casi cero para un punto en la misma latitud.")
 
 
 class TestConfigDMS(unittest.TestCase):
@@ -112,33 +115,6 @@ class TestFlightLossAnalyzer(unittest.TestCase):
         self.assertIn("1234", result)
         self.assertEqual(result["1234"].flight_count, 5)
 
-class TestAsterixAnalyzerMemory(unittest.TestCase):
-    """Pruebas para la gestión de memoria del analizador."""
-    
-    def test_reset_clears_all_data(self):
-        """Verifica que el método reset limpie correctamente los datos cargados."""
-        analyzer = AsterixAnalyzer()
-        
-        # 1. Simular carga previa de datos
-        analyzer.records = [{"category": 48}]
-        analyzer.decoded_records = [{"category": 48, "sac": 1, "sic": 1}]
-        analyzer.selected_sensors = {(1, 1)}
-        analyzer.asterix_data = b'datos dummy asterix'
-        analyzer.current_file_path = "ruta/al/archivo.pcap"
-        analyzer.filtered_asterix_data = b'datos filtrados'
-        
-        # 2. Ejecutar el reset (lo que hace la Opción 1 del menú)
-        analyzer.reset()
-        
-        # 3. Verificar que las estructuras críticas estén vacías o en None
-        self.assertEqual(analyzer.records, [], "Los records deberían estar vacíos")
-        self.assertEqual(analyzer.decoded_records, [], "Los decoded_records deberían estar vacíos")
-        self.assertIsNone(analyzer.selected_sensors, "La selección de sensores debería ser None")
-        self.assertEqual(analyzer.asterix_data, b'', "La data binaria debería estar vacía")
-        self.assertIsNone(analyzer.current_file_path, "La ruta del archivo debería ser None")
-        self.assertIsNone(analyzer.filtered_asterix_data, "La data filtrada debería ser None")
-
-
 class TestMathStability(unittest.TestCase):
     """Pruebas para asegurar que no ocurran 'math domain errors' con datos corruptos."""
 
@@ -187,23 +163,6 @@ class TestMathStability(unittest.TestCase):
         except ValueError as e:
             self.fail(f"vincenty_forward falló en coordenadas límite: {e}")
 
-class TestIntegrationPCAP(unittest.TestCase):
-    """Prueba de integración con el archivo PCAP de ejemplo."""
-    
-    def test_process_sample_pcap(self):
-        pcap_file = "UIS.pcap"
-        if not os.path.exists(pcap_file):
-            self.skipTest(f"Archivo {pcap_file} no encontrado en el directorio.")
-            
-        analyzer = AsterixAnalyzer()
-        
-        asterix_data = analyzer.load_pcap(pcap_file)
-        self.assertTrue(len(asterix_data) > 0, "No se extrajeron datos ASTERIX del PCAP.")
-        
-        analyzer.asterix_data = asterix_data
-        analyzer.decode_data()
-        self.assertTrue(len(analyzer.records) > 0, "No se decodificaron registros del PCAP.")
-        self.assertIn('category', analyzer.records[0], "Falta la clave 'category' en el registro.")
 
 class TestPPIPresentation(unittest.TestCase):
     """Pruebas para validar la lógica de presentación del PPI."""

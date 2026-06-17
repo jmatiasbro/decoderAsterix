@@ -1,0 +1,62 @@
+/*
+      IAC  MAP       
+      =========================     
+*/
+BrightnessGroup IAC
+
+LineStyle     1
+
+ColorLine            10
+
+Range                2048
+
+Polyline                2    [VOR_Y]
+311847.59S0641213.27W        [CBA]
+310525.54S0640911.71W
+
+Arc 310513.89S0641339.28W 310308.55S0641121.70W 310525.54S0640911.71W Arc
+
+Polyline                4
+310513.89S0641339.28W
+311039.74S0641304.67W        [FAP]
+311525.66S0641233.77W
+311744.36S0641230.86W        [RW19]
+
+BrightnessGroup IAC
+
+LineStyle     2
+
+ColorLine            10
+
+Range                2048
+
+Polyline                2    [FRUSTRADA]
+311525.66S0641233.77W
+311847.59S0641213.27W        [CBA]
+
+Arc 312127.80S0641151.36W 312107.22S0641219.32W 311847.59S0641213.27W Arc
+
+Polyline                3
+312127.80S0641151.36W
+312324.47S0640546.29W
+312732.14S0640000.93W
+
+BrightnessGroup IAC
+
+LineStyle     1
+
+ColorLine            10
+
+Range                2048
+
+Arc 312732.14S0640000.93W 312608.57S0640009.28W 312600.49S0635838.44W Arc
+
+Polyline                2    [ESPERA]
+312600.49S0635838.44W
+312826.88S0635503.23W
+
+Arc 312826.88S0635503.23W 312921.53S0635440.28W 312956.80S0635628.20W Arc
+
+Polyline                2    [ESPERA]
+312956.80S0635628.20W
+312732.14S0640000.93W

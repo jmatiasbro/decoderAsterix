@@ -1,0 +1,16 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                3    [TREJO1Z]
+304633.00S0632017.00W        [TREJO1Z]
+310428.00S0634245.00W        [TREJO1Z]
+310441.00S0635551.00W        [TREJO1Z]

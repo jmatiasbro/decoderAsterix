@@ -1,0 +1,258 @@
+=== APÉNDICE B: PERFORMANCE ASSESSMENT OF SURVEILLANCE SYSTEMS (PASS) ===
+
+
+=====================================
+PÁGINA DOCUMENTO: 87 (Página Apéndice: B-1)
+=====================================
+
+ 
+ PASS Informe Argentina #21 SEPTIEMBRE-OCTUBRE 2019 
+Servicio de Asistencia Técnica Especializada para la Evaluación de la Calidad de los Datos 
+de Vigilancia Radar 
+ 
+  
+ 
+ 
+ 
+Doc.Nº: 0105500000000IT17 
+Edic./Rev.: A/0 
+Fecha: 15/11/2019 
+ 
+   Apéndice B 
+Página 1 de 6 
+ 
+ 
+B.APÉNDICE B 
+PERFORMANCE ASSESSMENT OF 
+SURVEILLANCE SYSTEMS (PASS) 
+
+=====================================
+PÁGINA DOCUMENTO: 88 (Página Apéndice: B-2)
+=====================================
+
+ 
+ 
+PASS Informe Argentina #21 SEPTIEMBRE-OCTUBRE 2019 
+Servicio de Asistencia Técnica Especializada para la Evaluación de la Calidad de los Datos 
+de Vigilancia Radar 
+ 
+  
+ 
+ 
+ 
+Apéndice B 
+Página 2 de 6 
+ 
+   Doc.Nº: 0105500000000IT17 
+Edic./Rev.: A/0 
+Fecha: 15/11/2019 
+ 
+B. PERFORMANCE ASSESSMENT OF SURVEILLANCE SYSTEMS (PASS)  
+B.1 INTRODUCCIÓN 
+Performance Assessment of Surveillance Systems (PASS) es un Sistema de monitorización de 
+prestaciones en tiempo real. Este software es capaz de interactuar con la herramienta de 
+EUROCONTROL SASS-C. Así, PASS proporciona de forma automática el análisis de datos con SASS-
+C y la información de prestaciones resultante.  
+PASS tiene un diseño modular que le permite integrarse con el resto de sistemas de vigilancia de Indra 
+Sistemas. Cuenta con cuatro módulos diferenciados: 
+ Grabación automatizada de datos. 
+ Evaluación automatizada de datos. 
+ Almacenamiento de prestaciones. 
+ Interfaz de prestaciones. 
+B.2 GRABACIÓN AUTOMATIZADA 
+Dado el diseño modular de PASS, la grabación automatizada puede ser llevada a cabo por diferentes 
+sistemas. En el caso de Argentina, la grabación automatizada de datos se realiza en los RDCU del 
+sistema AirCon. 
+Se realiza la grabación continua de todos los datos de los sensores de vigilancia en los cinco Centros 
+de Control 
+ Comodoro. 
+ Córdoba. 
+ Ezeiza. 
+ Mendoza. 
+ Resistencia. 
+Las grabaciones en los RDCU tienen una duración de una hora, pero en PASS se puede configurar el 
+lapso de tiempo que se quiere evaluar. En el caso de Argentina, se realizan evaluaciones de 
+prestaciones de seis en seis horas. Las grabaciones realizadas en los RDCU, van fechadas, lo que 
+permite conocer las demoras de transmisión de los datos radar, desde que son detectados por el sensor 
+hasta que están disponibles para ser utilizados. 
+Una vez la grabación ha terminado, se envía de forma automática a un servidor centralizado, que llevará 
+a cabo la evaluación de prestaciones. 
+  
+
+=====================================
+PÁGINA DOCUMENTO: 89 (Página Apéndice: B-3)
+=====================================
+
+ 
+ PASS Informe Argentina #21 SEPTIEMBRE-OCTUBRE 2019 
+Servicio de Asistencia Técnica Especializada para la Evaluación de la Calidad de los Datos 
+de Vigilancia Radar 
+ 
+  
+ 
+ 
+ 
+Doc.Nº: 0105500000000IT17 
+Edic./Rev.: A/0 
+Fecha: 15/11/2019 
+ 
+   Apéndice B 
+Página 3 de 6 
+ 
+ 
+B.3 EVALUACIÓN AUTOMATIZADA 
+La evaluación de los datos de vigilancia se realiza en un servidor centralizado. Los archivos grabados 
+llegan al servidor mediante el protocolo SFTP. Por cada archivo recibido, se lanza en para lelo un 
+procedimiento de evaluación de prestaciones. Para realizar los análisis de la manera más rápida, el 
+servidor central balancea la carga de forma automática en diferentes procesos de evaluación. Los datos 
+subidos son inspeccionados en busca de información corrupta pues se registran los fallos y problemas 
+en la transmisión. 
+El servidor de evaluación soporta distintos formatos de entrada y los análisis de prestaciones son 
+lanzados en base al tipo de archivo. Si el archivo está fechado, se realizarán análisis de demoras de 
+transmisión y disponibilidad. 
+ El análisis de demoras mide el tiempo que tarda el dato radar desde que es generado por el 
+extractor radar hasta que llega a la máquina de grabación. 
+ El cálculo de la disponibilidad mide durante cuánto tiempo un sensor de vigilancia está 
+emitiendo datos que pueden ser usados por el sistema de control de tráfico aéreo.  
+Tras finalizar los análisis de demoras y disponibilidad, la grabación se pasa al servidor de SASS-C que 
+realiza el análisis. 
+Tras el proceso de análisis se obtiene el conjunto de prestaciones que permite conocer si un sensor de 
+vigilancia está o no funcionando dentro de los estándares de calidad. Estos parámetros son:  
+ Estadísticas de Blancos 
+ Total Mean Revolution Time. 
+ Total Radar Returns. 
+ Probabilidad de Detección 
+ Position Detection PSR, SSR, Roll-Call. 
+ Tasas de Combinación 
+ PRI and Mode A/C Combination Rate. 
+ Roll-Call and Mode A/C Combination Rate. 
+ Plots Falsos y Múltiples 
+ False Target Rate. 
+ Multiple Target Rate. 
+ Reflection Rate. 
+ Sidelobe Rate. 
+ Split Target Rate. 
+  
+
+=====================================
+PÁGINA DOCUMENTO: 90 (Página Apéndice: B-4)
+=====================================
+
+ 
+ 
+PASS Informe Argentina #21 SEPTIEMBRE-OCTUBRE 2019 
+Servicio de Asistencia Técnica Especializada para la Evaluación de la Calidad de los Datos 
+de Vigilancia Radar 
+ 
+  
+ 
+ 
+ 
+Apéndice B 
+Página 4 de 6 
+ 
+   Doc.Nº: 0105500000000IT17 
+Edic./Rev.: A/0 
+Fecha: 15/11/2019 
+ 
+ Detección de Códigos 
+ Garbled Mode A, C. 
+ Overall Mode A, C detection. 
+ Overall Roll-Call Mode A, C detection. 
+ Incorrect Validated Mode A, C. 
+ Overall False Code Rate. 
+ Errores Sistemáticos 
+ Time Bias. 
+ Range Bias. 
+ Range Gain. 
+ Azimuth Bias. 
+ Precisión 
+ Range Std PSR, SSR, CMB, Roll-Call. 
+ Azimuth Std PSR, SSR, CMB, Roll-Call. 
+ Demoras de transmisión 
+ Asterix Category 1, 2, 8, 10, 19, 20, 21, 34, 48, 62, 65. 
+El diseño modular de PASS, permite que se adapte bien a distintos tipos de arquitectura física. En el 
+caso de Argentina, PASS se encuentra instalado en un servidor virtual, en la nube, y que es fácilmente 
+escalable. 
+B.4 BASE DE DATOS DE PRESTACIONES 
+Una vez que PASS ha terminado la evaluación de SASS -C, interpreta los resultados del proceso de  
+análisis y los prepara para ser almacenados en el servidor de base de datos. Adicionalmente a las 
+figuras de prestaciones, PASS también almacena toda la información relacionada con cuando y como 
+la evaluación tuvo lugar. Esta información recogida hace posible recuperar una línea cronológica de las 
+prestaciones, permitiendo que las degradaciones en estas sean visibles a simple vista. La información 
+detallada también está disponible en un resumen de prestaciones (summary report).  
+La capacidad de la base de datos solo está limitada por el espacio en disco disponible. A mayor número 
+de evaluaciones realizadas, más capacidad será necesaria. Debido a la arquitectura distribuida de 
+PASS, el servidor de base de datos puede estar instalado en la misma máquina física que el servidor 
+de análisis o en cualquier otra. 
+  
+
+=====================================
+PÁGINA DOCUMENTO: 91 (Página Apéndice: B-5)
+=====================================
+
+ 
+ PASS Informe Argentina #21 SEPTIEMBRE-OCTUBRE 2019 
+Servicio de Asistencia Técnica Especializada para la Evaluación de la Calidad de los Datos 
+de Vigilancia Radar 
+ 
+  
+ 
+ 
+ 
+Doc.Nº: 0105500000000IT17 
+Edic./Rev.: A/0 
+Fecha: 15/11/2019 
+ 
+   Apéndice B 
+Página 5 de 6 
+ 
+ 
+B.5 INTERFAZ DE PRESTACIONES 
+La interfaz de prestaciones es el punto visible para el usuario de todo el sistema. En ella se pueden 
+realizar consultas de las prestaciones de un sensor en particular, se puede v er su evolución en el 
+tiempo, se puede comparar con los valores obtenidos para otro sensor, etc. También es posible 
+consultar un promedio de las prestaciones de uno o varios sensores en un periodo de tiempo en 
+particular. 
+Toda la interfaz está desarrollada con tecnología web 2.0, pudiendo, de esta forma, utilizarse desde 
+cualquier navegador (optimizada para Firefox +3, Internet Explorer +9 y Chrome).  
+B.6 RESUMEN DE FUNCIONALIDADES 
+ Grabación continua y automatizada de datos de vigilancia. 
+ Evaluación automática con SASS-C v6.7 de los datos grabados. 
+ Evaluación automática de los valores de disponibilidad de los radares grabados.  
+ Evaluación automática de las demoras de transmisión de los radares grabados.  
+ Almacenamiento de las prestaciones calculadas en una base de datos. 
+ Presentación y consulta de prestaciones en una interfaz web. 
+ Presentación gráfica de prestaciones individuales de varios radares acotada en tiempo.  
+ Presentación tabulada de una media de todas las prestaciones de los radares consultados acotada 
+en tiempo. 
+ Presentación gráfica de las demoras de transmisión de todos los radares evaluados.  
+ Presentación tabulada de la disponibilidad de todos los radares evaluados.  
+ 
+ 
+  
+
+=====================================
+PÁGINA DOCUMENTO: 92 (Página Apéndice: B-6)
+=====================================
+
+ 
+ 
+PASS Informe Argentina #21 SEPTIEMBRE-OCTUBRE 2019 
+Servicio de Asistencia Técnica Especializada para la Evaluación de la Calidad de los Datos 
+de Vigilancia Radar 
+ 
+  
+ 
+ 
+ 
+Apéndice B 
+Página 6 de 6 
+ 
+   Doc.Nº: 0105500000000IT17 
+Edic./Rev.: A/0 
+Fecha: 15/11/2019 
+ 
+ 
+ 
+"Última página del documento" 

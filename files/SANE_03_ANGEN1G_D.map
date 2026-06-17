@@ -1,0 +1,15 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                2    [ANGEN1G]
+274242.00S0641640.00W        [ANGEN1G]
+272044.00S0643616.00W        [ANGEN1G]

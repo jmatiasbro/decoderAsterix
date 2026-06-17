@@ -1,0 +1,15 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                2    [BITIS1U]
+265820.00S0640522.00W        [BITIS1U]
+263716.00S0645210.00W        [BITIS1U]

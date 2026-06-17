@@ -1,0 +1,16 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                3    [DIKOR1G]
+274242.00S0641640.00W        [DIKOR1G]
+275405.00S0640338.00W        [DIKOR1G]
+281539.00S0640936.00W        [DIKOR1G]

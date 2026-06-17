@@ -1,0 +1,337 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.19638888888889,
+            -31.660277777777775
+          ],
+          [
+            -64.78735,
+            -31.311891666666668
+          ],
+          [
+            -64.450575,
+            -31.210597222222223
+          ],
+          [
+            -64.30398055555555,
+            -31.16616111111111
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ALDEX1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.214444444444446,
+            -31.66722222222222
+          ],
+          [
+            -63.665,
+            -31.50722222222222
+          ],
+          [
+            -63.73257777777778,
+            -31.13741111111111
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ASISA1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.39333333333335,
+            -30.409166666666664
+          ],
+          [
+            -64.22200000000001,
+            -30.813272222222224
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "DONKA1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.02055555555556,
+            -30.72222222222222
+          ],
+          [
+            -64.41391666666667,
+            -30.79180277777778
+          ],
+          [
+            -64.31796944444444,
+            -30.802572222222224
+          ],
+          [
+            -64.22200000000001,
+            -30.813272222222224
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ETEPO1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.19,
+            -31.022499999999997
+          ],
+          [
+            -63.73257777777778,
+            -31.13741111111111
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "GEMOP1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.1475,
+            -31.46527777777778
+          ],
+          [
+            -63.73257777777778,
+            -31.13741111111111
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "GENAS1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.23416666666667,
+            -30.39472222222222
+          ],
+          [
+            -64.22200000000001,
+            -30.813272222222224
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "LOGET1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.13611111111111,
+            -31.25583333333333
+          ],
+          [
+            -63.73257777777778,
+            -31.13741111111111
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "MAVBI1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.27055555555556,
+            -31.39
+          ],
+          [
+            -64.78735,
+            -31.311891666666668
+          ],
+          [
+            -64.450575,
+            -31.210597222222223
+          ],
+          [
+            -64.30398055555555,
+            -31.16616111111111
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "PAMAK1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.67861111111111,
+            -30.490833333333335
+          ],
+          [
+            -64.22200000000001,
+            -30.813272222222224
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "SIBOL1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.56444444444444,
+            -32.05166666666666
+          ],
+          [
+            -63.665,
+            -31.50722222222222
+          ],
+          [
+            -63.73257777777778,
+            -31.13741111111111
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "SIMES1X",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.338055555555556,
+            -30.77583333333333
+          ],
+          [
+            -63.73257777777778,
+            -31.13741111111111
+          ],
+          [
+            -64.2125,
+            -31.138333333333332
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "TREJO1X",
+        "type": "polyline"
+      }
+    }
+  ]
+}

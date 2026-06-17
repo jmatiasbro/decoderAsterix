@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.51138888888889,
+            -24.97138888888889
+          ],
+          [
+            -65.38944444444445,
+            -25.460555555555555
+          ],
+          [
+            -65.31527777777778,
+            -25.75611111111111
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "MUBOK1",
+        "type": "polyline"
+      }
+    }
+  ]
+}

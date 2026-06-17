@@ -1,0 +1,18 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                5    [ETEPO1X]
+304320.00S0650114.00W        [ETEPO1X]
+304730.49S0642450.10W        [ETEPO1X]
+304809.26S0641904.69W        [ETEPO1X]
+304847.78S0641319.20W        [ETEPO1X]
+310818.00S0641245.00W        [ETEPO1X]

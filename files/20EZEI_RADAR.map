@@ -1,0 +1,17 @@
+/*
+      RADARS COVERAGE MAP       
+      =====================     
+*/
+BrightnessGroup     RADARS 
+
+ColorLine             6
+
+ColorSymbol           6
+
+Range                2048
+
+LineStyle     0
+
+LineWidth     1
+Circumference      344958.00S0583156.00W      250   Adap
+RadarSimbolo    344958.00S0583156.00W    237        Adap 

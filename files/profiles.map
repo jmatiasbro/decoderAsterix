@@ -1,0 +1,21 @@
+BrightnessGroup       PROFILES
+
+ColorSymbol           7
+
+ColorText             7
+
+ColorLine             7    [ ]
+
+Range                2048
+
+LineStyle     0
+
+LineWidth     1
+/*
+       AIRPORTS TOLERANCES       
+      =======================      
+*/
+/*
+       AIRPORTS PATHPOINTS       
+      =======================      
+*/

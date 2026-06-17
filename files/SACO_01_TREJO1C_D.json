@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.11532222222222,
+            -31.241625000000003
+          ],
+          [
+            -64.03179722222222,
+            -31.241083333333336
+          ],
+          [
+            -63.82219444444445,
+            -31.103347222222222
+          ],
+          [
+            -63.338055555555556,
+            -30.77583333333333
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "TREJO1C",
+        "type": "polyline"
+      }
+    }
+  ]
+}

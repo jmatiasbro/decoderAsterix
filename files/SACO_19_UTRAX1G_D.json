@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.07765833333333,
+            -31.458177777777777
+          ],
+          [
+            -63.95472222222222,
+            -31.5325
+          ],
+          [
+            -63.71971666666667,
+            -31.67401388888889
+          ],
+          [
+            -63.36472222222223,
+            -31.88611111111111
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "UTRAX1G",
+        "type": "polyline"
+      }
+    }
+  ]
+}

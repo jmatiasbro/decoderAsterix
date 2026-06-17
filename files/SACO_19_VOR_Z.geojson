@@ -1,0 +1,182 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.22757777777778,
+            -31.087191666666666
+          ],
+          [
+            -64.21796388888889,
+            -31.17770555555556
+          ],
+          [
+            -64.20938055555555,
+            -31.25712777777778
+          ],
+          [
+            -64.20857222222223,
+            -31.29565555555556
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "VOR_Z",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.20938055555555,
+            -31.25712777777778
+          ],
+          [
+            -64.20368611111111,
+            -31.313219444444446
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "FRUSTRADA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.15616666666668,
+            -31.371080555555555
+          ],
+          [
+            -64.09619166666666,
+            -31.390130555555555
+          ],
+          [
+            -64.00025833333333,
+            -31.458927777777777
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "LINEAS_DE_MAPA",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.97734444444445,
+            -31.433469444444444
+          ],
+          [
+            -63.917563888888886,
+            -31.47413333333333
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -63.94116666666666,
+            -31.499111111111112
+          ],
+          [
+            -64.00025833333333,
+            -31.458927777777777
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ESPERA",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.21796388888889,
+          -31.17770555555556
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "FAP",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.20368611111111,
+          -31.313219444444446
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_WAYPOINTS",
+        "name": "CBA",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.21796388888889,
+          -31.17770555555556
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "FAP",
+        "type": "symbol"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.20368611111111,
+          -31.313219444444446
+        ]
+      },
+      "properties": {
+        "layer": "SIMBOLOS_WAYPOINTS",
+        "name": "CBA",
+        "type": "symbol"
+      }
+    }
+  ]
+}

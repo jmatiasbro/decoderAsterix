@@ -1,0 +1,17 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                4    [PONPI2G]
+243329.09S0650011.19W        [PONPI2G]
+244528.18S0650533.80W        [PONPI2G]
+250958.15S0651101.44W        [PONPI2G]
+254522.00S0651855.00W        [PONPI2G]

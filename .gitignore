@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Logs
+*.log
+
+# Bases de datos / artefactos de análisis
+*.duckdb
+*.duckdb.wal
+*_fallback_*.duckdb
+*_fallback_*.duckdb.wal
+
+# Datos de runtime / config local
+config/udp_presets.json
+
+# Salidas de ejecución
+_run_out.log
+_run_err.log
+
+# Scratch / pruebas locales
+scratch/
+
+# Plugins/skills clonados
+ui-ux-pro-max-skill/
+
+# Backups del calibrador de registración
+*.bak

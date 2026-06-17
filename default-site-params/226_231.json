@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_231",
+  "name": "Radar Posadas",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 231,
+  "location": {
+    "latitude": -27.385,
+    "longitude": -55.966666,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

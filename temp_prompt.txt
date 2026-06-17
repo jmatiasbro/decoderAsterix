@@ -1,0 +1,54 @@
+# Resuming from a compaction
+
+You are continuing work on the task described above, but you have lost access to the full conversation history, and need to resume work efficiently using the progress summary below:
+
+# User Requests
+The following were user requests from the truncated conversation in chronological order:
+1. PROMPT DE INGENIERÍA: GESTOR DE PERFILES OPERATIVOS (CRUD), MAPAS PREEXISTENTES Y CARGA EN CALIENTE
+
+**Contexto:** Se requiere implementar un sistema de gestión de perfiles de usuario de trabajo (`ProfileManager`) con capacidades CRUD completas (Crear, Leer, Editar, Borrar) en PyQt, junto con un mecanismo de carga dinámica en caliente (Hot-Swapping). El perfil debe determinar la posición geográfica central, la carga automática de capas de mapas preexistentes y el techo vertical de propiedad de los vuelos, desactivando explícitamente las alertas STCA en sectores de Torre.
+
+### 🗂️ FASE 1: MODELO DE DATOS Y ESQUEMA JSON (`player/profile_manager.py`)
+1. Los perfiles se guardarán de forma individual como archivos `.json` dentro del directorio `profiles/`.
+2. Estructura estricta del esquema JSON del perfil de trabajo:
+```json
+{
+  "nombre_usuario": "Matias_TWR",
+  "aeropuerto_trabajo": "SACO",
+  "coordenadas_centro": {"lat": -31.31, "lon": -64.21},
+  "nivel_incumbencia": 95,
+  "frecuencias_sector": [
+<truncated 3472 bytes>
+2. PROMPT DE INGENIERÍA: GESTOR DE PERFILES OPERATIVOS (CRUD), MAPAS PREEXISTENTES Y CARGA EN CALIENTE
+
+**Contexto:** Se requiere implementar un sistema de gestión de perfiles de usuario de trabajo (`ProfileManager`) con capacidades CRUD completas (Crear, Leer, Editar, Borrar) en PyQt, junto con un mecanismo de carga dinámica en caliente (Hot-Swapping). El perfil debe determinar la posición geográfica central, la carga automática de capas de mapas preexistentes y el techo vertical de propiedad de los vuelos, desactivando explícitamente las alertas STCA en sectores de Torre.
+
+### 🗂️ FASE 1: MODELO DE DATOS Y ESQUEMA JSON (`player/profile_manager.py`)
+1. Los perfi
+<truncated 41041 bytes>
+
+    "model":  "MODEL_PLACEHOLDER_M26",
+    "modelTier":  "MODEL_TIER_INHERIT"
+  },
+  "result":  {
+    "conversationId":  "594ba6cb-9b25-49ff-a90b-55e4677801c6",
+    "logAbsoluteUri":  "file:///C:/Users/Usuario/.gemini/antigravity/brain/594ba6cb-9b25-49ff-a90b-55e4677801c6/.system_generated/logs/transcript.jsonl",
+    "workspaceUris":  [
+      "file:///c:/documentos"
+    ]
+  }
+}
+{
+  "spec":  {
+    "typeName":  "research",
+    "role":  "UI and visualization researcher",
+    "initialPrompt":  "Investigate the UI/visualization and playback functionality in the project at c:\\documentos\\decode_asterix. Read the following files completely and provide a detailed analysis:\n\n1. c:\\documentos\\decode_asterix\\radar_widget.py\n2. c:\\documentos\\decode_asterix\\dashboard_widget.py\n3. c:\\documentos\\decode_asterix\\track_manager.py\n4. c:\\documentos\\decode_asterix\\web_server.py\n5. c:\\documentos\\decode_asterix\\geo_tools.py\n6. c:\\documentos\\decode_asterix\\geo_utils.py\n7. c:\\documentos\\decode_asterix\\projection.py\n8. c:\\documentos\\decode_asterix\\exporters.py\n9. c:\\documentos\\decode_asterix\\osm_layer.py\n10. c:\\documentos\\decode_asterix\\radar_selector.py\n11. c:\\documentos\\decode_asterix\\mode_analyzer.py\n\nFor each file, summarize:\n- Its main purpose\n- Key classes and functions\n- Whether it belongs to DECODING, PLAYBACK/REPRODUCTION, or BOTH\n- Dependencies on other modules in the project\n\nAlso check the root level files at c:\\documentos that are Python files (motor_datos.py, radar_selector.py, mode_analyzer.py, etc.) to understand if there's duplication between the root and decode_asterix directory.",
+    "inherit":  true,
+    "model":  "MODEL_PLACEHOLDER_M26",
+    "modelTier":  "MODEL_TIER_INHERIT"
+  },
+  "result":  {
+    "conversationId":  "6ef8edf4-a687-43d1-9077-11251bffcadb",
+    "logAbsoluteUri":  "file:///C:/Users/Usuario/.gemini/antigravity/br
+---
+The checkpoint summary has been truncated due to hitting max length. Please see the conversation log file for the full conversation.

@@ -1,0 +1,15 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                2    [SORTI3E]
+270457.00S0651143.00W        [SORTI3E]
+274305.00S0652534.00W        [SORTI3E]

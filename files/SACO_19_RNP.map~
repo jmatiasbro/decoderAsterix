@@ -1,0 +1,66 @@
+/*
+      IAC  MAP       
+      =========================     
+*/
+BrightnessGroup IAC
+
+LineStyle     1
+
+ColorLine            10
+
+Range                2048
+
+Polyline                4    [RNP]
+310510.18S0641243.18W        [EDPAK]
+311040.86S0641237.78W        [UBNOR]
+311542.93S0641232.85W        [CO394]
+311744.36S0641230.86W        [RW19]
+
+Polyline                3
+310448.74S0640544.25W        [DOSMO]
+310459.52S0640913.91W        [CO392]
+310510.18S0641243.18W        [EDPAK]
+
+Polyline                3
+310459.24S0642017.54W        [EVPON]
+310504.74S0641631.49W        [CO393]
+310510.18S0641243.18W        [EDPAK]
+
+Polyline                3
+305853.21S0641249.29W        [ILNAK]
+310510.18S0641243.18W        [EDPAK]
+
+BrightnessGroup IAC
+
+LineStyle     2
+
+ColorLine            10
+
+Range                2048
+
+Polyline                5    [FRUSTRADA]
+311744.36S0641230.86W        [RW19]
+312041.14S0641227.97W        [CO395]
+312322.33S0640905.43W        [CO396]
+312324.99S0635601.36W        [CO397]
+312326.14S0633754.66W        [ILKUL]
+
+BrightnessGroup IAC
+
+LineStyle     1
+
+ColorLine            10
+
+Range                2048
+
+Arc 312326.14S0633754.66W 312210.73S0633812.72W 312152.69S0633635.15W Arc
+
+Polyline                2    [ESPERA]
+312152.69S0633635.15W
+312412.43S0633255.26W
+
+Arc 312412.43S0633255.26W 312533.76S0633244.16W 312545.36S0633415.43W Arc
+
+Polyline                2    [ESPERA]
+312545.36S0633415.43W
+312326.14S0633754.66W        [ILKUL]

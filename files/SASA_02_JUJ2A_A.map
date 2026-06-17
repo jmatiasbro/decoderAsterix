@@ -1,0 +1,16 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                3    [JUJ2A  ]
+242337.00S0650534.00W        [JUJ2A  ]
+245422.16S0651758.46W        [JUJ2A  ]
+250347.00S0652147.00W        [JUJ2A  ]

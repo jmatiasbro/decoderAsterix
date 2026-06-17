@@ -1,0 +1,738 @@
+/*
+       AIRPORTS NAMES MAP       
+      =======================      
+*/
+BrightnessGroup AIRPORTS
+
+ColorText             89
+
+Range                2048
+AirportTexto   514921.63S0582645.36W    EGYP 251    External      Adap 
+AirportTexto   341316.17S0592630.00W    SAAA 251    External      Adap 
+AirportTexto   311749.00S0575948.00W    SAAC 251    External      Adap 
+AirportTexto   330020.00S0583646.00W    SAAG 251    External      Adap 
+AirportTexto   352112.10S0571723.60W    SAAI 251    External      Adap 
+AirportTexto   343245.00S0605550.00W    SAAJ 251    External      Adap 
+AirportTexto   341053.00S0581449.90W    SAAK 251    External      Adap 
+AirportTexto   335515.13S0603857.79W    SAAN 251    External      Adap 
+AirportTexto   314741.00S0602849.00W    SAAP 251    External      Adap 
+AirportTexto   325413.00S0604704.00W    SAAR 251    External      Adap 
+AirportTexto   335739.00S0613800.15W    SAAS 251    External      Adap 
+AirportTexto   315101.24S0590423.50W    SAAU 251    External      Adap 
+AirportTexto   314239.00S0604841.00W    SAAV 251    External      Adap 
+AirportTexto   343335.00S0582454.00W    SABE 251    External      Adap 
+AirportTexto   380024.50S0611955.00W    SABP 251    External      Adap 
+AirportTexto   312630.60S0641530.50W    SACA 251    Internal      Adap 
+AirportTexto   310018.50S0643158.30W    SACC 251    Internal      Adap 
+AirportTexto   312916.50S0640831.00W    SACD 251    Internal      Adap 
+AirportTexto   312642.00S0641701.00W    SACE 251    Internal      Adap 
+AirportTexto   311836.00S0641230.00W    SACO 251    Internal      Adap 
+AirportTexto   302038.40S0661737.90W    SACT 251    Internal      Adap 
+AirportTexto   342718.00S0583529.00W    SADF 251    External      Adap 
+AirportTexto   343338.00S0584722.00W    SADJ 251    External      Adap 
+AirportTexto   345809.40S0575335.00W    SADL 251    External      Adap 
+AirportTexto   344043.00S0583837.00W    SADM 251    External      Adap 
+AirportTexto   343204.26S0584019.05W    SADO 251    External      Adap 
+AirportTexto   343636.00S0583645.00W    SADP 251    External      Adap 
+AirportTexto   344223.00S0581440.42W    SADQ 251    External      Adap 
+AirportTexto   343958.00S0584502.00W    SADR 251    External      Adap 
+AirportTexto   344358.00S0583556.00W    SADS 251    External      Adap 
+AirportTexto   344341.90S0583002.20W    SADZ 251    External      Adap 
+AirportTexto   372405.88S0643648.56W    SAEA 251    External      Adap 
+AirportTexto   373106.50S0604638.00W    SAEK 251    External      Adap 
+AirportTexto   360401.84S0590615.56W    SAEL 251    External      Adap 
+AirportTexto   381334.00S0575215.49W    SAEM 251    External      Adap 
+AirportTexto   360056.95S0624137.26W    SAET 251    External      Adap 
+AirportTexto   344920.00S0583209.00W    SAEZ 251    External      Adap 
+AirportTexto   311657.00S0613006.35W    SAFR 251    Internal      Adap 
+AirportTexto   305727.37S0613127.84W    SAFS 251    Internal      Adap 
+AirportTexto   334043.40S0615715.80W    SAFV 251    External      Adap 
+AirportTexto   372639.20S0701323.00W    SAHC 251    External      Adap 
+AirportTexto   390000.00S0673711.00W    SAHR 251    External      Adap 
+AirportTexto   372325.27S0685418.61W    SAHS 251    External      Adap 
+AirportTexto   361225.00S0652458.00W    SAHV 251    External      Adap 
+AirportTexto   385833.10S0700648.30W    SAHZ 251    External      Adap 
+AirportTexto   350333.80S0674135.50W    SAMA 251    External      Adap 
+AirportTexto   324954.00S0684734.00W    SAME 251    External      Adap 
+AirportTexto   350358.00S0674203.00W    SAMG 251    External      Adap 
+AirportTexto   330344.00S0683029.80W    SAMI 251    External      Adap 
+AirportTexto   301400.00S0684400.00W    SAMJ 251    External      Adap 
+AirportTexto   352937.00S0693429.00W    SAMM 251    External      Adap 
+AirportTexto   325200.00S0685200.00W    SAMO 251    External      Adap 
+AirportTexto   343516.00S0682413.00W    SAMR 251    External      Adap 
+AirportTexto   283535.00S0654504.20W    SANC 251    Internal      Adap 
+AirportTexto   274556.00S0641836.00W    SANE 251    Internal      Adap 
+AirportTexto   280227.20S0673439.30W    SANI 251    Internal      Adap 
+AirportTexto   292250.00S0664745.00W    SANL 251    Internal      Adap 
+AirportTexto   291324.00S0672622.80W    SANO 251    Internal      Adap 
+AirportTexto   272948.00S0645609.00W    SANR 251    Internal      Adap 
+AirportTexto   265018.00S0650616.00W    SANT 251    Internal      Adap 
+AirportTexto   313417.00S0682506.00W    SANU 251    External      Adap 
+AirportTexto   295217.85S0615537.26W    SANW 251    Internal      Adap 
+AirportTexto   330532.00S0641610.00W    SAOC 251    Internal      Adap 
+AirportTexto   315650.30S0650845.60W    SAOD 251    Internal      Adap 
+AirportTexto   340807.00S0632144.24W    SAOL 251    External      Adap 
+AirportTexto   324102.00S0620927.00W    SAOM 251    Internal      Adap 
+AirportTexto   334330.00S0652241.00W    SAOR 251    External      Adap 
+AirportTexto   322304.09S0651108.78W    SAOS 251    Internal      Adap 
+AirportTexto   331624.00S0662123.00W    SAOU 251    External      Adap 
+AirportTexto   321912.00S0631335.75W    SAOV 251    Internal      Adap 
+AirportTexto   272642.00S0584542.00W    SARC 251    External      Adap 
+AirportTexto   272700.00S0590322.00W    SARE 251    External      Adap 
+AirportTexto   261246.00S0581341.00W    SARF 251    External      Adap 
+AirportTexto   254414.00S0542824.00W    SARI 251    External      Adap 
+AirportTexto   294117.00S0570908.00W    SARL 251    External      Adap 
+AirportTexto   301613.10S0573821.50W    SARM 251    External      Adap 
+AirportTexto   272309.00S0555814.00W    SARP 251    External      Adap 
+AirportTexto   264513.20S0602932.70W    SARS 251    External      Adap 
+AirportTexto   273540.66S0604057.00W    SARV 251    External      Adap 
+AirportTexto   245135.00S0652913.00W    SASA 251    Internal      Adap 
+AirportTexto   242334.00S0650552.00W    SASJ 251    Internal      Adap 
+AirportTexto   230908.00S0641943.35W    SASO 251    Internal      Adap 
+AirportTexto   220941.20S0653420.40W    SASQ 251    Internal      Adap 
+AirportTexto   223656.00S0634734.20W    SAST 251    Internal      Adap 
+AirportTexto   251800.00S0574400.00W    SATC 251    External      Adap 
+AirportTexto   262349.00S0543428.70W    SATD 251    External      Adap 
+AirportTexto   290621.50S0591307.40W    SATG 251    External      Adap 
+AirportTexto   261653.40S0534021.30W    SATI 251    External      Adap 
+AirportTexto   291320.00S0580516.75W    SATM 251    External      Adap 
+AirportTexto   273057.00S0550730.30W    SATO 251    External      Adap 
+AirportTexto   291237.00S0594048.00W    SATR 251    External      Adap 
+AirportTexto   294613.00S0575844.30W    SATU 251    External      Adap 
+AirportTexto   401131.76S0700037.07W    SAVA 251    External      Adap 
+AirportTexto   415636.00S0713155.80W    SAVB 251    External      Adap 
+AirportTexto   454707.00S0672756.00W    SAVC 251    External      Adap 
+AirportTexto   420154.19S0711002.35W    SAVD 251    External      Adap 
+AirportTexto   425414.00S0710808.00W    SAVE 251    External      Adap 
+AirportTexto   463218.50S0685758.00W    SAVH 251    External      Adap 
+AirportTexto   411916.00S0693434.00W    SAVJ 251    External      Adap 
+AirportTexto   453430.20S0690438.00W    SAVM 251    External      Adap 
+AirportTexto   404502.30S0650207.00W    SAVN 251    External      Adap 
+AirportTexto   411433.50S0684228.00W    SAVQ 251    External      Adap 
+AirportTexto   450047.50S0704846.00W    SAVR 251    External      Adap 
+AirportTexto   413529.00S0652104.50W    SAVS 251    External      Adap 
+AirportTexto   431238.00S0651613.00W    SAVT 251    External      Adap 
+AirportTexto   405212.00S0625948.00W    SAVV 251    External      Adap 
+AirportTexto   424533.00S0650610.00W    SAVY 251    External      Adap 
+AirportTexto   640520.86S0563751.06W    SAWB 251    External      Adap 
+AirportTexto   501649.00S0720312.00W    SAWC 251    External      Adap 
+AirportTexto   474405.90S0655412.00W    SAWD 251    External      Adap 
+AirportTexto   534639.00S0674458.00W    SAWE 251    External      Adap 
+AirportTexto   513632.00S0691846.00W    SAWG 251    External      Adap 
+AirportTexto   545036.00S0681744.00W    SAWH 251    External      Adap 
+AirportTexto   491824.25S0674810.00W    SAWJ 251    External      Adap 
+AirportTexto   542958.62S0671020.00W    SAWL 251    External      Adap 
+AirportTexto   454214.00S0701440.00W    SAWM 251    External      Adap 
+AirportTexto   544922.00S0681815.20W    SAWO 251    External      Adap 
+AirportTexto   463216.40S0705841.00W    SAWP 251    External      Adap 
+AirportTexto   484652.50S0700912.50W    SAWR 251    External      Adap 
+AirportTexto   440257.80S0702654.80W    SAWS 251    External      Adap 
+AirportTexto   513618.50S0721315.10W    SAWT 251    External      Adap 
+AirportTexto   500101.73S0683449.00W    SAWU 251    External      Adap 
+AirportTexto   365013.80S0595250.69W    SAZA 251    External      Adap 
+AirportTexto   384338.00S0620912.00W    SAZB 251    External      Adap 
+AirportTexto   372646.50S0615321.50W    SAZC 251    External      Adap 
+AirportTexto   361912.00S0574314.00W    SAZD 251    External      Adap 
+AirportTexto   373602.58S0622240.52W    SAZE 251    External      Adap 
+AirportTexto   365324.80S0601300.00W    SAZF 251    External      Adap 
+AirportTexto   354145.54S0634529.88W    SAZG 251    External      Adap 
+AirportTexto   382313.76S0601946.84W    SAZH 251    External      Adap 
+AirportTexto   361111.74S0610434.46W    SAZI 251    External      Adap 
+AirportTexto   374221.94S0594731.44W    SAZJ 251    External      Adap 
+AirportTexto   363232.00S0564317.40W    SAZL 251    External      Adap 
+AirportTexto   375603.00S0573424.00W    SAZM 251    External      Adap 
+AirportTexto   385656.00S0680921.00W    SAZN 251    External      Adap 
+AirportTexto   382923.00S0584858.50W    SAZO 251    External      Adap 
+AirportTexto   355040.69S0615127.05W    SAZP 251    External      Adap 
+AirportTexto   385942.00S0640824.00W    SAZQ 251    External      Adap 
+AirportTexto   363517.00S0641632.00W    SAZR 251    External      Adap 
+AirportTexto   410904.00S0710928.00W    SAZS 251    External      Adap 
+AirportTexto   371404.00S0591343.00W    SAZT 251    External      Adap 
+AirportTexto   371407.49S0570143.72W    SAZV 251    External      Adap 
+AirportTexto   385623.40S0691554.00W    SAZW 251    External      Adap 
+AirportTexto   352353.90S0605616.00W    SAZX 251    External      Adap 
+AirportTexto   400431.00S0710814.00W    SAZY 251    External      Adap 
+AirportTexto   514108.00S0574640.00W    SFAL 251    External      Adap
+
+AirportTexto	274121.40S0641004.30W	ADN	251	Internal
+AirportTexto	285119.50S0621552.50W	ADT	251	Internal
+AirportTexto	285201.00S0621417.20W	ADU	251	Internal
+AirportTexto	313907.00S0642339.20W	AGR	251	Internal
+AirportTexto	332154.00S0634330.30W	ALR	251	Internal
+AirportTexto	273741.20S0662029.80W	AND	251	Internal
+AirportTexto	312520.50S0630018.50W	ARY	251	Internal
+AirportTexto	323934.00S0624207.60W	BEL	251	Internal
+AirportTexto	274228.60S0670542.20W	BLN	251	Internal
+AirportTexto	304343.00S0620028.00W	BOE	251	Internal
+AirportTexto	305547.00S0620301.50W	BPS	251	Internal
+AirportTexto	260320.40S0655613.40W	CAF	251	Internal
+AirportTexto	270420.60S0663510.60W	CAL	251	Internal
+AirportTexto	320128.40S0641645.80W	CAM	251	Internal
+AirportTexto	272043.20S0653702.00W	CCP	251	Internal
+AirportTexto	250618.90S0660926.10W	CCS	251	Internal
+AirportTexto	304528.00S0634453.50W	CDL	251	Internal
+AirportTexto	265211.00S0644445.70W	CEJ	251	Internal
+AirportTexto	320517.00S0641011.00W	CLE	251	Internal
+AirportTexto	234653.90S0644458.90W	CLI	251	Internal
+AirportTexto	333348.00S0625209.20W	CNS	251	Internal
+AirportTexto	333952.10S0622230.20W	COA	251	Internal
+AirportTexto	311708.90S0642720.50W	CQN	251	Internal
+AirportTexto	313925.00S0631633.60W	CSA	251	Internal
+AirportTexto	304640.00S0620053.40W	CSJ	251	Internal
+AirportTexto	330938.10S0642017.10W	CUA	251	Internal
+AirportTexto	342123.10S0645450.00W	CVV	251	Internal
+AirportTexto	314950.65S0641728.70W	DLC	251	Internal
+AirportTexto	231433.30S0631922.80W	FDD	251	Internal
+AirportTexto	312447.00S0620759.20W	FRA	251	Internal
+AirportTexto	254933.90S0645747.10W	FRO	251	Internal
+AirportTexto	283743.90S0650648.90W	FRS	251	Internal
+AirportTexto	302240.70S0642250.70W	FUN	251	Internal
+AirportTexto	272941.00S0613931.70W	GAI	251	Internal
+AirportTexto	244445.40S0652508.05W	GBL	251	Internal
+AirportTexto	302315.70S0602155.60W	GCR	251	Internal
+AirportTexto	324443.00S0634746.00W	GDH	251	Internal
+AirportTexto	272842.74S0613842.00W	GDO	251	Internal
+AirportTexto	263444.89S0643143.21W	GYT	251	Internal
+AirportTexto	324123.63S0644259.53W	HAC	252	Internal
+AirportTexto	312450.96S0642949.32W	HAI	252	Internal
+AirportTexto	321212.79S0641852.57W	HAT	252	Internal
+AirportTexto	312513.23S0641024.07W	HBI	252	Internal
+AirportTexto	265936.47S0650948.76W	HBO	252	Internal
+AirportTexto	312623.16S0642037.42W	HBR	252	Internal
+AirportTexto	321346.00S0642623.79W	HCN	252	Internal
+AirportTexto	312626.65S0641125.02W	HCU	252	Internal
+AirportTexto	274652.68S0641554.08W	HET	252	Internal
+AirportTexto	244613.50S0652943.75W	HFC	252	Internal
+AirportTexto	244650.82S0652703.86W	HGB	252	Internal
+AirportTexto	244622.60S0652456.18W	HHM	252	Internal
+AirportTexto	322200.04S0660359.14W	HLU	252	Internal
+AirportTexto	312021.22S0635449.88W	HMT	252	Internal
+AirportTexto	252044.81S0642719.47W	HNA	252	Internal
+AirportTexto	322615.61S0631325.84W	HNE	252	Internal
+AirportTexto	313759.14S0642351.98W	HOB	252	Internal
+AirportTexto	312429.17S0641158.08W	HPC	252	Internal
+AirportTexto	292608.02S0665147.67W	HPL	252	Internal
+AirportTexto	291546.03S0650329.70W	HRE	252	Internal
+AirportTexto	323510.20S0625100.32W	HRR	252	Internal
+AirportTexto	245010.70S0652220.40W	HTE	252	Internal
+AirportTexto	320335.05S0644649.23W	HYC	252	Internal
+AirportTexto	311249.00S0640938.00W	JCM	251	Internal
+AirportTexto	305915.00S0640440.80W	JES	251	Internal
+AirportTexto	251112.00S0640453.10W	JGA	251	Internal
+AirportTexto	315301.50S0615038.50W	JOR	251	Internal
+AirportTexto	332318.00S0631819.55W	LCC	251	Internal
+AirportTexto	332727.00S0631849.30W	LCT	251	Internal
+AirportTexto	323833.30S0621900.40W	LEO	251	Internal
+AirportTexto	244456.00S0641406.00W	LLA	251	Internal
+AirportTexto	264357.00S0645304.30W	LRE	251	Internal
+AirportTexto	314912.00S0623749.00W	LVA	251	Internal
+AirportTexto	315330.00S0624216.60W	LVL	251	Internal
+AirportTexto	315128.70S0625040.00W	LVR	251	Internal
+AirportTexto	331239.80S0623751.80W	MAI	251	Internal
+AirportTexto	325554.80S0622605.20W	SROM    251	Internal
+AirportTexto	314358.12S0645909.73W	MCL	251	Internal
+AirportTexto	312404.00S0641800.90W	MEZ	251	Internal
+AirportTexto	283708.00S0613612.60W	MIN	251	Internal
+AirportTexto	323512.58S0623754.35W	MLE	251	Internal
+AirportTexto	320223.00S0641134.20W	MOI	251	Internal
+AirportTexto	253051.80S0645756.20W	MTN	251	Internal
+AirportTexto	304039.00S0620134.50W	MTR	251	Internal
+AirportTexto	320211.10S0634105.90W	NAN	251	Internal
+AirportTexto	252557.00S0635128.70W	NST	251	Internal
+AirportTexto	320337.60S0633253.40W	OLV	251	Internal
+AirportTexto	330620.00S0631134.70W	PAN	251	Internal
+AirportTexto	244825.00S0641049.10W	PCA	251	Internal
+AirportTexto	241853.00S0651449.00W	PDA	251	Internal
+AirportTexto	245943.55S0664439.29W	RAT	251	Internal
+AirportTexto	321022.00S0640518.40W	RCR	251	Internal
+AirportTexto	330534.00S0642545.65W	RIE	251	Internal
+AirportTexto	315941.15S0613610.10W	RST	251	Internal
+AirportTexto	312119.79S0614947.00W	SCL	251	Internal
+AirportTexto	301550.15S0611314.00W	SCT	251	Internal
+AirportTexto	294645.00S0620152.00W	SFN	251	Internal
+AirportTexto	301913.00S0615406.00W	SGV	251	Internal
+AirportTexto	315226.00S0615707.00W	SJB	251	Internal
+AirportTexto	301627.00S0635127.00W	SJD	251	Internal
+AirportTexto	231246.00S0640202.00W	SLV	251	Internal
+AirportTexto	264026.00S0660129.58W	SMC	251	Internal
+AirportTexto	220725.00S0631726.00W	SMF	251	Internal
+AirportTexto	324414.00S0623153.15W	SMS	251	Internal
+AirportTexto	264745.60S0651834.00W	TCM	251	Internal
+AirportTexto	265342.80S0621834.80W	TEV	251	Internal
+AirportTexto	321735.20S0632407.00W	TIO	251	Internal
+AirportTexto	311452.70S0640218.40W	TIR	251	Internal
+AirportTexto	324508.50S0651653.70W	TLS	251	Internal
+AirportTexto	291408.00S0614718.30W	TOS	251	Internal
+AirportTexto	313901.00S0642208.40W	TOT	251	Internal
+AirportTexto	321227.98S0643201.93W	VAY	251	Internal
+AirportTexto	313450.00S0633221.10W	VDR	251	Internal
+AirportTexto	315752.10S0643352.40W	VGB	251	Internal
+AirportTexto	221709.00S0624249.25W	VIT	251	Internal
+AirportTexto	322617.00S0631721.50W	VNR	251	Internal
+AirportTexto	322538.00S0631808.65W	VNS	251	Internal
+AirportTexto	321103.00S0642919.65W	VRU	251	Internal
+AirportTexto	322909.00S0624013.60W	ZLM	251	Internal
+AirportTexto	331620.00S0603414.00W	ACB	251	External
+AirportTexto	340432.13S0600829.80W	ACM	251	External
+AirportTexto	344840.70S0603100.40W	AII	251	External
+AirportTexto	344834.00S0623123.00W	ALC	251	External
+AirportTexto	385730.00S0674810.00W	ALL	251	External
+AirportTexto	330028.00S0615013.00W	ALT	251	External
+AirportTexto	330324.40S0604037.10W	ALV	251	External
+AirportTexto	350602.00S0620100.00W	AMA	251	External
+AirportTexto	344950.00S0622804.00W	AME	251	External
+AirportTexto	345043.00S0622857.68W	AMG	251	External
+AirportTexto	314528.00S0602225.00W	ANA	251	External
+AirportTexto	341320.67S0612312.00W	ARB	251	External
+AirportTexto	340711.57S0590459.44W	ATE	251	External
+AirportTexto	355952.00S0624223.00W	ATN	251	External
+AirportTexto	345044.97S0622857.40W	AUL	251	External
+AirportTexto	330248.76S0603551.04W	AVA	251	External
+AirportTexto	370949.40S0582819.54W	AYA	251	External
+AirportTexto	375456.00S0582037.50W	BAL	251	External
+AirportTexto	322143.48S0585257.75W	BAS	251	External
+AirportTexto	334916.30S0592934.00W	BDO	251	External
+AirportTexto	335130.50S0592808.00W	BEX	251	External
+AirportTexto	344446.92S0581212.39W	SRDB	251	External
+AirportTexto	384019.31S0622109.94W	BHB	251	External
+AirportTexto	372746.26S0581117.16W	BLA	251	External
+AirportTexto	374407.50S0580201.00W	BLC	251	External
+AirportTexto	373334.00S0583958.00W	BLE	251	External
+AirportTexto	382117.00S0580632.00W	BLL	251	External
+AirportTexto	361111.74S0610434.46W	BLR	251	External
+AirportTexto	350906.30S0603020.00W	BMO	251	External
+AirportTexto	331926.00S0603958.00W	BOG	251	External
+AirportTexto	332619.00S0611812.00W	BOM	251	External
+AirportTexto	351238.50S0590813.93W	BOS	251	External
+AirportTexto	350844.91S0602848.86W	BRA	251	External
+AirportTexto	384349.00S0631713.50W	BRF	251	External
+AirportTexto	371137.68S0693653.67W	BRQ	251	External
+AirportTexto	331651.00S0620908.40W	BTS	251	External
+AirportTexto	382003.30S0593750.20W	CAY	251	External
+AirportTexto	320637.34S0613754.97W	CBB	251	External
+AirportTexto	382955.40S0615300.00W	CBD	251	External
+AirportTexto	354012.00S0612420.60W	CCH	251	External
+AirportTexto	353408.00S0612207.00W	CCM	251	External
+AirportTexto	353853.50S0612101.30W	CCO	251	External
+AirportTexto	332757.50S0603743.00W	CDA	251	External
+AirportTexto	325328.00S0610726.00W	CDI	251	External
+AirportTexto	322719.00S0581824.00W	CDU	251	External
+AirportTexto	371253.00S0624650.00W	CFU	251	External
+AirportTexto	304513.00S0580000.00W	CHJ	251	External
+AirportTexto	372022.00S0653850.00W	CHR	251	External
+AirportTexto	345750.56S0600159.16W	CHY	251	External
+AirportTexto	340443.00S0600246.00W	CIF	251	External
+AirportTexto	385334.20S0675920.00W	CIP	251	External
+AirportTexto	332021.00S0620213.00W	CLD	251	External
+AirportTexto	321542.00S0580921.50W	CLN	251	External
+AirportTexto	375430.00S0674946.00W	CLT	251	External
+AirportTexto	350642.00S0584335.00W	CNA	251	External
+AirportTexto	342458.30S0595215.00W	CNO	251	External
+AirportTexto	335522.00S0610248.10W	CON	251	External
+AirportTexto	311815.00S0580055.00W	CRD	251	External
+AirportTexto	340239.00S0594120.00W	CSP	251	External
+AirportTexto	340922.40S0595224.00W	CSQ	251	External
+AirportTexto	353745.00S0612337.80W	CSR	251	External
+AirportTexto	304807.81S0580051.41W	CSU	251	External
+AirportTexto	384436.30S0603313.00W	CTA	251	External
+AirportTexto	362919.50S0632558.50W	CTP	251	External
+AirportTexto	340952.00S0594353.70W	CTS	251	External
+AirportTexto	374245.00S0630945.00W	DAR	251	External
+AirportTexto	363527.00S0614630.20W	DFR	251	External
+AirportTexto	372051.57S0585906.94W	DIO	251	External
+AirportTexto	351633.00S0613323.00W	DOF	251	External
+AirportTexto	384427.80S0611521.50W	DOR	251	External
+AirportTexto	374500.94S0622003.49W	DRA	251	External
+AirportTexto	363457.83S0614702.90W	DRX	251	External
+AirportTexto	320056.00S0603459.00W	DTE	251	External
+AirportTexto	312415.00S0605357.00W	EBF	251	External
+AirportTexto	355249.00S0641630.00W	ECX	251	External
+AirportTexto	323741.00S0613239.45W	EGO	251	External
+AirportTexto	353212.80S0600746.00W	ELC	251	External
+AirportTexto	381828.00S0580618.00W	ELL	251	External
+AirportTexto	363548.00S0641112.40W	ELP	251	External
+AirportTexto	345830.00S0575745.00W	ELZ	251	External
+AirportTexto	351140.00S0582136.00W	EML	251	External
+AirportTexto	312824.60S0605043.00W	EPZ	251	External
+AirportTexto	321255.20S0614258.30W	ETB	251	External
+AirportTexto	332544.60S0613040.00W	FAE	251	External
+AirportTexto	305058.00S0584205.00W	FAG	251	External
+AirportTexto	332806.60S0613003.00W	FIM	251	External
+AirportTexto	344924.18S0581857.79W	FVA	251	External
+AirportTexto	330217.94S0592624.00W	GAA	251	External
+AirportTexto	355844.10S0595425.00W	GAR	251	External
+AirportTexto	345944.43S0625958.85W	GAS	251	External
+AirportTexto	354507.00S0582747.70W	GBE	251	External
+AirportTexto	325828.80S0581513.00W	GEP	251	External
+AirportTexto	344050.90S0590207.73W	SRDR	251	External
+AirportTexto	342814.00S0592528.00W	GIL	251	External
+AirportTexto	345514.50S0585459.00W	GLH	251	External
+AirportTexto	325843.00S0583121.00W	GLM	251	External
+AirportTexto	325629.20S0583353.50W	GLP	251	External
+AirportTexto	345838.39S0610115.43W	GNV	251	External
+AirportTexto	334006.00S0595002.00W	GOC	251	External
+AirportTexto	324828.00S0612156.00W	GOM	251	External
+AirportTexto	350544.20S0580507.00W	GOZ	251	External
+AirportTexto	354025,00S0634305,00W	GPF	251	External
+AirportTexto	343458.00S0590002.00W	GRZ	251	External
+AirportTexto	374219.00S0633325.60W	GTE	251	External
+AirportTexto	380145.20S0600808.54W	GVZ	251	External
+AirportTexto	343159.65S0585815.14W	HAG	252	External
+AirportTexto	343421.23S0582401.65W	HAL	252	External
+AirportTexto	342437.99S0584314.66W	HAR	252	External
+AirportTexto	314231.05S0603002.89W	HAS	252	External
+AirportTexto	344138.13S0582737.42W	HAU	252	External
+AirportTexto	410940.20S0712156.64W	HBA	252	External
+AirportTexto	343826.62S0582433.99W	HBC	252	External
+AirportTexto	343717.48S0582041.74W	HBM	252	External
+AirportTexto	384626.80S0621738.35W	HBP	252	External
+AirportTexto	345401.62S0575546.19W	HBT	252	External
+AirportTexto	364001.00S0564043.00W	HCA	252	External
+AirportTexto	393359.99S0654119.64W	HCC	252	External
+AirportTexto	400238.60S0712159.86W	HCD	252	External
+AirportTexto	345444.49S0584311.48W	HCG	252	External
+AirportTexto	342243.09S0584718.69W	HCI	252	External
+AirportTexto	395305.24S0703050.63W	HCL	252	External
+AirportTexto	341357.83S0591857.33W	HCO	252	External
+AirportTexto	341825.15S0591010.55W	HCS	252	External
+AirportTexto	341027.78S0585957.51W	HCT	252	External
+AirportTexto	343740.33S0582105.53W	HDA	252	External
+AirportTexto	342919.46S0583603.01W	HDH	252	External
+AirportTexto	343421.14S0582401.57W	HDI	252	External
+AirportTexto	394856.90S0711012.13W	HDL	252	External
+AirportTexto	325107.00S0604233.00W	HDR	252	External
+AirportTexto	361853.40S0614451.80W	HDS	251	External
+AirportTexto	342951.16S0583624.85W	HDT	252	External
+AirportTexto	345626.87S0575930.73W	HEC	252	External
+AirportTexto	345004.88S0582305.83W	HEV	252	External
+AirportTexto	343509.50S0582005.05W	HFA	252	External
+AirportTexto	385159.24S0680603.47W	HFG	252	External
+AirportTexto	345500.80S0581500.86W	HFV	252	External
+AirportTexto	350330.11S0584717.44W	HGA	252	External
+AirportTexto	400530.43S0710832.40W	HGC	252	External
+AirportTexto	344634.75S0583929.78W	HGM	252	External
+AirportTexto	343456.72S0582228.32W	HGN	252	External
+AirportTexto	325638.82S0603915.47W	HGO	252	External
+AirportTexto	334848.85S0612008.84W	HGS	251	External
+AirportTexto	383253.19S0704039.82W	HHL	252	External
+AirportTexto	342933.60S0583624.92W	HHT	252	External
+AirportTexto	343802.97S0584505.60W	HHW	252	External
+AirportTexto	350454.22S0630447.87W	HIL	252	External
+AirportTexto	344730.21S0583606.82W	HIS	252	External
+AirportTexto	395109.78S0710246.96W	HJN	252	External
+AirportTexto	341653.64S0590707.05W	HLF	252	External
+AirportTexto	343326.45S0590245.33W	HLH	252	External
+AirportTexto	342951.15S0583624.84W	HLI	252	External
+AirportTexto	410717.06S0713202.15W	HLL	252	External
+AirportTexto	345735.36S0575335.03W	HLP	252	External
+AirportTexto	341613.64S0585401.58W	HLR	252	External
+AirportTexto	343002.60S0590054.73W	HLS	252	External
+AirportTexto	342416.64S0585148.99W	HLT	252	External
+AirportTexto	344855.88S0581143.59W	HMA	252	External
+AirportTexto	342645.34S0584402.69W	HMC	252	External
+AirportTexto	343451.40S0582546.50W	HMD	252	External
+AirportTexto	342639.98S0585012.15W	HME	252	External
+AirportTexto	344324.91S0583053.60W	HMF	252	External
+AirportTexto	343715.00S0582139.20W	HMG	252	External
+AirportTexto	341015.71S0583038.90W	HMH	252	External
+AirportTexto	343324.93S0584720.35W	HMM	252	External
+AirportTexto	344354.86S0583327.82W	HMY	252	External
+AirportTexto	342622.72S0583831.73W	HNB	252	External
+AirportTexto	343751.40S0582337.90W	HNP	252	External
+AirportTexto	343626.31S0582209.75W	HPA	252	External
+AirportTexto	314348.46S0603115.80W	HPE	252	External
+AirportTexto	400940.67S0700232.67W	HPG	252	External
+AirportTexto	342559.28S0585821.00W	HPI	252	External
+AirportTexto	345528.58S0575518.92W	HPM	252	External
+AirportTexto	343437.93S0582301.76W	HPN	252	External
+AirportTexto	330021.10S0604452.70W	HPR	252	External
+AirportTexto	324308.91S0604334.89W	HPT	252	External
+AirportTexto	380851.80S0654929.47W	HPU	252	External
+AirportTexto	343617.93S0585014.77W	HRA	252	External
+AirportTexto	342018.52S0594317.34W	HRC	252	External
+AirportTexto	400907.91S0711707.40W	HRM	252	External
+AirportTexto	345407.22S0583656.26W	HSC	252	External
+AirportTexto	343601.72S0585027.38W	HSD	252	External
+AirportTexto	343548.81S0582519.29W	HSG	252	External
+AirportTexto	342655.94S0592657.97W	HSH	252	External
+AirportTexto	342453.80S0583023.67W	HSM	252	External
+AirportTexto	332132.15S0601457.68W	HSN	252	External
+AirportTexto	323253.34S0581425.41W	HTA	252	External
+AirportTexto	323513.01S0604727.24W	HTC	252	External
+AirportTexto	372337.38S0585759.05W	HTD	252	External
+AirportTexto	355447.54S0623831.39W	HTL	252	External
+AirportTexto	371137.25S0624652.83W	HUE	251	External
+AirportTexto	370310.00S0615711.60W	HUG	251	External
+AirportTexto	344913.80S0642228.10W	HUI	251	External
+AirportTexto	312323.20S0610833.20W	HUM	251	External
+AirportTexto	360239.12S0600106.18W	HUP	252	External
+AirportTexto	352523.70S0600934.40W	HUU	252	External
+AirportTexto	342230.89S0583920.77W	HVA	252	External
+AirportTexto	343328.19S0583019.98W	HVM	252	External
+AirportTexto	364632.65S0573834.00W	HZA	251	External
+AirportTexto	351123.50S0633637.90W	IAA	251	External
+AirportTexto	351401.00S0633356.60W	IAL	251	External
+AirportTexto	341645.90S0603006.90W	IBA	251	External
+AirportTexto	334438.20S0584051.00W	IBY	251	External
+AirportTexto	352118.00S0642832.09W	IGL	251	External
+AirportTexto	330346.00S0611234.00W	ILD	251	External
+AirportTexto	331450.00S0622455.90W	IVB	251	External
+AirportTexto	331324.00S0622416.90W	IVL	251	External
+AirportTexto	394207.80S0711022.00W	JAH	251	External
+AirportTexto	380357.00S0632543.70W	JAR	251	External
+AirportTexto	342901.10S0615416.60W	JBA	251	External
+AirportTexto	395043.92S0705155.15W	JLA	251	External
+AirportTexto	362639.00S0625249.30W	JMB	251	External
+AirportTexto	343139.27S0635739.21W	JOC	251	External
+AirportTexto	371334.34S0611644.52W	LAM	251	External
+AirportTexto	304437.20S0593408.00W	LAZ	251	External
+AirportTexto	381122.08S0584714.09W	LBI	251	External
+AirportTexto	321617.28S0613943.33W	LCA	251	External
+AirportTexto	380454.44S0703838.00W	LCP	251	External
+AirportTexto	332727.00S0631849.15W	LCT	251	External
+AirportTexto	355211.00S0575236.00W	LDA	251	External
+AirportTexto	343917.20S0610033.00W	LDG	251	External
+AirportTexto	341756.00S0584755.00W	SRDE	251	External
+AirportTexto	345327.00S0613152.40W	LIN	251	External
+AirportTexto	343303.94S0590443.26W	LJN	251	External
+AirportTexto	345134.80S0582042.00W	LLC	251	External
+AirportTexto	383218.16S0702011.57W	LLJ	251	External
+AirportTexto	380030.00S0592059.80W	LMD	251	External
+AirportTexto	330445.00S0611858.40W	LMF	251	External
+AirportTexto	410550.17S0711036.47W	LNH	251	External
+AirportTexto	345641.00S0611808.40W	LNV	251	External
+AirportTexto	322935.00S0613454.30W	LRS	251	External
+AirportTexto	323120.00S0613302.10W	LRT	251	External
+AirportTexto	343833.17S0590730.73W	LVM	251	External
+AirportTexto	334711.00S0620740.00W	MAB	251	External
+AirportTexto	370845.00S0634043.30W	MAC	251	External
+AirportTexto	370219.80S0570811.10W	MAD	251	External
+AirportTexto	374835.30S0673934.10W	MAO	251	External
+AirportTexto	352647.00S0600518.80W	MAY	251	External
+AirportTexto	382308.00S0580801.00W	MBL	251	External
+AirportTexto	380041.70S0574039.50W	MDB	251	External
+AirportTexto	364632.70S0573834.00W	MEA	251	External
+AirportTexto	322137.80S0605857.00W	MON	251	External
+AirportTexto	380140.60S0573823.80W	MPH	251	External
+AirportTexto	380055.20S0573913.00W	MPP	251	External
+AirportTexto	365323.80S0575101.85W	MPU	251	External
+AirportTexto	343817.12S0592719.12W	MRD	251	External
+AirportTexto	352657.70S0600939.30W	MSA	251	External
+AirportTexto	344751.30S0585349.00W	MSP	251	External
+AirportTexto	360327.00S0633751.90W	MUQ	251	External
+AirportTexto	353232.00S0580307.30W	MUS	251	External
+AirportTexto	371555.70S0590535.70W	NDL	251	External
+AirportTexto	351939.40S0594728.00W	NDR	251	External
+AirportTexto	382843.90S0584816.00W	NEI	251	External
+AirportTexto	380836.71S0584453.59W	NIK	251	External
+AirportTexto	322511.90S0594909.00W	NJB	251	External
+AirportTexto	322412.10S0594447.60W	NOG	251	External
+AirportTexto	322651.20S0595158.00W	NOT	251	External
+AirportTexto	383437.00S0584750.00W	NPA	251	External
+AirportTexto	350124.80S0590200.10W	NVR	251	External
+AirportTexto	323503.00S0615030.00W	OCA	251	External
+AirportTexto	391711.10S0653636.00W	OEL	251	External
+AirportTexto	331821.80S0603922.00W	OGB	251	External
+AirportTexto	382449.70S0684414.10W	OMA	251	External
+AirportTexto	350634.00S0621303.00W	PAS	251	External
+AirportTexto	350520.90S0575700.20W	PBE	251	External
+AirportTexto	334214.43S0594333.00W	PED	251	External
+AirportTexto	305739.10S0605313.70W	PEL	251	External
+AirportTexto	335125.00S0604201.20W	PEN	251	External
+AirportTexto	324814.00S0604755.30W	PEP	251	External
+AirportTexto	354725.00S0615630.00W	PJO	251	External
+AirportTexto	330432.10S0604254.00W	PLC	251	External
+AirportTexto	361649.70S0630848.60W	PLG	251	External
+AirportTexto	330033.40S0610346.40W	PLL	251	External
+AirportTexto	385003.00S0620514.00W	PLT	251	External
+AirportTexto	314354.20S0601312.50W	PNA	251	External
+AirportTexto	370527.93S0565842.73W	PNR	251	External
+AirportTexto	344709.30S0615450.60W	PNT	251	External
+AirportTexto	341402.80S0603503.80W	PRC	251	External
+AirportTexto	373122.96S0622708.33W	PSA	251	External
+AirportTexto	323830.00S0604512.60W	PST	251	External
+AirportTexto	345229.00S0575739.75W	PTL	251	External
+AirportTexto	373221.90S0624402.90W	PUA	251	External
+AirportTexto	330027.50S0610103.60W	PUP	251	External
+AirportTexto	353408.80S0582623.00W	RAI	251	External
+AirportTexto	364618.82S0590327.99W	RAU	251	External
+AirportTexto	341456.80S0624026.50W	RBS	251	External
+AirportTexto	324940.00S0604653.80W	RDJ	251	External
+AirportTexto	341254.00S0604024.00W	RJA	251	External
+AirportTexto	350332.10S0641246.10W	RLC	251	External
+AirportTexto	325553.57S0605546.25W	RLI	251	External
+AirportTexto	350809.40S0615950.00W	ROB	251	External
+AirportTexto	350618.56S0620140.04W	ROH	251	External
+AirportTexto	330454.10S0603353.00W	ROP	251	External
+AirportTexto	321945.90S0591129.30W	ROT	251	External
+AirportTexto	341658.70S0624006.20W	RUF	251	External
+AirportTexto	353006.50S0625923.00W	RVA	251	External
+AirportTexto	354418.50S0594544.00W	SAB	251	External
+AirportTexto	343435.10S0610020.90W	SAF	251	External
+AirportTexto	314830.70S0602705.50W	SBE	251	External
+AirportTexto	331034.50S0611209.50W	SCF	251	External
+AirportTexto	353605.32S0594859.91W	SDL	251	External
+AirportTexto	351054.00S0581742.30W	SEN	251	External
+AirportTexto	323447.20S0605434.00W	SER	251	External
+AirportTexto	344805.00S0615211.30W	SEZ	251	External
+AirportTexto	341854.30S0620057.00W	SGE	251	External
+AirportTexto	382421.00S0601758.90W	SGI	251	External
+AirportTexto	341240.60S0592330.00W	SHP	251	External
+AirportTexto	303321.50S0595926.50W	SJR	251	External
+AirportTexto	304556.10S0603357.50W	SJT	251	External
+AirportTexto	324303.80S0604703.54W	SLA	251	External
+AirportTexto	381218.40S0614540.00W	SLG	251	External
+AirportTexto	364524.50S0625637.50W	SLO	251	External
+AirportTexto	363531.30S0641313.10W	SLP	251	External
+AirportTexto	341825.50S0601711.80W	SLT	251	External
+AirportTexto	381430.00S0614939.60W	SLY	251	External
+AirportTexto	362054.50S0621332.80W	SLZ	251	External
+AirportTexto	352734.00S0584549.50W	SMM	251	External
+AirportTexto	375734.00S0633528.00W	SMT	251	External
+AirportTexto	332331.94S0601145.13W	SNY	251	External
+AirportTexto	320620.00S0613648.80W	SQI	251	External
+AirportTexto	343248.10S0630728.10W	SRE	251	External
+AirportTexto	342125.00S0600921.00W	SSK	251	External
+AirportTexto	355005.00S0600901.10W	SSR	251	External
+AirportTexto	321437.00S0614533.00W	TBL	251	External
+AirportTexto	321501.90S0613906.70W	TDB	251	External
+AirportTexto	352531.50S0622809.80W	TEJ	251	External
+AirportTexto	341039.20S0613024.10W	TEO	251	External
+AirportTexto	380542.00S0621457.70W	TOR	251	External
+AirportTexto	355813.20S0624618.70W	TQL	251	External
+AirportTexto	325946.20S0614629.00W	TSV	251	External
+AirportTexto	330611.79S0592209.21W	UAE	251	External
+AirportTexto	343629.82S0602435.37W	UCO	251	External
+AirportTexto	314814.00S0590205.20W	UEL	251	External
+AirportTexto	382531.96S0582217.48W	UEN	251	External
+AirportTexto	325317.90S0605036.90W	UNE	251	External
+AirportTexto	313534.00S0604037.00W	UPE	251	External
+AirportTexto	324145.00S0585356.70W	URD	251	External
+AirportTexto	363310.00S0634600.30W	URL	251	External
+AirportTexto	392717.60S0624029.96W	URO	251	External
+AirportTexto	342910.33S0612922.95W	VDA	251	External
+AirportTexto	372808.00S0574559.26W	VDL	251	External
+AirportTexto	344912.58S0584022.27W	VDP	251	External
+AirportTexto	320200.29S0611036.70W	VEZ	251	External
+AirportTexto	323504.20S0601107.00W	VIC	251	External
+AirportTexto	314132.00S0592438.00W	VLL	251	External
+AirportTexto	335618.00S0642428.30W	VMA	251	External
+AirportTexto	335615.00S0642454.50W	VMB	251	External
+AirportTexto	335602.00S0642457.40W	VMC	251	External
+AirportTexto	335635.00S0642216.20W	VMK	251	External
+AirportTexto	352353.90S0572154.90W	VNA	251	External
+AirportTexto	390439.53S0670427.87W	VRG	251	External
+AirportTexto	334129.00S0620349.40W	VTO	251	External
+AirportTexto	334643.40S0615833.90W	VTS	251	External
+AirportTexto	382052.00S0601632.90W	YOP	251	External
+AirportTexto	312114.20S0682818.20W	AJA	251	External
+AirportTexto	333845.54S0652517.72W	CED	251	External
+AirportTexto	325741.00S0685220.20W	DOP	251	External
+AirportTexto	340004.20S0652200.00W	ERT	251	External
+AirportTexto	345827.00S0674328.00W	GVA	251	External
+AirportTexto	330557.14S0683445.79W	HCR	252	External
+AirportTexto	343713.01S0681933.29W	HHS	252	External
+AirportTexto	325145.49S0685221.56W	HPD	252	External
+AirportTexto	314536.13S0702443.57W	HPS	252	External
+AirportTexto	333703.10S0643702.00W	MLD	251	External
+AirportTexto	334448.30S0651444.00W	MSR	251	External
+AirportTexto	365957.00S0704433.06W	OVJ	251	External
+AirportTexto	331225.00S0682930.00W	RAE	251	External
+AirportTexto	370355.70S0692345.10W	RCV	251	External
+AirportTexto	331348.10S0682826.80W	RVD	251	External
+AirportTexto	313610.97S0683250.15W	SJA	251	External
+AirportTexto	372155.10S0691807.00W	TXO	251	External
+AirportTexto	335033.00S0651929.10W	VMT	251	External
+AirportTexto	293939.50S0694335.60W	ZAN	251	External
+AirportTexto	275412.00S0554556.10W	APO	251	External
+AirportTexto	290621.60S0593927.20W	AVL	251	External
+AirportTexto	272258.00S0573839.20W	BAD	251	External
+AirportTexto	283134.00S0590218.60W	BTA	251	External
+AirportTexto	290515.70S0601731.00W	CCI	251	External
+AirportTexto	271300.00S0611236.50W	CHA	251	External
+AirportTexto	271823.40S0611238.00W	CHT	251	External
+AirportTexto	272654.00S0572520.00W	CII	251	External
+AirportTexto	271815.80S0581852.90W	CIT	251	External
+AirportTexto	273301.00S0584302.50W	CQZ	251	External
+AirportTexto	294643.60S0580549.00W	CZU	251	External
+AirportTexto	293252.62S0590148.58W	EDP	251	External
+AirportTexto	273514.50S0584908.70W	ENV	251	External
+AirportTexto	300252.50S0593207.40W	ESN	251	External
+AirportTexto	250236.00S0583529.00W	ESR	251	External
+AirportTexto	280228.00S0560416.00W	EVC	251	External
+AirportTexto	303112.50S0582357.00W	EZA	251	External
+AirportTexto	261805.00S0581754.10W	FOR	251	External
+AirportTexto	290931.00S0591046.40W	GIT	251	External
+AirportTexto	271536.30S0612828.00W	GPK	251	External
+AirportTexto	272036.00S0611629.50W	GPO	251	External
+AirportTexto	291816.00S0565253.00W	GSE	251	External
+AirportTexto	291011.00S0591449.00W	GYA	251	External
+AirportTexto	273137.56S0584541.22W	HAZ	252	External
+AirportTexto	273330.89S0563929.83W	HIT	252	External
+AirportTexto	255925.25S0543817.55W	HPO	252	External
+AirportTexto	292741.35S0594553.18W	HRT	252	External
+AirportTexto	293606.30S0580119.00W	HSJ	251	External
+AirportTexto	270157.00S0551153.00W	JDA	251	External
+AirportTexto	285139.00S0594024.00W	LAN	251	External
+AirportTexto	295942.30S0575018.00W	LLE	251	External
+AirportTexto	270517.00S0584011.10W	LPP	251	External
+AirportTexto	302304.80S0575810.00W	MCP	251	External
+AirportTexto	301407.00S0575044.60W	MCT	251	External
+AirportTexto	292203.00S0595841.60W	MLA	251	External
+AirportTexto	263239.00S0544324.40W	MTL	251	External
+AirportTexto	273624.30S0555154.00W	PBO	251	External
+AirportTexto	261745.20S0593207.30W	PDP	251	External
+AirportTexto	251652.00S0585615.60W	PLS	251	External
+AirportTexto	260816.30S0593949.50W	PRA	251	External
+AirportTexto	264659.00S0602914.60W	PSV	251	External
+AirportTexto	273752.00S0591047.40W	RES	251	External
+AirportTexto	303410.11S0583009.96W	SJF	251	External
+AirportTexto	292805.00S0601331.80W	VER	251	External
+AirportTexto	282945.00S0591933.20W	VPO	251	External
+AirportTexto	265709.00S0542919.70W	VTE	251	External
+AirportTexto	292132.00S0564745.00W	YPY	251	External
+AirportTexto	463434.00S0705654.00W	BAI	251	External
+AirportTexto	415014.30S0650425.00W	BDR	251	External
+AirportTexto	454642.79S0672225.44W	CDF	251	External
+AirportTexto	463216.70S0673333.00W	CDS	251	External
+AirportTexto	422850.60S0712725.40W	CHO	251	External
+AirportTexto	523154.67S0682304.97W	HAB	252	External
+AirportTexto	523258.07S0681841.93W	HAD	252	External
+AirportTexto	523122.90S0681650.18W	HAM	252	External
+AirportTexto	525011.00S0681044.00W	HCE	252	External
+AirportTexto	524419.43S0683420.49W	HCP	252	External
+AirportTexto	521949.00S0682428.47W	HCV	252	External
+AirportTexto	523630.00S0680740.00W	HEA	252	External
+AirportTexto	523258.06S0681841.76W	HEM	252	External
+AirportTexto	531922.97S0681558.25W	HEN	252	External
+AirportTexto	524059.00S0680231.00W	HES	252	External
+AirportTexto	530521.70S0671922.00W	HFE	252	External
+AirportTexto	414212.24S0713627.63W	HLE	252	External
+AirportTexto	523415.46S0681508.38W	HMQ	252	External
+AirportTexto	524914.00S0681309.00W	HNO	252	External
+AirportTexto	525000.00S0662500.00W	HOC	252	External
+AirportTexto	501843.30S0724732.40W	HPB	252	External
+AirportTexto	524526.00S0671310.00W	HRI	252	External
+AirportTexto	541401.05S0671247.03W	HRW	252	External
+AirportTexto	501811.00S0695503.30W	HSR	252	External
+AirportTexto	433218.93S0713225.97W	HST	252	External
+AirportTexto	514109.00S0715804.00W	HTS	252	External
+AirportTexto	525400.00S0664900.00W	HWG	252	External
+AirportTexto	455414.97S0673342.25W	ICO	251	External
+AirportTexto	443422.00S0652214.00W	LAE	251	External
+AirportTexto	461126.65S0691649.00W	LHP	251	External
+AirportTexto	495942.00S0685708.20W	LPB	251	External
+AirportTexto	421301.80S0714819.00W	LZA	251	External
+AirportTexto	404858.90S0680422.30W	MCO	251	External
+AirportTexto	404641.00S0625848.00W	PAT	251	External
+AirportTexto	431739.00S0650349.20W	RAW	251	External
+AirportTexto	514008.45S0691558.00W	RGR	251	External
+AirportTexto	453455.50S0690004.00W	SRM	251	External
+AirportTexto	401237.30S0623704.10W	STD	251	External
+AirportTexto	433645.40S0710115.00W	TEC	251	External
+AirportTexto	431408.31S0651927.00W	TRW	251	External
+AirportTexto	430515.00S0712841.20W	TVN	251	External
+AirportTexto	525336.82S0682120.18W	ULL	252	External
+AirportTexto	404054.00S0661038.00W	VAL	251	External
+AirportTexto	433158.00S0712909.00W	VDO	251	External
+AirportTexto	434317.40S0711444.00W	VEC	251	External

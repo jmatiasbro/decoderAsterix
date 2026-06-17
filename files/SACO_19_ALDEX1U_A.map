@@ -1,0 +1,18 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                5    [ALDEX1U]
+313937.00S0651147.00W        [ALDEX1U]
+311657.12S0644548.59W        [ALDEX1U]
+311133.00S0643940.00W        [ALDEX1U]
+310839.85S0643107.75W        [ALDEX1U]
+310459.00S0642018.00W        [ALDEX1U]

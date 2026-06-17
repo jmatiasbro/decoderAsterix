@@ -1,0 +1,22 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                9    [ANGEN2A]
+264446.00S0650508.00W        [ANGEN2A]
+263905.00S0645605.00W        [ANGEN2A]
+264402.00S0645138.00W        [ANGEN2A]
+264857.00S0644957.00W        [ANGEN2A]
+265402.00S0645014.00W        [ANGEN2A]
+265741.00S0645144.00W        [ANGEN2A]
+265958.00S0645322.00W        [ANGEN2A]
+270151.00S0645518.00W        [ANGEN2A]
+272044.00S0643616.00W        [ANGEN2A]

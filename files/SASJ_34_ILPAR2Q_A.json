@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.0925,
+            -25.699444444444445
+          ],
+          [
+            -65.04841666666667,
+            -25.36675277777778
+          ],
+          [
+            -64.99600555555556,
+            -25.030105555555554
+          ],
+          [
+            -64.92954166666667,
+            -24.692697222222222
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ILPAR2Q",
+        "type": "polyline"
+      }
+    }
+  ]
+}

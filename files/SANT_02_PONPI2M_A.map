@@ -1,0 +1,19 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                6    [PONPI2M]
+254522.00S0651855.00W        [PONPI2M]
+260119.00S0651555.00W        [PONPI2M]
+261830.82S0651546.71W        [PONPI2M]
+264035.00S0651536.00W        [PONPI2M]
+265036.72S0651531.05W        [PONPI2M]
+270001.00S0651526.00W        [PONPI2M]

@@ -1,0 +1,16 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                3    [MIMEX1G]
+243329.09S0650011.19W        [MIMEX1G]
+243153.07S0645301.70W        [MIMEX1G]
+242745.00S0643440.00W        [MIMEX1G]

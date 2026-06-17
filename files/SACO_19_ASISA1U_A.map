@@ -1,0 +1,18 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                5    [ASISA1U]
+314002.00S0631252.00W        [ASISA1U]
+312736.37S0633138.35W        [ASISA1U]
+312326.00S0633755.00W        [ASISA1U]
+311210.00S0635447.00W        [ASISA1U]
+310449.00S0640544.00W        [ASISA1U]

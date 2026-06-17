@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_213",
+  "name": "Radar Morteros",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 213,
+  "location": {
+    "latitude": -30.681111,
+    "longitude": -62.024166,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

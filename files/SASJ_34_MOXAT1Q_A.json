@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.91666666666667,
+            -24.10138888888889
+          ],
+          [
+            -64.89361111111111,
+            -24.385833333333334
+          ],
+          [
+            -64.86472222222221,
+            -24.56277777777778
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "MOXAT1Q",
+        "type": "polyline"
+      }
+    }
+  ]
+}

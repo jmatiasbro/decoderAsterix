@@ -1,0 +1,12 @@
+[Unit]
+Description=Shutdown_Reboot
+DefaultDependencies=no
+After=final.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/administrador/tail2ax/tail2axd stop
+RemainAfterExit=yes
+
+[Install]
+WantedBy=final.target

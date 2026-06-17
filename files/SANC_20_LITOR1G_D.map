@@ -1,0 +1,16 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                3    [LITOR1G]
+284114.00S0654626.00W        [LITOR1G]
+285454.00S0654800.00W        [LITOR1G]
+290202.00S0652955.00W        [LITOR1G]

@@ -1,0 +1,17 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                4    [KAKAN1C]
+283125.41S0654404.34W        [KAKAN1C]
+283204.00S0654709.00W        [KAKAN1C]
+283407.00S0654847.00W        [KAKAN1C]
+290341.00S0662214.00W        [KAKAN1C]

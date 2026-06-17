@@ -1,0 +1,16 @@
+{
+  "radar_id": "RADAR_226_241",
+  "name": "Radar Río Gallegos",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 241,
+  "location": {
+    "latitude": -51.614166,
+    "longitude": -69.302222,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12
+}

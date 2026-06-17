@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -64.11532222222222,
+            -31.241625000000003
+          ],
+          [
+            -64.03179722222222,
+            -31.241083333333336
+          ],
+          [
+            -63.740875,
+            -31.246372222222224
+          ],
+          [
+            -63.13611111111111,
+            -31.25583333333333
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "MAVBI1C",
+        "type": "polyline"
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                3    [LITOR1M]
+290202.00S0652955.00W        [LITOR1M]
+290001.00S0653919.00W        [LITOR1M]
+285738.00S0655023.00W        [LITOR1M]

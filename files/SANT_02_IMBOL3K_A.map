@@ -1,0 +1,18 @@
+/*
+      ARRIVAL ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            21
+
+Range                2048
+
+Polyline                5    [IMBOL3K]
+274456.00S0645554.00W        [IMBOL3K]
+273000.00S0645826.00W        [IMBOL3K]
+271419.00S0651037.00W        [IMBOL3K]
+271033.00S0651009.00W        [IMBOL3K]
+270535.00S0650912.00W        [IMBOL3K]

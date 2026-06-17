@@ -1,0 +1,20 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                7    [DONKA1G]
+312346.68S0640259.21W        [DONKA1G]
+311847.29S0640259.23W        [DONKA1G]
+311848.00S0641213.00W        [DONKA1G]
+310046.73S0642244.64W        [DONKA1G]
+304048.00S0642313.00W        [DONKA1G]
+303328.12S0642323.57W        [DONKA1G]
+302433.00S0642336.00W        [DONKA1G]

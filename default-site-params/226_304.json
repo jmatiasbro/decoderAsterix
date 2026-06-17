@@ -1,0 +1,13 @@
+{
+  "radar_id": "ADS-B_226_304",
+  "name": "ADS-B_Radar Bariloche BRC",
+  "type": "ads-b",
+  "category": "CAT021",
+  "sac": 226,
+  "sic": 304,
+  "location": {
+    "latitude": -41.145277,
+    "longitude": -71.155555,
+    "altitude": 0
+  }
+}

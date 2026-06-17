@@ -1,0 +1,35 @@
+{
+  "radar_id": "RADAR_226_232",
+  "name": "Radar Saenz Peña",
+  "type": "SSR/PSR",
+  "category": "CAT048",
+  "sac": 226,
+  "sic": 232,
+  "location": {
+    "latitude": -26.750555,
+    "longitude": -60.481666,
+    "altitude": 0
+  },
+  "range": 250,
+  "azimuth_coverage": 360,
+  "antenna_rotation_speed": 12,
+  "registration": {
+    "azimuth_offset_deg": 0.05,
+    "range_offset_nm": -0.035,
+    "range_scale": 1.0,
+    "enabled": true,
+    "source": "interradar",
+    "absolute": false,
+    "stats": {
+      "coverage_az_pct": 88.9,
+      "n": 4400,
+      "residual_az_after": 0.044,
+      "residual_az_before": 0.067,
+      "residual_rng_after": 0.108,
+      "residual_rng_before": 0.114,
+      "sigma_az_deg": 0.044,
+      "sigma_rng_nm": 0.108
+    },
+    "verdict": "applicable"
+  }
+}

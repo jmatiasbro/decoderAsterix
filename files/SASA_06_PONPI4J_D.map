@@ -1,0 +1,17 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                4    [PONPI4J]
+244635.07S0652226.07W        [PONPI4J]
+245011.18S0652049.42W        [PONPI4J]
+245108.00S0652902.00W        [PONPI4J]
+254522.00S0651855.00W        [PONPI4J]

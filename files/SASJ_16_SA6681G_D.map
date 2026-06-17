@@ -1,0 +1,16 @@
+/*
+      DEPARTURE ROUTES  MAP       
+      =========================     
+*/
+BrightnessGroup APPROACH_ROUTES
+
+LineStyle     1
+
+ColorLine            20
+
+Range                2048
+
+Polyline                3    [SA6681G]
+243329.09S0650011.19W        [SA6681G]
+244528.18S0650533.80W        [SA6681G]
+245422.16S0651758.46W        [SA6681G]

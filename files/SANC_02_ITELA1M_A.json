@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.39083333333333,
+            -28.974444444444444
+          ],
+          [
+            -65.65527777777778,
+            -29.00027777777778
+          ],
+          [
+            -65.83972222222222,
+            -28.960555555555555
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "AEROVIAS",
+        "name": "ITELA1M",
+        "type": "polyline"
+      }
+    }
+  ]
+}

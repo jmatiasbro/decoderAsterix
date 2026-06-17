@@ -1,0 +1,55 @@
+{
+  "_source": "ICAO Doc 8071 Vol III (2020) — Tablas 3-1 y 3-2 (Radar Data Quality Characteristics)",
+  "_note": "Umbrales versionados para el veredicto pass/fail del dashboard PASS. 'dir': higher=mayor es mejor, lower=menor es mejor, abs_lower=|valor| menor es mejor. green=umbral OK, orange=umbral de alerta (opcional).",
+  "active_profile": "monopulse",
+  "profiles": {
+    "monopulse": {
+      "label": "SSR Monopulso (ICAO Tabla 3-2)",
+      "metrics": {
+        "pd_global":          {"dir": "higher",    "green": 97.0,  "orange": 90.0, "ref": "≥ 97.00%"},
+        "pd_overlap":         {"dir": "higher",    "green": 97.0,  "orange": 90.0, "ref": "≥ 97.00%"},
+        "pd_vs_adsb":         {"dir": "higher",    "green": 97.0,  "orange": 90.0, "ref": "≥ 97.00%"},
+        "pd_mode_a":          {"dir": "higher",    "green": 98.0,  "orange": 90.0, "ref": "≥ 98.00%"},
+        "mode_a_correct_pct": {"dir": "higher",    "green": 98.0,  "orange": 90.0, "ref": "≥ 98.00%"},
+        "pd_mode_c":          {"dir": "higher",    "green": 96.0,  "orange": 85.0, "ref": "≥ 96.00%"},
+        "mode_c_correct_pct": {"dir": "higher",    "green": 96.0,  "orange": 85.0, "ref": "≥ 96.00%"},
+        "gap_mean_size":      {"dir": "lower",     "green": 1.5,   "orange": 2.0,  "ref": "≤ 1.50"},
+        "gap_pct_gt2":        {"dir": "lower",     "green": 10.0,  "orange": 15.0, "ref": "≤ 10.00%"},
+        "gap_pct_misses_big": {"dir": "lower",     "green": 15.0,  "orange": 25.0, "ref": "≤ 15.00%"},
+        "range_bias_m":       {"dir": "abs_lower", "green": 50.0,  "orange": 150.0, "ref": "≤ ±50.0 m"},
+        "azimuth_bias_deg":   {"dir": "abs_lower", "green": 0.10,  "ref": "≤ ±0.100°"},
+        "range_jitter_m":     {"dir": "lower",     "green": 70.0,  "orange": 130.0, "ref": "≤ 70.0 m"},
+        "azimuth_jitter_deg": {"dir": "lower",     "green": 0.08,  "orange": 0.20, "ref": "≤ 0.080°"},
+        "split_plots_pct":    {"dir": "lower",     "green": 0.10,  "orange": 1.0,  "ref": "≤ 0.10%"},
+        "range_gain_slope":   {"dir": "abs_lower", "green": 0.001, "ref": "≤ ±0.001"},
+        "delay_mean":         {"dir": "abs_lower", "green": 2.0,   "orange": 5.0,  "ref": "≤ 2.000 s"},
+        "reflection_rate":    {"dir": "lower",     "green": 0.20,  "orange": 1.0,  "ref": "≤ 0.20%"},
+        "sidelobe_rate":      {"dir": "lower",     "green": 0.10,  "orange": 0.5,  "ref": "≤ 0.10%"}
+      }
+    },
+    "sliding_window": {
+      "label": "PSR / SSR ventana deslizante (ICAO Tabla 3-1)",
+      "metrics": {
+        "pd_global":          {"dir": "higher",    "green": 90.0,  "orange": 85.0, "ref": "≥ 90.00%"},
+        "pd_overlap":         {"dir": "higher",    "green": 90.0,  "orange": 85.0, "ref": "≥ 90.00%"},
+        "pd_vs_adsb":         {"dir": "higher",    "green": 90.0,  "orange": 85.0, "ref": "≥ 90.00%"},
+        "pd_mode_a":          {"dir": "higher",    "green": 95.0,  "orange": 85.0, "ref": "≥ 95.00%"},
+        "mode_a_correct_pct": {"dir": "higher",    "green": 85.0,  "orange": 75.0, "ref": "≥ 85.00%"},
+        "pd_mode_c":          {"dir": "higher",    "green": 92.0,  "orange": 83.0, "ref": "≥ 92.00%"},
+        "mode_c_correct_pct": {"dir": "higher",    "green": 83.0,  "orange": 75.0, "ref": "≥ 83.00%"},
+        "gap_mean_size":      {"dir": "lower",     "green": 2.0,   "orange": 3.0,  "ref": "≤ 2.00"},
+        "gap_pct_gt2":        {"dir": "lower",     "green": 15.0,  "orange": 25.0, "ref": "≤ 15.00%"},
+        "gap_pct_misses_big": {"dir": "lower",     "green": 25.0,  "orange": 40.0, "ref": "≤ 25.00%"},
+        "range_bias_m":       {"dir": "abs_lower", "green": 100.0, "orange": 400.0, "ref": "≤ ±100.0 m"},
+        "azimuth_bias_deg":   {"dir": "abs_lower", "green": 0.15,  "ref": "≤ ±0.150°"},
+        "range_jitter_m":     {"dir": "lower",     "green": 130.0, "orange": 200.0, "ref": "≤ 130.0 m"},
+        "azimuth_jitter_deg": {"dir": "lower",     "green": 0.20,  "orange": 0.30, "ref": "≤ 0.200°"},
+        "split_plots_pct":    {"dir": "lower",     "green": 1.0,   "orange": 2.0,  "ref": "≤ 1.00%"},
+        "range_gain_slope":   {"dir": "abs_lower", "green": 0.001, "ref": "≤ ±0.001"},
+        "delay_mean":         {"dir": "abs_lower", "green": 2.0,   "orange": 5.0,  "ref": "≤ 2.000 s"},
+        "reflection_rate":    {"dir": "lower",     "green": 1.0,   "orange": 3.0,  "ref": "≤ 1.00%"},
+        "sidelobe_rate":      {"dir": "lower",     "green": 0.50,  "orange": 1.0,  "ref": "≤ 0.50%"}
+      }
+    }
+  }
+}
