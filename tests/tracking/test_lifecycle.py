@@ -137,3 +137,20 @@ def test_tentativa_que_falta_se_descarta():
     lc.procesar(_p(0.0))                          # 1 detección, TENTATIVE
     lc.tick(8.0)                                  # pasó ≥1 vuelta sin confirmar
     assert lc.estado("1234") is None
+
+
+def test_coasting_con_tods_no_alineados_a_la_grilla():
+    # ToDs separados 1 período (4 s) pero con offset 1.3 (no múltiplos de 4):
+    # el conteo por tiempo transcurrido debe dar faltas 1,2,3 igual.
+    lc = _lc()
+    for tod in [1.3, 5.3, 9.3, 13.3]:
+        lc.procesar(_p(tod))
+    assert lc.estado("1234") == CONFIRMED
+    lc.tick(17.3)
+    assert lc.estado("1234") == COASTING and lc.faltas("1234") == 1
+    lc.tick(21.3)
+    assert lc.faltas("1234") == 2
+    lc.tick(25.3)
+    assert lc.faltas("1234") == 3
+    eventos = lc.tick(29.3)
+    assert ("1234", DELETED) in eventos and lc.estado("1234") is None

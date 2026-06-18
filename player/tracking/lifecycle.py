@@ -23,14 +23,14 @@ def _squawk(plot):
 
 class _Pista:
     __slots__ = ("codigo", "estado", "detecciones", "faltas",
-                 "ultima_vuelta", "scan_period", "x", "y")
+                 "ultima_tod", "scan_period", "x", "y")
 
-    def __init__(self, codigo, vuelta, scan_period, x, y):
+    def __init__(self, codigo, ultima_tod, scan_period, x, y):
         self.codigo = codigo
         self.estado = TENTATIVE
         self.detecciones = 1
         self.faltas = 0
-        self.ultima_vuelta = vuelta
+        self.ultima_tod = ultima_tod    # ToD de la última detección
         self.scan_period = scan_period
         self.x = x
         self.y = y
@@ -60,49 +60,57 @@ class MonoradarLifecycle:
         codigo = identidad_codigo(plot)
         if codigo is None:
             return None
-        period = self._periodo(plot)
-        vuelta = int(plot.timestamp // period)
         pista = self.pistas.get(codigo)
         if pista is None:
-            self.pistas[codigo] = _Pista(codigo, vuelta, period, plot.x, plot.y)
+            self.pistas[codigo] = _Pista(codigo, plot.timestamp,
+                                         self._periodo(plot), plot.x, plot.y)
             return codigo
-        if vuelta == pista.ultima_vuelta:
-            # mismo scan: colapsar si está cerca, si no es duplicado lejano
+        # Conteo por TIEMPO TRANSCURRIDO desde la última detección (robusto a saltos
+        # de ToD y ráfagas de carga), no por índice absoluto floor(tod/período).
+        period = pista.scan_period
+        elapsed = plot.timestamp - pista.ultima_tod
+        if elapsed < 0:
+            elapsed = 0.0                       # fuera de orden: tratar como misma vuelta
+
+        if elapsed < period * 0.5:
+            # Misma vuelta: duplicado. Colapsar si está cerca; si no, duplicado lejano.
             dist = math.hypot(plot.x - pista.x, plot.y - pista.y)
             if dist < self.pair_m:
                 if pista.estado == TENTATIVE:
                     pista.detecciones += 1
+                    if pista.detecciones >= self.confirm_n:
+                        pista.estado = CONFIRMED
                 pista.x, pista.y = plot.x, plot.y
-                if pista.estado == TENTATIVE and pista.detecciones >= self.confirm_n:
-                    pista.estado = CONFIRMED
+                pista.ultima_tod = plot.timestamp
                 return codigo
             return DUPLICADO_LEJANO
-        if vuelta > pista.ultima_vuelta:
-            if pista.estado == CONFIRMED or pista.estado == COASTING:
-                pista.estado = CONFIRMED        # recuperación
-            else:
-                if vuelta > pista.ultima_vuelta + 1:
-                    pista.detecciones = 0
-                pista.detecciones += 1
-            pista.faltas = 0
-            pista.ultima_vuelta = vuelta
-            pista.x, pista.y = plot.x, plot.y
-        if pista.estado == TENTATIVE and pista.detecciones >= self.confirm_n:
-            pista.estado = CONFIRMED
+
+        # Detección en una vuelta posterior.
+        if pista.estado in (CONFIRMED, COASTING):
+            pista.estado = CONFIRMED            # recuperación
+        else:
+            if elapsed >= period * 1.5:         # se saltó ≥1 vuelta entera → reiniciar racha
+                pista.detecciones = 0
+            pista.detecciones += 1
+            if pista.detecciones >= self.confirm_n:
+                pista.estado = CONFIRMED
+        pista.faltas = 0
+        pista.ultima_tod = plot.timestamp
+        pista.x, pista.y = plot.x, plot.y
         return codigo
 
     def tick(self, tod_actual):
         """Envejece faltas según el ToD actual. Devuelve [(codigo, evento)].
 
-        Para cada pista, la vuelta actual = floor(tod/scan_period). Si hay vueltas
-        sin dato: tentativa → se descarta; confirmada/coasting → COASTING y, al
-        llegar a drop_misses, DELETE.
+        faltas = vueltas enteras transcurridas desde la última detección
+        (int((tod - ultima_tod)/período)). Tentativa que pierde una vuelta → se
+        descarta; confirmada/coasting → COASTING y, al llegar a drop_misses, DELETE.
         """
         eventos = []
         for codigo in list(self.pistas.keys()):
             pista = self.pistas[codigo]
-            vuelta_actual = int(tod_actual // pista.scan_period)
-            faltantes = vuelta_actual - pista.ultima_vuelta
+            period = pista.scan_period or 4.0
+            faltantes = int((tod_actual - pista.ultima_tod) / period)
             if faltantes <= 0:
                 continue
             if pista.estado == TENTATIVE:
