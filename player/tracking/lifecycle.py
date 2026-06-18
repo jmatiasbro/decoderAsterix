@@ -20,6 +20,76 @@ def _squawk(plot):
     return None
 
 
+class _Pista:
+    __slots__ = ("codigo", "estado", "detecciones", "faltas",
+                 "ultima_vuelta", "scan_period", "x", "y")
+
+    def __init__(self, codigo, vuelta, scan_period, x, y):
+        self.codigo = codigo
+        self.estado = TENTATIVE
+        self.detecciones = 1
+        self.faltas = 0
+        self.ultima_vuelta = vuelta
+        self.scan_period = scan_period
+        self.x = x
+        self.y = y
+
+
+class MonoradarLifecycle:
+    """Confirma/mantiene/borra pistas monoradar por vueltas de antena.
+
+    scan_period_fn(sac, sic) -> período de barrido en s (60/RPM).
+    confirm_n: detecciones para confirmar. drop_misses: faltas para borrar.
+    pair_nm: umbral para colapsar dos plots del mismo código en la misma vuelta.
+    """
+
+    def __init__(self, scan_period_fn, confirm_n=4, drop_misses=4, pair_nm=1.0):
+        self._period_fn = scan_period_fn
+        self.confirm_n = confirm_n
+        self.drop_misses = drop_misses
+        self.pair_m = pair_nm * NM_M
+        self.pistas = {}
+
+    def _periodo(self, plot):
+        p = self._period_fn(getattr(plot, "sac", None), getattr(plot, "sic", None))
+        return p if p and p > 0 else 4.0
+
+    def procesar(self, plot):
+        """Registra una detección. Devuelve el código tratado o None."""
+        codigo = identidad_codigo(plot)
+        if codigo is None:
+            return None
+        period = self._periodo(plot)
+        vuelta = int(plot.timestamp // period)
+        pista = self.pistas.get(codigo)
+        if pista is None:
+            self.pistas[codigo] = _Pista(codigo, vuelta, period, plot.x, plot.y)
+            return codigo
+        # vuelta nueva consecutiva (o posterior): cuenta como detección
+        if vuelta > pista.ultima_vuelta:
+            if pista.estado == CONFIRMED or pista.estado == COASTING:
+                pista.estado = CONFIRMED        # recuperación
+            else:
+                # tentativa: si hubo hueco, reinicia la racha
+                if vuelta > pista.ultima_vuelta + 1:
+                    pista.detecciones = 0
+                pista.detecciones += 1
+            pista.faltas = 0
+            pista.ultima_vuelta = vuelta
+            pista.x, pista.y = plot.x, plot.y
+        if pista.estado == TENTATIVE and pista.detecciones >= self.confirm_n:
+            pista.estado = CONFIRMED
+        return codigo
+
+    def estado(self, codigo):
+        p = self.pistas.get(codigo)
+        return p.estado if p else None
+
+    def faltas(self, codigo):
+        p = self.pistas.get(codigo)
+        return p.faltas if p else 0
+
+
 def identidad_codigo(plot):
     """Clave de identidad del plot, o None.
 

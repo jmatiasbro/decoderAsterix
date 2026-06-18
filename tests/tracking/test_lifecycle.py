@@ -30,3 +30,39 @@ def test_adsb_usa_callsign_luego_mode_s():
 def test_psr_puro_sin_codigo_es_none():
     assert identidad_codigo(_plot(category=48, mode3a=None, mode_s=None,
                                   callsign=None)) is None
+
+
+from player.tracking.lifecycle import (MonoradarLifecycle, TENTATIVE,
+                                        CONFIRMED)
+
+# scan_period fijo de 4 s (RPM=15) para todas las pruebas de ciclo
+def _lc():
+    return MonoradarLifecycle(scan_period_fn=lambda sac, sic: 4.0)
+
+
+def _p(tod, code="1234", x=0.0, y=0.0):
+    return _plot(timestamp=tod, mode3a=code, x=x, y=y, category=48)
+
+
+def test_cuatro_vueltas_confirman():
+    lc = _lc()
+    for i, tod in enumerate([0.0, 4.0, 8.0]):     # vueltas 0,1,2
+        lc.procesar(_p(tod))
+        assert lc.estado("1234") == TENTATIVE
+    lc.procesar(_p(12.0))                          # vuelta 3 → 4ª detección
+    assert lc.estado("1234") == CONFIRMED
+    assert lc.faltas("1234") == 0
+
+
+def test_tres_vueltas_siguen_tentativas():
+    lc = _lc()
+    for tod in [0.0, 4.0, 8.0]:
+        lc.procesar(_p(tod))
+    assert lc.estado("1234") == TENTATIVE
+
+
+def test_pista_nueva_arranca_tentativa():
+    lc = _lc()
+    lc.procesar(_p(0.0))
+    assert lc.estado("1234") == TENTATIVE
+    assert lc.faltas("1234") == 0
