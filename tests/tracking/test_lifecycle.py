@@ -92,3 +92,48 @@ def test_doble_plot_lejano_no_colapsa():
     assert ev == DUPLICADO_LEJANO
     # la detección de la pista no aumentó por el plot lejano
     assert lc.pistas["1234"].detecciones == 1
+
+
+from player.tracking.lifecycle import COASTING, DELETED
+
+
+def _confirmada():
+    lc = _lc()
+    for tod in [0.0, 4.0, 8.0, 12.0]:             # confirma en vuelta 3
+        lc.procesar(_p(tod))
+    assert lc.estado("1234") == CONFIRMED
+    return lc
+
+
+def test_coasting_marca_faltas():
+    lc = _confirmada()
+    # sin datos: a ToD de la vuelta 4,5,6 (16,20,24 s) → faltas 1,2,3, sigue viva
+    for v, tod in enumerate([16.0, 20.0, 24.0], start=1):
+        lc.tick(tod)
+        assert lc.estado("1234") == COASTING
+        assert lc.faltas("1234") == v
+
+
+def test_borra_en_la_cuarta_falta():
+    lc = _confirmada()
+    for tod in [16.0, 20.0, 24.0]:
+        lc.tick(tod)
+    eventos = lc.tick(28.0)                        # 4ª falta → DELETE
+    assert ("1234", DELETED) in eventos
+    assert lc.estado("1234") is None              # ya no está
+
+
+def test_recuperacion_resetea_faltas():
+    lc = _confirmada()
+    lc.tick(16.0)                                 # falta 1 (COASTING)
+    lc.tick(20.0)                                 # falta 2
+    lc.procesar(_p(24.0))                         # vuelve dato en vuelta 6
+    assert lc.estado("1234") == CONFIRMED
+    assert lc.faltas("1234") == 0
+
+
+def test_tentativa_que_falta_se_descarta():
+    lc = _lc()
+    lc.procesar(_p(0.0))                          # 1 detección, TENTATIVE
+    lc.tick(8.0)                                  # pasó ≥1 vuelta sin confirmar
+    assert lc.estado("1234") is None
