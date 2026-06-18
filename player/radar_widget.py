@@ -3037,7 +3037,10 @@ class RadarWidget(_RadarBase):
                 if self._ciclo_activo:
                     from player.tracking.lifecycle import (
                         DELETED, CONFIRMED, COASTING, identidad_codigo)
-                    tod = getattr(self, '_last_tod', 0.0) or 0.0
+                    # Reloj de simulación (ToD ASTERIX) que AVANZA en reproducción
+                    # aunque no lleguen plots; _last_tod se congela entre plots y la
+                    # pista perdida nunca acumulaba faltas.
+                    tod = SimulationTime.instance().now()
                     # códigos confirmados/coasting ANTES del tick: solo esos, al
                     # borrarse (4ª falta), eliminan la pista del player (las
                     # tentativas descartadas envejecen solas).
@@ -3058,6 +3061,9 @@ class RadarWidget(_RadarBase):
                         c: (p.estado, p.faltas)
                         for c, p in self._mono_lifecycle.pistas.items()
                     }
+                    if os.environ.get("DECODE_PERF"):
+                        print(f"[CICLO] tod={tod:.1f} estados={self._mono_estado} "
+                              f"borrados={borrados}", flush=True)
                 else:
                     self._mono_estado = {}
 
