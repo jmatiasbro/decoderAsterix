@@ -805,6 +805,7 @@ class RadarWidget(_RadarBase):
             scan_period_fn=lambda sac, sic: 60.0 / max(
                 0.1, self.sensor_rpms.get((sac, sic), self.sweep_rpm) or self.sweep_rpm))
         self._mono_estado = {}     # codigo -> (estado, faltas), para el render
+        self._mono_activo = False  # flag monoradar, cacheado en el tick de 1 Hz
 
         # FASE 3: Historial de trazas, mapeado por plot_id
         self.history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=500))
@@ -2144,6 +2145,27 @@ class RadarWidget(_RadarBase):
             plot['lat_render'] = radar_lat + delta_lat
             plot['lon_render'] = radar_lon + delta_lon
 
+    def _alimentar_ciclo_monoradar(self, plot: Dict[str, Any]):
+        """Alimenta el motor de ciclo de vida monoradar con un plot ya proyectado.
+
+        Solo actúa si el flag monoradar (cacheado en el tick de 1 Hz) está activo.
+        Requiere que _process_plot_data ya haya seteado x_meters/y_meters.
+        """
+        if not getattr(self, '_mono_activo', False):
+            return
+        from types import SimpleNamespace as _S
+        sid = plot.get('sac_sic') or ''
+        try:
+            _sac, _sic = (int(v) for v in sid.split('/'))
+        except (ValueError, AttributeError):
+            _sac = _sic = None
+        self._mono_lifecycle.procesar(_S(
+            timestamp=plot.get('time', 0.0) or 0.0,
+            sac=_sac, sic=_sic,
+            x=plot.get('x_meters') or 0.0, y=plot.get('y_meters') or 0.0,
+            mode3a=plot.get('mode3a'), mode_s=plot.get('mode_s'),
+            callsign=plot.get('callsign'), category=plot.get('category')))
+
     def agregar_plot_individual(self, plot: Dict[str, Any], trigger_update: bool = True):
         """
         FASE 2: Método de ingestión unificado.
@@ -2197,6 +2219,7 @@ class RadarWidget(_RadarBase):
         # ya dibuja cada blanco con su símbolo y etiqueta. Agregar a plots_raw causaría
         # renderizado doble (o triple si BLINDAJE también está activo).
         self._process_plot_data(plot)
+        self._alimentar_ciclo_monoradar(plot)
         self._reconciliar_pistas()
         self._schedule_safety()
         if trigger_update:
@@ -2209,15 +2232,7 @@ class RadarWidget(_RadarBase):
             return
         for data in batch:
             self._process_plot_data(data)
-        if self._es_monoradar():
-            from types import SimpleNamespace as _S
-            for data in batch:
-                p = _S(timestamp=data.get('time', 0.0) or 0.0,
-                       sac=data.get('sac'), sic=data.get('sic'),
-                       x=data.get('x_meters') or 0.0, y=data.get('y_meters') or 0.0,
-                       mode3a=data.get('mode3a'), mode_s=data.get('mode_s'),
-                       callsign=data.get('callsign'), category=data.get('category'))
-                self._mono_lifecycle.procesar(p)
+            self._alimentar_ciclo_monoradar(data)
         self._reconciliar_pistas()
         self._schedule_safety()
         self._request_repaint()
@@ -3016,14 +3031,18 @@ class RadarWidget(_RadarBase):
                         counts[plot.category] += 1
                 self.category_counts_updated.emit(counts)
 
-                # Ciclo de vida monoradar: envejecer faltas por vueltas (ToD).
-                if self._es_monoradar():
+                # Ciclo de vida monoradar: cachear el flag (evita O(n) por plot/por
+                # frame) y envejecer faltas por vueltas (ToD).
+                self._mono_activo = self._es_monoradar()
+                if self._mono_activo:
                     tod = getattr(self, '_last_tod', 0.0) or 0.0
                     self._mono_lifecycle.tick(tod)
                     self._mono_estado = {
                         c: (p.estado, p.faltas)
                         for c, p in self._mono_lifecycle.pistas.items()
                     }
+                else:
+                    self._mono_estado = {}
 
                 # 5. Re-evaluar STCA localmente en el timer
                 self.evaluar_stca()
@@ -5315,7 +5334,7 @@ class RadarWidget(_RadarBase):
                 plot_color = QColor(255, 128, 0)
             else:
                 mono = None
-                if getattr(self, '_es_monoradar', None) and self._es_monoradar():
+                if getattr(self, '_mono_activo', False):
                     from player.tracking.lifecycle import identidad_codigo, CONFIRMED, TENTATIVE, COASTING
                     cod = identidad_codigo(plot)
                     mono = self._mono_estado.get(cod) if cod else None
@@ -5603,7 +5622,7 @@ class RadarWidget(_RadarBase):
                     plot.label_rect = total_hitbox
 
             # Flecha de coasting (monoradar): faltó dato en ≥1 vuelta.
-            if getattr(self, '_es_monoradar', None) and self._es_monoradar():
+            if getattr(self, '_mono_activo', False):
                 from player.tracking.lifecycle import identidad_codigo
                 cod = identidad_codigo(plot)
                 est = self._mono_estado.get(cod) if cod else None
