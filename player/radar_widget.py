@@ -3061,9 +3061,6 @@ class RadarWidget(_RadarBase):
                         c: (p.estado, p.faltas)
                         for c, p in self._mono_lifecycle.pistas.items()
                     }
-                    if os.environ.get("DECODE_PERF"):
-                        print(f"[CICLO] tod={tod:.1f} estados={self._mono_estado} "
-                              f"borrados={borrados}", flush=True)
                 else:
                     self._mono_estado = {}
 
