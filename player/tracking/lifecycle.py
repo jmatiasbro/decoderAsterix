@@ -10,6 +10,7 @@ TENTATIVE = "TENTATIVE"
 CONFIRMED = "CONFIRMED"
 COASTING = "COASTING"
 DELETED = "DELETED"
+DUPLICADO_LEJANO = "DUPLICADO_LEJANO"
 
 
 def _squawk(plot):
@@ -65,12 +66,21 @@ class MonoradarLifecycle:
         if pista is None:
             self.pistas[codigo] = _Pista(codigo, vuelta, period, plot.x, plot.y)
             return codigo
-        # vuelta nueva consecutiva (o posterior): cuenta como detección
+        if vuelta == pista.ultima_vuelta:
+            # mismo scan: colapsar si está cerca, si no es duplicado lejano
+            dist = math.hypot(plot.x - pista.x, plot.y - pista.y)
+            if dist < self.pair_m:
+                if pista.estado == TENTATIVE:
+                    pista.detecciones += 1
+                pista.x, pista.y = plot.x, plot.y
+                if pista.estado == TENTATIVE and pista.detecciones >= self.confirm_n:
+                    pista.estado = CONFIRMED
+                return codigo
+            return DUPLICADO_LEJANO
         if vuelta > pista.ultima_vuelta:
             if pista.estado == CONFIRMED or pista.estado == COASTING:
                 pista.estado = CONFIRMED        # recuperación
             else:
-                # tentativa: si hubo hueco, reinicia la racha
                 if vuelta > pista.ultima_vuelta + 1:
                     pista.detecciones = 0
                 pista.detecciones += 1
