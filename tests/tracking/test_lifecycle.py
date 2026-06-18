@@ -66,3 +66,29 @@ def test_pista_nueva_arranca_tentativa():
     lc.procesar(_p(0.0))
     assert lc.estado("1234") == TENTATIVE
     assert lc.faltas("1234") == 0
+
+
+from player.tracking.lifecycle import DUPLICADO_LEJANO
+
+
+def test_doble_plot_cercano_cuenta_dos():
+    lc = _lc()
+    # vuelta 0: dos plots <1 NM -> 2 detecciones
+    lc.procesar(_p(0.0, x=0.0, y=0.0))
+    lc.procesar(_p(0.5, x=500.0, y=0.0))          # mismo scan (0.5//4=0), 0.5 NM
+    # vuelta 1: una detección -> total 3, sigue tentativa
+    lc.procesar(_p(4.0, x=0.0, y=0.0))
+    assert lc.estado("1234") == TENTATIVE
+    # vuelta 2: cuarta detección -> confirma (2+1+1)
+    lc.procesar(_p(8.0, x=0.0, y=0.0))
+    assert lc.estado("1234") == CONFIRMED
+
+
+def test_doble_plot_lejano_no_colapsa():
+    lc = _lc()
+    lc.procesar(_p(0.0, x=0.0, y=0.0))
+    # mismo scan, >1 NM (3000 m ~ 1.6 NM): no suma, marca duplicado lejano
+    ev = lc.procesar(_p(0.5, x=3000.0, y=0.0))
+    assert ev == DUPLICADO_LEJANO
+    # la detección de la pista no aumentó por el plot lejano
+    assert lc.pistas["1234"].detecciones == 1
