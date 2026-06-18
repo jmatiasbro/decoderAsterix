@@ -800,6 +800,12 @@ class RadarWidget(_RadarBase):
         self.tracks: Dict[str, RadarPlot] = {}
         self.pending_tracks: Dict[str, RadarPlot] = {}
 
+        from player.tracking.lifecycle import MonoradarLifecycle
+        self._mono_lifecycle = MonoradarLifecycle(
+            scan_period_fn=lambda sac, sic: 60.0 / max(
+                0.1, self.sensor_rpms.get((sac, sic), self.sweep_rpm) or self.sweep_rpm))
+        self._mono_estado = {}     # codigo -> (estado, faltas), para el render
+
         # FASE 3: Historial de trazas, mapeado por plot_id
         self.history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=500))
         self.history_limit = 500
@@ -2203,6 +2209,15 @@ class RadarWidget(_RadarBase):
             return
         for data in batch:
             self._process_plot_data(data)
+        if self._es_monoradar():
+            from types import SimpleNamespace as _S
+            for data in batch:
+                p = _S(timestamp=data.get('time', 0.0) or 0.0,
+                       sac=data.get('sac'), sic=data.get('sic'),
+                       x=data.get('x_meters') or 0.0, y=data.get('y_meters') or 0.0,
+                       mode3a=data.get('mode3a'), mode_s=data.get('mode_s'),
+                       callsign=data.get('callsign'), category=data.get('category'))
+                self._mono_lifecycle.procesar(p)
         self._reconciliar_pistas()
         self._schedule_safety()
         self._request_repaint()
@@ -3000,6 +3015,15 @@ class RadarWidget(_RadarBase):
                             continue
                         counts[plot.category] += 1
                 self.category_counts_updated.emit(counts)
+
+                # Ciclo de vida monoradar: envejecer faltas por vueltas (ToD).
+                if self._es_monoradar():
+                    tod = getattr(self, '_last_tod', 0.0) or 0.0
+                    self._mono_lifecycle.tick(tod)
+                    self._mono_estado = {
+                        c: (p.estado, p.faltas)
+                        for c, p in self._mono_lifecycle.pistas.items()
+                    }
 
                 # 5. Re-evaluar STCA localmente en el timer
                 self.evaluar_stca()
@@ -5576,6 +5600,14 @@ class RadarWidget(_RadarBase):
             alertas_dict[t1] = (estado, tiempo, t2)
             alertas_dict[t2] = (estado, tiempo, t1)
         self._draw_oaci_track(painter, plot, z, inv_z, alertas_dict)
+
+    def _es_monoradar(self) -> bool:
+        """True si hay exactamente un sensor activo (un único SAC/SIC con tracks)."""
+        sensores = {t.sac_sic for t in self.tracks.values()
+                    if getattr(t, 'sac_sic', None)}
+        sensores |= {t.sac_sic for t in self.pending_tracks.values()
+                     if getattr(t, 'sac_sic', None)}
+        return len(sensores) == 1
 
     def get_all_areas(self):
         """Devuelve la combinación de áreas de la base de datos y de usuario.
