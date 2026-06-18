@@ -5601,11 +5601,22 @@ class RadarWidget(_RadarBase):
                     # Draw text lines
                     painter.setPen(label_pen_color)
                     total_hitbox = None
+                    # Coasting monoradar: flecha junto al valor del código SSR.
+                    if getattr(self, '_mono_activo', False):
+                        from player.tracking.lifecycle import identidad_codigo
+                        _cod = identidad_codigo(plot)
+                    else:
+                        _cod = None
+                    _faltas = self._mono_estado.get(_cod, (None, 0))[1] if _cod else 0
+                    _ssr_ok = bool(ssr_code) and ssr_code not in ("----", "0000", "")
+                    _arrow = None
                     for i, line in enumerate(lines):
                         y_pos = dy + i * 14
                         text_pos = QPointF(dx, y_pos)
                         painter.drawText(text_pos, line)
-                        
+                        if _faltas >= 1 and _arrow is None and _ssr_ok and ssr_code in line:
+                            _arrow = (dx + fm.horizontalAdvance(line) + 4, y_pos)
+
                         br = fm.boundingRect(int(text_pos.x()), int(text_pos.y()), int(1e6), int(1e6),
                                               Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, line)
                         mapped_rect = painter.transform().mapRect(br)
@@ -5613,41 +5624,25 @@ class RadarWidget(_RadarBase):
                             total_hitbox = QRectF(mapped_rect)
                         else:
                             total_hitbox = total_hitbox.united(QRectF(mapped_rect))
-                            
+
+                    if _faltas >= 1:
+                        # Si no se halló la línea del SSR, al final del bloque.
+                        if _arrow is None:
+                            _arrow = (dx + max_w + 4, dy)
+                        _ax, _ay = _arrow[0], _arrow[1] - 5
+                        painter.setPen(QPen(QColor("#FF5050"), 1.5))
+                        _L = 6.0
+                        _tx, _ty = _ax + _L, _ay + _L
+                        painter.drawLine(QPointF(_ax, _ay), QPointF(_tx, _ty))
+                        painter.drawLine(QPointF(_tx, _ty), QPointF(_tx - 4, _ty))
+                        painter.drawLine(QPointF(_tx, _ty), QPointF(_tx, _ty - 4))
+
                 finally:
                     painter.restore()
                     
                 if total_hitbox is not None:
                     self.label_hitboxes[plot.id] = total_hitbox
                     plot.label_rect = total_hitbox
-
-            # Flecha de coasting (monoradar): faltó dato en ≥1 vuelta.
-            if getattr(self, '_mono_activo', False):
-                from player.tracking.lifecycle import identidad_codigo
-                cod = identidad_codigo(plot)
-                est = self._mono_estado.get(cod) if cod else None
-                if est is not None and est[1] >= 1:      # faltas >= 1
-                    sp = self._world_to_screen(plot.x, plot.y)
-                    if sp is not None:
-                        # Anclar al lado del código SSR (posición de la etiqueta).
-                        off = getattr(plot, 'label_offset', None)
-                        if off is not None and (off.x() or off.y()):
-                            ax = sp.x() + off.x() * z + 6
-                            ay = sp.y() - off.y() * z + 4
-                        else:
-                            ax, ay = sp.x() + 12, sp.y() + 4
-                        painter.save()
-                        painter.resetTransform()
-                        pen = QPen(QColor("#FF5050"))
-                        pen.setWidthF(1.5)
-                        painter.setPen(pen)
-                        # Flecha chica oblicua hacia abajo-derecha (↘).
-                        L = 6.0
-                        tx, ty = ax + L, ay + L
-                        painter.drawLine(int(ax), int(ay), int(tx), int(ty))
-                        painter.drawLine(int(tx), int(ty), int(tx - 4), int(ty))
-                        painter.drawLine(int(tx), int(ty), int(tx), int(ty - 4))
-                        painter.restore()
 
         except Exception as e:
             print(f"[RENDER WARNING] Error drawing OACI target: {e}")
