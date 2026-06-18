@@ -5161,6 +5161,24 @@ class RadarWidget(_RadarBase):
             self.label_hitboxes[plot.id] = hitbox
             plot.label_rect = hitbox
 
+    def _color_por_tipo(self, is_fused, is_adsb, is_mlat, is_psr, is_ssr,
+                        is_combined, ssr_code, plot):
+        if is_fused:
+            return QColor("#FFFFFF")
+        if is_adsb:
+            return QColor("#FFFF00")
+        if is_mlat:
+            return QColor(255, 0, 255)
+        if is_psr:
+            return QColor(204, 85, 0)
+        if is_ssr or is_combined:
+            has_valid_ssr = ssr_code and ssr_code not in ("----", "0000", "")
+            has_fl = plot.flight_level is not None
+            if plot.category in (1, 48) and (not has_valid_ssr or not has_fl):
+                return QColor(100, 200, 255)
+            return COLOR_GREEN_NEON
+        return self._get_sensor_color(plot.sac, plot.sic)
+
     def _draw_oaci_track(self, painter: QPainter, plot: 'RadarPlot', z: float, inv_z: float, alertas_dict: dict):
         try:
             # 1. Check emergency (FASE 4)
@@ -5296,24 +5314,17 @@ class RadarWidget(_RadarBase):
             elif getattr(plot, 'has_reflection', False) and not getattr(self, 'modo_crudo', False):
                 plot_color = QColor(255, 128, 0)
             else:
-                if is_fused:
-                    plot_color = QColor("#FFFFFF")  # Blanco para fusionado/CAT62
-                elif is_adsb:
-                    plot_color = QColor("#FFFF00")  # Amarillo para ADS-B/CAT21
-                elif is_mlat:
-                    plot_color = QColor(255, 0, 255)  # Magenta para MLAT
-                elif is_psr:
-                    plot_color = QColor(204, 85, 0)  # Naranja oscuro para PSR
-                elif is_ssr or is_combined:
-                    # CAT48/01 sin SSR (squawk) o sin FL → celeste claro (plot inválido/incompleto)
-                    has_valid_ssr = ssr_code and ssr_code not in ("----", "0000", "")
-                    has_fl = plot.flight_level is not None
-                    if plot.category in (1, 48) and (not has_valid_ssr or not has_fl):
-                        plot_color = QColor(100, 200, 255)  # Celeste claro = inválido
-                    else:
-                        plot_color = COLOR_GREEN_NEON  # Verde neón para SSR / combinado
+                mono = None
+                if getattr(self, '_es_monoradar', None) and self._es_monoradar():
+                    from player.tracking.lifecycle import identidad_codigo, CONFIRMED, TENTATIVE, COASTING
+                    cod = identidad_codigo(plot)
+                    mono = self._mono_estado.get(cod) if cod else None
+                if mono is not None and mono[0] in (CONFIRMED, COASTING):
+                    plot_color = QColor("#FFFFFF")   # confirmada/coasting = blanco
                 else:
-                    plot_color = self._get_sensor_color(plot.sac, plot.sic)
+                    plot_color = self._color_por_tipo(is_fused, is_adsb, is_mlat,
+                                                      is_psr, is_ssr, is_combined,
+                                                      ssr_code, plot)
                 
             if plot.highlighted:
                 base_color = QColor(255, 255, 0, alpha)
@@ -5590,7 +5601,26 @@ class RadarWidget(_RadarBase):
                 if total_hitbox is not None:
                     self.label_hitboxes[plot.id] = total_hitbox
                     plot.label_rect = total_hitbox
-                    
+
+            # Flecha de coasting (monoradar): faltó dato en ≥1 vuelta.
+            if getattr(self, '_es_monoradar', None) and self._es_monoradar():
+                from player.tracking.lifecycle import identidad_codigo
+                cod = identidad_codigo(plot)
+                est = self._mono_estado.get(cod) if cod else None
+                if est is not None and est[1] >= 1:      # faltas >= 1
+                    sp = self._world_to_screen(plot.x, plot.y)
+                    if sp is not None:
+                        painter.save()
+                        painter.resetTransform()
+                        pen = QPen(QColor("#FF5050"))
+                        pen.setWidthF(2.0)
+                        painter.setPen(pen)
+                        bx, by = sp.x() + 10, sp.y() + 10
+                        painter.drawLine(int(bx), int(by - 8), int(bx), int(by + 8))
+                        painter.drawLine(int(bx - 5), int(by + 3), int(bx), int(by + 8))
+                        painter.drawLine(int(bx + 5), int(by + 3), int(bx), int(by + 8))
+                        painter.restore()
+
         except Exception as e:
             print(f"[RENDER WARNING] Error drawing OACI target: {e}")
 
