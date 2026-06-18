@@ -3035,8 +3035,25 @@ class RadarWidget(_RadarBase):
                 # plot/por frame) y envejecer faltas por vueltas (ToD).
                 self._ciclo_activo = bool(getattr(self, 'modo_integrado', True))
                 if self._ciclo_activo:
+                    from player.tracking.lifecycle import (
+                        DELETED, CONFIRMED, COASTING, identidad_codigo)
                     tod = getattr(self, '_last_tod', 0.0) or 0.0
-                    self._mono_lifecycle.tick(tod)
+                    # códigos confirmados/coasting ANTES del tick: solo esos, al
+                    # borrarse (4ª falta), eliminan la pista del player (las
+                    # tentativas descartadas envejecen solas).
+                    confirmados = {c for c, p in self._mono_lifecycle.pistas.items()
+                                   if p.estado in (CONFIRMED, COASTING)}
+                    eventos = self._mono_lifecycle.tick(tod)
+                    borrados = {c for c, ev in eventos
+                                if ev == DELETED and c in confirmados}
+                    if borrados:
+                        for tid in list(self.tracks.keys()):
+                            if identidad_codigo(self.tracks[tid]) in borrados:
+                                self.tracks.pop(tid, None)
+                                self.history.pop(tid, None)
+                        for tid in list(self.pending_tracks.keys()):
+                            if identidad_codigo(self.pending_tracks[tid]) in borrados:
+                                self.pending_tracks.pop(tid, None)
                     self._mono_estado = {
                         c: (p.estado, p.faltas)
                         for c, p in self._mono_lifecycle.pistas.items()
@@ -5230,7 +5247,15 @@ class RadarWidget(_RadarBase):
             is_alive = plot.age < 25.0
 
             if not is_alive or alpha <= 0:
-                return
+                # Si el ciclo de vida (integrado) aún sigue esta pista por su código
+                # (coasting), seguir dibujándola con la flecha hasta que el motor la
+                # borre (4ª falta); no dejar que la edad la corte antes.
+                vivo_por_ciclo = False
+                if getattr(self, '_ciclo_activo', False):
+                    from player.tracking.lifecycle import identidad_codigo
+                    vivo_por_ciclo = identidad_codigo(plot) in self._mono_estado
+                if not vivo_por_ciclo:
+                    return
 
             # Fase C — atenuación por incumbencia: si la vista de jurisdicción está
             # activa (controlador siempre, o técnico con el toggle), el tráfico fuera
