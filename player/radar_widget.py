@@ -805,7 +805,7 @@ class RadarWidget(_RadarBase):
             scan_period_fn=lambda sac, sic: 60.0 / max(
                 0.1, self.sensor_rpms.get((sac, sic), self.sweep_rpm) or self.sweep_rpm))
         self._mono_estado = {}     # codigo -> (estado, faltas), para el render
-        self._mono_activo = False  # flag monoradar, cacheado en el tick de 1 Hz
+        self._ciclo_activo = False  # ciclo de vida activo (modo integrado), cacheado 1 Hz
 
         # FASE 3: Historial de trazas, mapeado por plot_id
         self.history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=500))
@@ -2151,7 +2151,7 @@ class RadarWidget(_RadarBase):
         Solo actúa si el flag monoradar (cacheado en el tick de 1 Hz) está activo.
         Requiere que _process_plot_data ya haya seteado x_meters/y_meters.
         """
-        if not getattr(self, '_mono_activo', False):
+        if not getattr(self, '_ciclo_activo', False):
             return
         from types import SimpleNamespace as _S
         sid = plot.get('sac_sic') or ''
@@ -3031,10 +3031,10 @@ class RadarWidget(_RadarBase):
                         counts[plot.category] += 1
                 self.category_counts_updated.emit(counts)
 
-                # Ciclo de vida monoradar: cachear el flag (evita O(n) por plot/por
-                # frame) y envejecer faltas por vueltas (ToD).
-                self._mono_activo = self._es_monoradar()
-                if self._mono_activo:
+                # Ciclo de vida (modo integrado): cachear el flag (evita O(n) por
+                # plot/por frame) y envejecer faltas por vueltas (ToD).
+                self._ciclo_activo = bool(getattr(self, 'modo_integrado', True))
+                if self._ciclo_activo:
                     tod = getattr(self, '_last_tod', 0.0) or 0.0
                     self._mono_lifecycle.tick(tod)
                     self._mono_estado = {
@@ -5334,7 +5334,7 @@ class RadarWidget(_RadarBase):
                 plot_color = QColor(255, 128, 0)
             else:
                 mono = None
-                if getattr(self, '_mono_activo', False):
+                if getattr(self, '_ciclo_activo', False):
                     from player.tracking.lifecycle import identidad_codigo, CONFIRMED, TENTATIVE, COASTING
                     cod = identidad_codigo(plot)
                     mono = self._mono_estado.get(cod) if cod else None
@@ -5602,7 +5602,7 @@ class RadarWidget(_RadarBase):
                     painter.setPen(label_pen_color)
                     total_hitbox = None
                     # Coasting monoradar: flecha junto al valor del código SSR.
-                    if getattr(self, '_mono_activo', False):
+                    if getattr(self, '_ciclo_activo', False):
                         from player.tracking.lifecycle import identidad_codigo
                         _cod = identidad_codigo(plot)
                     else:
@@ -5653,14 +5653,6 @@ class RadarWidget(_RadarBase):
             alertas_dict[t1] = (estado, tiempo, t2)
             alertas_dict[t2] = (estado, tiempo, t1)
         self._draw_oaci_track(painter, plot, z, inv_z, alertas_dict)
-
-    def _es_monoradar(self) -> bool:
-        """True si hay exactamente un sensor activo (un único SAC/SIC con tracks)."""
-        sensores = {t.sac_sic for t in self.tracks.values()
-                    if getattr(t, 'sac_sic', None)}
-        sensores |= {t.sac_sic for t in self.pending_tracks.values()
-                     if getattr(t, 'sac_sic', None)}
-        return len(sensores) == 1
 
     def get_all_areas(self):
         """Devuelve la combinación de áreas de la base de datos y de usuario.
