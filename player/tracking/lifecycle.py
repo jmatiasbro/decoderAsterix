@@ -91,6 +91,34 @@ class MonoradarLifecycle:
             pista.estado = CONFIRMED
         return codigo
 
+    def tick(self, tod_actual):
+        """Envejece faltas según el ToD actual. Devuelve [(codigo, evento)].
+
+        Para cada pista, la vuelta actual = floor(tod/scan_period). Si hay vueltas
+        sin dato: tentativa → se descarta; confirmada/coasting → COASTING y, al
+        llegar a drop_misses, DELETE.
+        """
+        eventos = []
+        for codigo in list(self.pistas.keys()):
+            pista = self.pistas[codigo]
+            vuelta_actual = int(tod_actual // pista.scan_period)
+            faltantes = vuelta_actual - pista.ultima_vuelta
+            if faltantes <= 0:
+                continue
+            if pista.estado == TENTATIVE:
+                # sin confirmar y perdió una vuelta → descartar
+                del self.pistas[codigo]
+                eventos.append((codigo, DELETED))
+                continue
+            pista.faltas = faltantes
+            if faltantes >= self.drop_misses:
+                del self.pistas[codigo]
+                eventos.append((codigo, DELETED))
+            else:
+                pista.estado = COASTING
+                eventos.append((codigo, COASTING))
+        return eventos
+
     def estado(self, codigo):
         p = self.pistas.get(codigo)
         return p.estado if p else None
