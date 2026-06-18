@@ -5629,15 +5629,24 @@ class RadarWidget(_RadarBase):
                 if est is not None and est[1] >= 1:      # faltas >= 1
                     sp = self._world_to_screen(plot.x, plot.y)
                     if sp is not None:
+                        # Anclar al lado del código SSR (posición de la etiqueta).
+                        off = getattr(plot, 'label_offset', None)
+                        if off is not None and (off.x() or off.y()):
+                            ax = sp.x() + off.x() * z + 6
+                            ay = sp.y() - off.y() * z + 4
+                        else:
+                            ax, ay = sp.x() + 12, sp.y() + 4
                         painter.save()
                         painter.resetTransform()
                         pen = QPen(QColor("#FF5050"))
-                        pen.setWidthF(2.0)
+                        pen.setWidthF(1.5)
                         painter.setPen(pen)
-                        bx, by = sp.x() + 10, sp.y() + 10
-                        painter.drawLine(int(bx), int(by - 8), int(bx), int(by + 8))
-                        painter.drawLine(int(bx - 5), int(by + 3), int(bx), int(by + 8))
-                        painter.drawLine(int(bx + 5), int(by + 3), int(bx), int(by + 8))
+                        # Flecha chica oblicua hacia abajo-derecha (↘).
+                        L = 6.0
+                        tx, ty = ax + L, ay + L
+                        painter.drawLine(int(ax), int(ay), int(tx), int(ty))
+                        painter.drawLine(int(tx), int(ty), int(tx - 4), int(ty))
+                        painter.drawLine(int(tx), int(ty), int(tx), int(ty - 4))
                         painter.restore()
 
         except Exception as e:
