@@ -2684,7 +2684,8 @@ class RadarWidget(_RadarBase):
         """
         try:
             import datetime
-            log_path = "c:/documentos/decode_asterix/stca_conflicts.log"
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            log_path = os.path.join(base_dir, "stca_conflicts.log")
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
             with open(log_path, "a", encoding="utf-8") as f:
@@ -2702,7 +2703,8 @@ class RadarWidget(_RadarBase):
         self._logged_quality_events.add(event_key)
         try:
             import datetime
-            log_path = "c:/documentos/decode_asterix/quality_events.log"
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            log_path = os.path.join(base_dir, "quality_events.log")
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(log_path, "a", encoding="utf-8") as f:
@@ -5178,7 +5180,8 @@ class RadarWidget(_RadarBase):
         off = plot.label_offset
         lx, ly = sp.x() + off.x(), sp.y() + off.y()
         intens = getattr(self, 'ods_layer_intensity', _pal.LAYER_DEFAULT)
-        a = _pal.layer_alpha("labels", intens.get("labels", _pal.LAYER_DEFAULT["labels"]))
+        lab_intensity = intens.get("labels", _pal.LAYER_DEFAULT["labels"])
+        a = _pal.layer_alpha("labels", lab_intensity)
         col = QColor(qcolor)
         col.setAlpha(int(col.alpha() * a / 255))
         painter.save()
@@ -5187,7 +5190,11 @@ class RadarWidget(_RadarBase):
         pen.setWidthF(1.0)
         painter.setPen(pen)
         painter.drawLine(QPointF(sp.x(), sp.y()), QPointF(lx, ly))  # leader line
-        painter.setFont(QFont("Consolas", 8))
+        # A intensidad máxima, negrita para que la etiqueta se lea más clara.
+        font = QFont("Consolas", 8)
+        if lab_intensity >= 0.95:
+            font.setBold(True)
+        painter.setFont(font)
         fm = painter.fontMetrics()
         hitbox = None
         for i, ln in enumerate(lines):
@@ -5265,7 +5272,7 @@ class RadarWidget(_RadarBase):
             # del radio o sobre el techo FL se muestra tenue.
             if (self.vista_controlador or getattr(self, 'mostrar_incumbencia', False)) \
                     and not getattr(plot, 'en_jurisdiccion', True):
-                alpha = 70
+                alpha = 110
 
             # ODS: símbolo por estado de track + color de paleta + FDB con leader line.
             if self.vista_controlador and getattr(self, 'ods_enabled', True):
@@ -5291,8 +5298,25 @@ class RadarWidget(_RadarBase):
                         painter.setPen(QPen(sel_col, 1.0))
                         painter.setBrush(Qt.BrushStyle.NoBrush)
                         painter.drawRect(QRectF(sp.x() - s, sp.y() - s, 2 * s, 2 * s))
+                    # Resaltado de alarma (STCA/APW/MSAW): recuadro en color de
+                    # severidad. VIOLATION parpadea a 1 Hz; PREDICTED, fijo.
+                    label_col = col
+                    if plot.id in alertas_dict:
+                        estado_al = alertas_dict[plot.id][0]
+                        if estado_al == 'VIOLATION':
+                            c_al = QColor("#FF0000")
+                        elif estado_al == 'PREDICTED':
+                            c_al = QColor("#FFB040")
+                        else:
+                            c_al = QColor("#FFFF00")
+                        if estado_al != 'VIOLATION' or self.blink_flag:
+                            ha = spec.size_px + 7.0
+                            painter.setPen(QPen(c_al, 1.6))
+                            painter.setBrush(Qt.BrushStyle.NoBrush)
+                            painter.drawRect(QRectF(sp.x() - ha, sp.y() - ha, 2 * ha, 2 * ha))
+                        label_col = c_al
                     painter.restore()
-                    self._draw_track_label_ods(painter, plot, sp, col)
+                    self._draw_track_label_ods(painter, plot, sp, label_col)
                 return
 
             is_psr = False

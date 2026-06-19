@@ -583,6 +583,10 @@ class PanelSensoresFlotante(QWidget):
 
 
 class MainWindow(QMainWindow):
+    # Sectores de Vuelo VFR: áreas de la DB que se muestran fuera de 'Áreas
+    # Restringidas', en su propio submenú dentro de 'Mapas'.
+    _VFR_SECTOR_NAMES = {"ORONIO1", "ORONIO2", "ORONIO3"}
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ASTERIX Radar Decoder - Reproductor Multi-Sensor")
@@ -898,6 +902,7 @@ class MainWindow(QMainWindow):
 
         # Menú Exportar
         menu_exportar = menu_bar.addMenu("Exportar")
+        self.menu_exportar = menu_exportar
         self.act_exp_kmz = menu_exportar.addAction("Trayectorias a Google Earth (KMZ)", self.exportar_kmz)
         self.act_exp_playback = menu_exportar.addAction("Reproducción de Vuelo Animado a Google Earth (KMZ)...", self.exportar_playback_kmz)
         self.act_exp_cobertura = menu_exportar.addAction("Mapa de Cobertura Real a Google Earth (KMZ)...", self.exportar_cobertura_kmz)
@@ -988,7 +993,7 @@ class MainWindow(QMainWindow):
 
         if atm_db.available():
             sub_aero = self.menu_mapas.addMenu("Aerovías")
-            for label, cat in [("Superiores", "SUP"), ("Inferiores", "INF"), ("RNAV", "RNAV")]:
+            for label, cat in [("Superiores", "SUP"), ("Inferiores", "INF")]:
                 self._add_atm_action(sub_aero, f"AERO_{cat}", label,
                                      (lambda c=cat: atm_maps.airway_segments(c)))
 
@@ -1008,8 +1013,11 @@ class MainWindow(QMainWindow):
             act_na = self.menu_mapas.addAction("Base ATM no encontrada (data/atm/atm.duckdb)")
             act_na.setEnabled(False)
 
-        self.menu_mapas.addSeparator()
-        self.menu_mapas.addAction("Cargar Mapa Personalizado (.geojson)...", self._cargar_mapa_personalizado)
+        self._setup_vfr_submenu()
+
+        self._sep_cargar_mapa = self.menu_mapas.addSeparator()
+        self.act_cargar_mapa = self.menu_mapas.addAction(
+            "Cargar Mapa Personalizado (.geojson)...", self._cargar_mapa_personalizado)
 
         # Menú Áreas — restringidas / prohibidas / peligrosas (desde atm.duckdb)
         self.menu_areas = menu_bar.addMenu("Áreas")
@@ -1292,18 +1300,46 @@ class MainWindow(QMainWindow):
         cont_freq, self.lbl_hud_freqs = _campo("TWR/GND/APP", "—", "#FFD700")
         self.hud_bar.addWidget(cont_freq)
         self.hud_bar.addSeparator()
-        cont_qnh, self.lbl_hud_qnh = _campo("QNH", "1013 hPa")
+        # QNH editable — exclusivo del rol controlador. Recalcula el TL en caliente.
+        cont_qnh = QWidget()
+        lay_qnh = QHBoxLayout(cont_qnh)
+        lay_qnh.setContentsMargins(6, 0, 6, 0)
+        lay_qnh.setSpacing(4)
+        t_qnh = QLabel("QNH")
+        t_qnh.setStyleSheet("color: #6B7A8D; font-size: 8pt; font-weight: bold;")
+        self.sb_qnh = QSpinBox()
+        self.sb_qnh.setRange(940, 1050)
+        self.sb_qnh.setValue(1013)
+        self.sb_qnh.setSuffix(" hPa")
+        self.sb_qnh.setFixedHeight(22)
+        self.sb_qnh.setStyleSheet(
+            "background-color: #121824; color: #39FF14; border: 1px solid #4B5263;"
+            " border-radius: 4px; font-weight: bold;")
+        self.sb_qnh.valueChanged.connect(self._on_qnh_changed)
+        lay_qnh.addWidget(t_qnh)
+        lay_qnh.addWidget(self.sb_qnh)
         self.hud_bar.addWidget(cont_qnh)
         self.hud_bar.addSeparator()
-        cont_ta, self.lbl_hud_ta = _campo("TA", "—")
-        self.hud_bar.addWidget(cont_ta)
+        # Nivel de Transición (TL) dinámico — varía con el QNH configurado.
+        cont_tl, self.lbl_hud_tl = _campo("TL", "—")
+        self.hud_bar.addWidget(cont_tl)
+
+        # Centrar Mapa: en el HUD solo para el controlador (en técnico vive en la barra lateral).
+        self.hud_bar.addSeparator()
+        self.btn_hud_centrar = QPushButton(" Centrar Mapa")
+        self.btn_hud_centrar.setIcon(_icon("fa5s.crosshairs"))
+        self.btn_hud_centrar.setToolTip("Recentrar la vista en el área de control")
+        self.btn_hud_centrar.clicked.connect(self._centrar_mapa)
+        # En un QToolBar la visibilidad se controla por la acción, no por el widget.
+        self._act_hud_centrar = self.hud_bar.addWidget(self.btn_hud_centrar)
+        self._act_hud_centrar.setVisible(False)
 
         # Espaciador para empujar la hora UTC a la derecha
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.hud_bar.addWidget(spacer)
         cont_utc, self.lbl_hud_utc = _campo("UTC", "00:00:00", "#39FF14")
-        self.hud_bar.addWidget(cont_utc)
+        self._act_hud_utc = self.hud_bar.addWidget(cont_utc)
 
         self._actualizar_hud(self.profile_manager.profile)
 
@@ -1316,12 +1352,27 @@ class MainWindow(QMainWindow):
         apt = perfil_data.get("aeropuerto_trabajo") or perfil_data.get("aeropuerto") or "—"
         freqs = perfil_data.get("frecuencias_sector", ["", "", ""])
         freqs = [str(f).strip() if str(f).strip() else "---" for f in (list(freqs) + ["", "", ""])[:3]]
-        ta = perfil_data.get("transition_altitude", 10000)
 
         self.lbl_hud_user.setText(f"{nombre} ({rol})")
         self.lbl_hud_apt.setText(str(apt))
         self.lbl_hud_freqs.setText(" / ".join(freqs))
-        self.lbl_hud_ta.setText(f"{int(ta)} ft")
+
+        # El QNH solo lo modifica el controlador; el resto lo ve en solo lectura.
+        if hasattr(self, 'sb_qnh'):
+            es_controlador = rol == "CONTROLADOR"
+            self.sb_qnh.setReadOnly(not es_controlador)
+            self.sb_qnh.setEnabled(es_controlador)
+            self.sb_qnh.setButtonSymbols(
+                QSpinBox.ButtonSymbols.UpDownArrows if es_controlador
+                else QSpinBox.ButtonSymbols.NoButtons)
+        self._actualizar_tl_hud()
+
+    def _actualizar_tl_hud(self):
+        """Refresca el Nivel de Transición del HUD según el QNH activo (ENR 1.7)."""
+        if not hasattr(self, 'lbl_hud_tl'):
+            return
+        tl = self.radar.altimetry.transition_level
+        self.lbl_hud_tl.setText(f"FL{int(tl):03d}")
 
     def _make_toggle_button(self, text: str, accent: str = "#00E5FF", checked: bool = False) -> QPushButton:
         """Botón checkable estilo toggle para la consola (reemplazo de QCheckBox)."""
@@ -1576,22 +1627,7 @@ class MainWindow(QMainWindow):
 
         self.chk_ocultar_parrot = self._make_toggle_button("Ocultar Parrot (Sqwk 0000)", "#FFA500")
 
-        # Control QNH manual (hPa) — recalcula TL y etiquetas A/F en caliente
-        l_qnh = QHBoxLayout()
-        lbl_qnh = QLabel("QNH:")
-        lbl_qnh.setStyleSheet("color: #E0E6ED; font-size: 8pt;")
-        self.sb_qnh = QSpinBox()
-        self.sb_qnh.setRange(940, 1050)
-        self.sb_qnh.setValue(1013)
-        self.sb_qnh.setSuffix(" hPa")
-        self.sb_qnh.setFixedHeight(22)
-        self.sb_qnh.setStyleSheet("background-color: #2D313C; color: white; border: 1px solid #4B5263; border-radius: 4px;")
-        self.sb_qnh.valueChanged.connect(self._on_qnh_changed)
-        l_qnh.addWidget(lbl_qnh)
-        l_qnh.addWidget(self.sb_qnh)
-
         l_hist.addWidget(self.chk_show_history)
-        l_hist.addLayout(l_qnh)
         l_hist.addLayout(l_modo)
         l_hist.addLayout(l_cant)
         l_hist.addWidget(self.btn_clear_hist)
@@ -1950,10 +1986,19 @@ class MainWindow(QMainWindow):
 
     def _abrir_log_stca(self):
         import os
-        log_path = "c:/documentos/decode_asterix/stca_conflicts.log"
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_path = os.path.join(base_dir, "stca_conflicts.log")
         if os.path.exists(log_path):
             try:
-                os.startfile(os.path.normpath(log_path))
+                if hasattr(os, 'startfile'):
+                    os.startfile(os.path.normpath(log_path))
+                else:
+                    import subprocess
+                    import sys
+                    if sys.platform == 'darwin':
+                        subprocess.call(('open', log_path))
+                    else:
+                        subprocess.call(('xdg-open', log_path))
             except Exception:
                 import webbrowser
                 webbrowser.open(log_path)
@@ -1966,10 +2011,19 @@ class MainWindow(QMainWindow):
 
     def _abrir_log_calidad(self):
         import os
-        log_path = "c:/documentos/decode_asterix/quality_events.log"
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_path = os.path.join(base_dir, "quality_events.log")
         if os.path.exists(log_path):
             try:
-                os.startfile(os.path.normpath(log_path))
+                if hasattr(os, 'startfile'):
+                    os.startfile(os.path.normpath(log_path))
+                else:
+                    import subprocess
+                    import sys
+                    if sys.platform == 'darwin':
+                        subprocess.call(('open', log_path))
+                    else:
+                        subprocess.call(('xdg-open', log_path))
             except Exception:
                 import webbrowser
                 webbrowser.open(log_path)
@@ -3192,8 +3246,7 @@ class MainWindow(QMainWindow):
     def _on_qnh_changed(self, value: int):
         """Refresca el QNH del gestor de altimetría y repinta etiquetas (TL / A-F)."""
         self.radar.altimetry.qnh_local = float(value)
-        if hasattr(self, 'lbl_hud_qnh'):
-            self.lbl_hud_qnh.setText(f"{value} hPa")
+        self._actualizar_tl_hud()
         self.radar.update()
 
     def _aplicar_rol(self, perfil_data: dict):
@@ -3219,6 +3272,12 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'act_toggle_tech_dock'):
             self.act_toggle_tech_dock.setVisible(not es_controlador)
 
+        # Centrar Mapa: el controlador lo usa desde la barra superior; el técnico, desde la lateral.
+        if hasattr(self, 'btn_centrar'):
+            self.btn_centrar.setVisible(not es_controlador)
+        if hasattr(self, '_act_hud_centrar'):
+            self._act_hud_centrar.setVisible(es_controlador)
+
         # Barra de transporte retirada: el reproductor es el widget flotante (menú Modo).
         self.toolbar.setVisible(False)
         if hasattr(self, 'btn_cargar'):
@@ -3228,6 +3287,25 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'act_modo_playback'):
             self.act_modo_playback.setEnabled(not es_controlador)
             self.act_modo_playback.setVisible(not es_controlador)
+
+        # Defaults operativos del rol Controlador: barra lateral, panel de sensores,
+        # reloj UTC de la barra superior y menú Exportar ocultos/deshabilitados;
+        # 5 históricos; modo integrado activo. El reloj flotante UTC se mantiene.
+        if hasattr(self, 'dock_lateral'):
+            self.dock_lateral.setVisible(not es_controlador)
+        if hasattr(self, 'menu_exportar'):
+            self.menu_exportar.menuAction().setEnabled(not es_controlador)
+        if hasattr(self, 'panel_sensores'):
+            self.panel_sensores.setVisible(not es_controlador)
+            if hasattr(self, 'act_toggle_panel_sensores'):
+                self.act_toggle_panel_sensores.setChecked(not es_controlador)
+        if hasattr(self, '_act_hud_utc'):
+            self._act_hud_utc.setVisible(not es_controlador)
+        if es_controlador:
+            if hasattr(self, 'spin_hist'):
+                self.spin_hist.setValue(5)
+            if hasattr(self, 'chk_modo_integrado'):
+                self.chk_modo_integrado.setChecked(True)
 
         # Controlador: enmarcar el área de control en el aeropuerto del perfil
         if es_controlador:
@@ -3450,6 +3528,39 @@ class MainWindow(QMainWindow):
         full_path = os.path.join(base_dir, relative_path)
         self._load_and_register_custom_map(full_path)
 
+    def _setup_vfr_submenu(self):
+        """Submenú 'VFR' en Mapas con capas conmutables (ATZs, corredores VFR,
+        pistas y nombres). Cada acción carga/descarga su GeoJSON bajo demanda."""
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        sub_vfr = self.menu_mapas.addMenu("VFR")
+        archivos = [
+            ("ATZs", "files/ATZs.geojson"),
+            ("Corredores VFR", "files/corrVFR.geojson"),
+            ("Pistas", "files/pistas.json"),
+            ("Nombres", "files/nombres.json"),
+        ]
+        for label, rel in archivos:
+            abs_path = os.path.abspath(os.path.join(base_dir, rel))
+            action = sub_vfr.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(False)
+            action.triggered.connect(
+                lambda checked, p=abs_path: self._on_map_action_triggered(p))
+            self.map_actions[abs_path] = action
+
+    def _cargar_mapa_al_final(self):
+        """Reubica 'Cargar Mapa Personalizado' (y su separador) al final del menú
+        Mapas, por debajo de cualquier capa agregada dinámicamente."""
+        sep = getattr(self, '_sep_cargar_mapa', None)
+        act = getattr(self, 'act_cargar_mapa', None)
+        if act is None:
+            return
+        if sep is not None:
+            self.menu_mapas.removeAction(sep)
+            self.menu_mapas.addAction(sep)
+        self.menu_mapas.removeAction(act)
+        self.menu_mapas.addAction(act)
+
     def _cargar_mapa_personalizado(self):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         initial_dir = os.path.join(base_dir, "files", "INFERIOR")
@@ -3486,7 +3597,9 @@ class MainWindow(QMainWindow):
         action.setChecked(True)
         action.triggered.connect(lambda checked, p=abs_path: self._on_map_action_triggered(p))
         self.map_actions[abs_path] = action
-        
+        # Mantener 'Cargar Mapa Personalizado' como última opción del menú.
+        self._cargar_mapa_al_final()
+
         self._on_map_action_triggered(abs_path)
 
     def _on_map_action_triggered(self, abs_path: str):
@@ -3594,7 +3707,13 @@ class MainWindow(QMainWindow):
 
         all_db_areas = atm_db.restricted_airspaces()
         areas_by_kind = {"R": [], "P": [], "D": []}
+        vfr_areas = []
         for area in all_db_areas:
+            # Los sectores VFR (ORONIO) salen de Áreas Restringidas y van a su
+            # propio submenú dentro de Mapas.
+            if area.name.strip().upper() in self._VFR_SECTOR_NAMES:
+                vfr_areas.append(area)
+                continue
             if area.kind in areas_by_kind:
                 areas_by_kind[area.kind].append(area)
 
@@ -3673,6 +3792,20 @@ class MainWindow(QMainWindow):
             else:
                 act_empty = submenu.addAction("(vacío)")
                 act_empty.setEnabled(False)
+
+        # Sectores de Vuelo VFR (ORONIO) — submenú propio dentro de 'Mapas'.
+        prev_vfr = getattr(self, 'vfr_sectores_action', None)
+        if prev_vfr is not None:
+            self.menu_mapas.removeAction(prev_vfr)
+        self.vfr_sectores_action = None
+        if vfr_areas:
+            sub_vfr = self.menu_mapas.addMenu("Sectores de Vuelo VFR")
+            self.vfr_sectores_action = sub_vfr.menuAction()
+            scroll_vfr = ScrollableAreaListMenu(
+                sub_vfr, sorted(vfr_areas, key=lambda a: a.name), self)
+            sub_vfr.addAction(scroll_vfr)
+            self.area_list_widgets["VFR"] = scroll_vfr
+        self._cargar_mapa_al_final()
 
         # Capa de referencia: sectores de Altitud Mínima de Sector (MSAW)
         self.menu_areas.addSeparator()
