@@ -117,12 +117,11 @@ def airports():
 
 # ---- Aerovías ----
 def _airway_category_clause(categoria: str) -> str:
-    if categoria == "RNAV":
-        return "TRIM(rnp_type) <> ''"
+    # Superiores (upper): el nombre de la aerovía empieza con 'U'. El resto, inferiores.
     if categoria == "SUP":
-        return "TRIM(rnp_type) = '' AND LEFT(identifier_name,1) = 'U'"
+        return "LEFT(identifier_name,1) = 'U'"
     if categoria == "INF":
-        return "TRIM(rnp_type) = '' AND LEFT(identifier_name,1) <> 'U'"
+        return "LEFT(identifier_name,1) <> 'U'"
     return "1=1"
 
 

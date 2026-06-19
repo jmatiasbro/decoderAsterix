@@ -14,7 +14,7 @@ import shutil
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget,
+    QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget,
     QTableWidgetItem, QHeaderView, QFileDialog, QMessageBox, QCheckBox,
     QDoubleSpinBox, QApplication, QWidget, QProgressBar,
 )
@@ -52,10 +52,13 @@ VERDICT_ES = {
 }
 
 
-class CalibrationDialog(QDialog):
+class CalibrationWidget(QWidget):
     COLS = ["Radar (SAC/SIC)", "Nombre", "Muestras", "Cobertura 360°",
             "Corrección azimut (°)", "Corrección rango (NM)",
             "Tipo", "Estado", "Aplicar"]
+
+    # Emitida tras guardar/desactivar correcciones: el contenedor recarga sensores.
+    cambios_guardados = pyqtSignal()
 
     def __init__(self, sensores, pcap_path="", parent=None):
         super().__init__(parent)
@@ -73,7 +76,7 @@ class CalibrationDialog(QDialog):
         self._build()
 
     QSS = """
-        QDialog { background-color: #0E131F; }
+        CalibrationWidget { background-color: #0E131F; }
         QLabel { color: #E0E6ED; font-family: 'Segoe UI', sans-serif; font-size: 9pt; }
         QPushButton {
             background-color: #121824; border: 1px solid #00E5FF; border-radius: 4px;
@@ -146,12 +149,9 @@ class CalibrationDialog(QDialog):
         self.btn_off = QPushButton("Desactivar tildados")
         self.btn_off.clicked.connect(self._desactivar)
         self.btn_off.setEnabled(False)
-        btn_close = QPushButton("Cerrar")
-        btn_close.clicked.connect(self.reject)
         bot.addStretch(1)
         bot.addWidget(self.btn_save)
         bot.addWidget(self.btn_off)
-        bot.addWidget(btn_close)
         lay.addLayout(bot)
 
     def _pcap_label(self):
@@ -286,7 +286,7 @@ class CalibrationDialog(QDialog):
                 self, "Guardado",
                 f"{len(cambios)} sensor(es) actualizados.\n"
                 "Recargá/reproducí la captura para que la corrección tome efecto.")
-        self.accept()
+        self.cambios_guardados.emit()
 
     def _desactivar(self):
         sensores = [self.tabla.item(r, 0).text() for r in range(self.tabla.rowCount())
@@ -315,7 +315,7 @@ class CalibrationDialog(QDialog):
         else:
             QMessageBox.information(self, "Desactivado",
                                     msg + "\nRecargá/reproducí la captura para ver el efecto.")
-        self.accept()
+        self.cambios_guardados.emit()
 
     def _radar_name(self, sac_sic) -> str:
         try:

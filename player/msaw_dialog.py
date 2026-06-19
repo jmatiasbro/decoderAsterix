@@ -9,8 +9,9 @@ class MSAWDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("⚠️ MSAW")
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
-                            | Qt.WindowType.WindowStaysOnTopHint)
+        # Sin WindowStaysOnTopHint: el panel flota sobre la app (es Tool con
+        # parent) pero NO sobre otras aplicaciones del escritorio (p. ej. el IDE).
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setFixedSize(280, 110)
 

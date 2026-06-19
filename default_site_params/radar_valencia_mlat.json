@@ -1,0 +1,20 @@
+{
+  "radar_id": "RADAR003",
+  "name": "Multilateration System - Valencia",
+  "type": "MLAT",
+  "category": "CAT021",
+  "location": {
+    "latitude": 39.4699,
+    "longitude": -0.3763,
+    "altitude": 15,
+    "coordinates_dms": "39°28'11.64\"N 0°22'34.68\"W"
+  },
+  "range": 500,
+  "azimuth_coverage": 360,
+  "elevation_angle": 0.0,
+  "frequency": "UHF",
+  "pulse_repetition_frequency": 0,
+  "antenna_rotation_speed": 0,
+  "detection_probability": 0.99,
+  "false_alarm_rate": 1e-8
+}

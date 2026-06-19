@@ -1,10 +1,10 @@
 {
     "nombre_usuario": "ROBERTO",
     "rol": "controlador",
-    "aeropuerto_trabajo": "SASA",
+    "aeropuerto_trabajo": "SACO",
     "coordenadas_centro": {
-        "lat": -24.85972,
-        "lon": -65.48694
+        "lat": -31.31,
+        "lon": -64.20833
     },
     "nivel_incumbencia": 95,
     "radio_incumbencia": 200,

@@ -254,6 +254,34 @@ DEFAULT_NM_RANGE = 250
 # Límite de plots renderizados
 MAX_PLOTS_RENDERED = 2000
 
+# Instrumentación de rendimiento (diagnóstico). Activar con DECODE_PERF=1 en el
+# entorno; sin la variable no agrega ningún overhead (devuelve la función tal cual).
+# Registra en consola cualquier llamada al hilo de UI que supere DECODE_PERF_MS ms.
+_PERF_ON = bool(os.environ.get("DECODE_PERF"))
+_PERF_MS = float(os.environ.get("DECODE_PERF_MS", "40"))
+
+
+def _timed(label):
+    def deco(fn):
+        if not _PERF_ON:
+            return fn
+        import functools
+
+        @functools.wraps(fn)
+        def wrap(self, *a, **k):
+            t0 = time_module.perf_counter()
+            try:
+                return fn(self, *a, **k)
+            finally:
+                dt = (time_module.perf_counter() - t0) * 1000.0
+                if dt >= _PERF_MS:
+                    n = len(getattr(self, "tracks", ()) or ())
+                    p = len(getattr(self, "pending_tracks", ()) or ())
+                    print(f"[PERF] {label} {dt:.0f}ms tracks={n} pending={p}",
+                          flush=True)
+        return wrap
+    return deco
+
 # Historial
 HISTORY_LENGTH = 15  # Últimos 15 puntos de trayectoria (estela de puntos)
 
@@ -772,6 +800,13 @@ class RadarWidget(_RadarBase):
         self.tracks: Dict[str, RadarPlot] = {}
         self.pending_tracks: Dict[str, RadarPlot] = {}
 
+        from player.tracking.lifecycle import MonoradarLifecycle
+        self._mono_lifecycle = MonoradarLifecycle(
+            scan_period_fn=lambda sac, sic: 60.0 / max(
+                0.1, self.sensor_rpms.get((sac, sic), self.sweep_rpm) or self.sweep_rpm))
+        self._mono_estado = {}     # codigo -> (estado, faltas), para el render
+        self._ciclo_activo = False  # ciclo de vida activo (modo integrado), cacheado 1 Hz
+
         # FASE 3: Historial de trazas, mapeado por plot_id
         self.history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=500))
         self.history_limit = 500
@@ -789,6 +824,14 @@ class RadarWidget(_RadarBase):
         self.blink_timer = QTimer(self)
         self.blink_timer.timeout.connect(self._toggle_blink)
         self.blink_timer.start(500)  # Parpadeo cada 500ms
+
+        # Throttle de repintados: el paint redibuja toda la escena (~40 ms) y los
+        # caminos calientes (ingesta de plots, tick a 20 Hz) pedían update() más
+        # rápido de lo que el paint puede completar, saturando el hilo de UI con
+        # archivos densos/multisensor. Limitamos los repintados de esos caminos a
+        # ~15 FPS; las interacciones del usuario siguen llamando update() directo.
+        self._last_repaint = 0.0
+        self._repaint_min_dt = 1.0 / 15.0
 
         # Filtros
         self.active_sensors: Set[Tuple[int, int]] = set()
@@ -1021,6 +1064,18 @@ class RadarWidget(_RadarBase):
     def _toggle_blink(self):
         self.blink_flag = not self.blink_flag
         self.update()
+
+    def _request_repaint(self):
+        """Repintado throttleado (~15 FPS) para caminos de alta frecuencia.
+
+        Coalesce las peticiones de los caminos calientes (ingesta de plots, tick
+        del timer) para que el paint —que redibuja toda la escena— no se pida más
+        rápido de lo que tarda en completarse. El timer a 20 Hz garantiza que un
+        repintado pospuesto se atienda en el tick siguiente (latencia ≤ ~66 ms)."""
+        now = time_module.monotonic()
+        if now - self._last_repaint >= self._repaint_min_dt:
+            self._last_repaint = now
+            self.update()
 
     @pyqtSlot()
     def play(self):
@@ -2036,9 +2091,10 @@ class RadarWidget(_RadarBase):
             return None
 
     @pyqtSlot(object)
+    @_timed("on_new_plot")
     def on_new_plot(self, data: Dict[str, Any]):
         self._process_plot_data(data)
-        self.update()
+        self._request_repaint()
 
     def normalizar_coordenadas_wgs84(self, plot: Dict[str, Any]):
         """
@@ -2088,6 +2144,27 @@ class RadarWidget(_RadarBase):
 
             plot['lat_render'] = radar_lat + delta_lat
             plot['lon_render'] = radar_lon + delta_lon
+
+    def _alimentar_ciclo_monoradar(self, plot: Dict[str, Any]):
+        """Alimenta el motor de ciclo de vida monoradar con un plot ya proyectado.
+
+        Solo actúa si el flag monoradar (cacheado en el tick de 1 Hz) está activo.
+        Requiere que _process_plot_data ya haya seteado x_meters/y_meters.
+        """
+        if not getattr(self, '_ciclo_activo', False):
+            return
+        from types import SimpleNamespace as _S
+        sid = plot.get('sac_sic') or ''
+        try:
+            _sac, _sic = (int(v) for v in sid.split('/'))
+        except (ValueError, AttributeError):
+            _sac = _sic = None
+        self._mono_lifecycle.procesar(_S(
+            timestamp=plot.get('time', 0.0) or 0.0,
+            sac=_sac, sic=_sic,
+            x=plot.get('x_meters') or 0.0, y=plot.get('y_meters') or 0.0,
+            mode3a=plot.get('mode3a'), mode_s=plot.get('mode_s'),
+            callsign=plot.get('callsign'), category=plot.get('category')))
 
     def agregar_plot_individual(self, plot: Dict[str, Any], trigger_update: bool = True):
         """
@@ -2142,20 +2219,23 @@ class RadarWidget(_RadarBase):
         # ya dibuja cada blanco con su símbolo y etiqueta. Agregar a plots_raw causaría
         # renderizado doble (o triple si BLINDAJE también está activo).
         self._process_plot_data(plot)
+        self._alimentar_ciclo_monoradar(plot)
         self._reconciliar_pistas()
         self._schedule_safety()
         if trigger_update:
-            self.update()
+            self._request_repaint()
 
     @pyqtSlot(list)
+    @_timed("on_new_plot_batch")
     def on_new_plot_batch(self, batch: List[Dict[str, Any]]):
         if not batch:
             return
         for data in batch:
             self._process_plot_data(data)
+            self._alimentar_ciclo_monoradar(data)
         self._reconciliar_pistas()
         self._schedule_safety()
-        self.update()
+        self._request_repaint()
 
     # ================================================================
     # FUSIÓN MULTISENSOR: extrapolación cinemática y reconciliación de
@@ -2604,7 +2684,8 @@ class RadarWidget(_RadarBase):
         """
         try:
             import datetime
-            log_path = "c:/documentos/decode_asterix/stca_conflicts.log"
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            log_path = os.path.join(base_dir, "stca_conflicts.log")
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
             with open(log_path, "a", encoding="utf-8") as f:
@@ -2622,7 +2703,8 @@ class RadarWidget(_RadarBase):
         self._logged_quality_events.add(event_key)
         try:
             import datetime
-            log_path = "c:/documentos/decode_asterix/quality_events.log"
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            log_path = os.path.join(base_dir, "quality_events.log")
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(log_path, "a", encoding="utf-8") as f:
@@ -2775,6 +2857,7 @@ class RadarWidget(_RadarBase):
     # TIMER
     # ================================================================
 
+    @_timed("_on_timer")
     def _on_timer(self):
         try:
             sim_time = SimulationTime.instance()
@@ -2950,11 +3033,44 @@ class RadarWidget(_RadarBase):
                         counts[plot.category] += 1
                 self.category_counts_updated.emit(counts)
 
+                # Ciclo de vida (modo integrado): cachear el flag (evita O(n) por
+                # plot/por frame) y envejecer faltas por vueltas (ToD).
+                self._ciclo_activo = bool(getattr(self, 'modo_integrado', True))
+                if self._ciclo_activo:
+                    from player.tracking.lifecycle import (
+                        DELETED, CONFIRMED, COASTING, identidad_codigo)
+                    # Reloj de simulación (ToD ASTERIX) que AVANZA en reproducción
+                    # aunque no lleguen plots; _last_tod se congela entre plots y la
+                    # pista perdida nunca acumulaba faltas.
+                    tod = SimulationTime.instance().now()
+                    # códigos confirmados/coasting ANTES del tick: solo esos, al
+                    # borrarse (4ª falta), eliminan la pista del player (las
+                    # tentativas descartadas envejecen solas).
+                    confirmados = {c for c, p in self._mono_lifecycle.pistas.items()
+                                   if p.estado in (CONFIRMED, COASTING)}
+                    eventos = self._mono_lifecycle.tick(tod)
+                    borrados = {c for c, ev in eventos
+                                if ev == DELETED and c in confirmados}
+                    if borrados:
+                        for tid in list(self.tracks.keys()):
+                            if identidad_codigo(self.tracks[tid]) in borrados:
+                                self.tracks.pop(tid, None)
+                                self.history.pop(tid, None)
+                        for tid in list(self.pending_tracks.keys()):
+                            if identidad_codigo(self.pending_tracks[tid]) in borrados:
+                                self.pending_tracks.pop(tid, None)
+                    self._mono_estado = {
+                        c: (p.estado, p.faltas)
+                        for c, p in self._mono_lifecycle.pistas.items()
+                    }
+                else:
+                    self._mono_estado = {}
+
                 # 5. Re-evaluar STCA localmente en el timer
                 self.evaluar_stca()
 
             self.plot_count = len(self.tracks) + len(self.pending_tracks)
-            self.update()
+            self._request_repaint()
         except Exception:
             pass
 
@@ -3133,6 +3249,7 @@ class RadarWidget(_RadarBase):
     # PAINT EVENT
     # ================================================================
 
+    @_timed("paintEvent")
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -5063,7 +5180,8 @@ class RadarWidget(_RadarBase):
         off = plot.label_offset
         lx, ly = sp.x() + off.x(), sp.y() + off.y()
         intens = getattr(self, 'ods_layer_intensity', _pal.LAYER_DEFAULT)
-        a = _pal.layer_alpha("labels", intens.get("labels", _pal.LAYER_DEFAULT["labels"]))
+        lab_intensity = intens.get("labels", _pal.LAYER_DEFAULT["labels"])
+        a = _pal.layer_alpha("labels", lab_intensity)
         col = QColor(qcolor)
         col.setAlpha(int(col.alpha() * a / 255))
         painter.save()
@@ -5072,7 +5190,11 @@ class RadarWidget(_RadarBase):
         pen.setWidthF(1.0)
         painter.setPen(pen)
         painter.drawLine(QPointF(sp.x(), sp.y()), QPointF(lx, ly))  # leader line
-        painter.setFont(QFont("Consolas", 8))
+        # A intensidad máxima, negrita para que la etiqueta se lea más clara.
+        font = QFont("Consolas", 8)
+        if lab_intensity >= 0.95:
+            font.setBold(True)
+        painter.setFont(font)
         fm = painter.fontMetrics()
         hitbox = None
         for i, ln in enumerate(lines):
@@ -5084,6 +5206,24 @@ class RadarWidget(_RadarBase):
         if hitbox is not None:
             self.label_hitboxes[plot.id] = hitbox
             plot.label_rect = hitbox
+
+    def _color_por_tipo(self, is_fused, is_adsb, is_mlat, is_psr, is_ssr,
+                        is_combined, ssr_code, plot):
+        if is_fused:
+            return QColor("#FFFFFF")
+        if is_adsb:
+            return QColor("#FFFF00")
+        if is_mlat:
+            return QColor(255, 0, 255)
+        if is_psr:
+            return QColor(204, 85, 0)
+        if is_ssr or is_combined:
+            has_valid_ssr = ssr_code and ssr_code not in ("----", "0000", "")
+            has_fl = plot.flight_level is not None
+            if plot.category in (1, 48) and (not has_valid_ssr or not has_fl):
+                return QColor(100, 200, 255)
+            return COLOR_GREEN_NEON
+        return self._get_sensor_color(plot.sac, plot.sic)
 
     def _draw_oaci_track(self, painter: QPainter, plot: 'RadarPlot', z: float, inv_z: float, alertas_dict: dict):
         try:
@@ -5117,14 +5257,22 @@ class RadarWidget(_RadarBase):
             is_alive = plot.age < 25.0
 
             if not is_alive or alpha <= 0:
-                return
+                # Si el ciclo de vida (integrado) aún sigue esta pista por su código
+                # (coasting), seguir dibujándola con la flecha hasta que el motor la
+                # borre (4ª falta); no dejar que la edad la corte antes.
+                vivo_por_ciclo = False
+                if getattr(self, '_ciclo_activo', False):
+                    from player.tracking.lifecycle import identidad_codigo
+                    vivo_por_ciclo = identidad_codigo(plot) in self._mono_estado
+                if not vivo_por_ciclo:
+                    return
 
             # Fase C — atenuación por incumbencia: si la vista de jurisdicción está
             # activa (controlador siempre, o técnico con el toggle), el tráfico fuera
             # del radio o sobre el techo FL se muestra tenue.
             if (self.vista_controlador or getattr(self, 'mostrar_incumbencia', False)) \
                     and not getattr(plot, 'en_jurisdiccion', True):
-                alpha = 70
+                alpha = 110
 
             # ODS: símbolo por estado de track + color de paleta + FDB con leader line.
             if self.vista_controlador and getattr(self, 'ods_enabled', True):
@@ -5150,8 +5298,25 @@ class RadarWidget(_RadarBase):
                         painter.setPen(QPen(sel_col, 1.0))
                         painter.setBrush(Qt.BrushStyle.NoBrush)
                         painter.drawRect(QRectF(sp.x() - s, sp.y() - s, 2 * s, 2 * s))
+                    # Resaltado de alarma (STCA/APW/MSAW): recuadro en color de
+                    # severidad. VIOLATION parpadea a 1 Hz; PREDICTED, fijo.
+                    label_col = col
+                    if plot.id in alertas_dict:
+                        estado_al = alertas_dict[plot.id][0]
+                        if estado_al == 'VIOLATION':
+                            c_al = QColor("#FF0000")
+                        elif estado_al == 'PREDICTED':
+                            c_al = QColor("#FFB040")
+                        else:
+                            c_al = QColor("#FFFF00")
+                        if estado_al != 'VIOLATION' or self.blink_flag:
+                            ha = spec.size_px + 7.0
+                            painter.setPen(QPen(c_al, 1.6))
+                            painter.setBrush(Qt.BrushStyle.NoBrush)
+                            painter.drawRect(QRectF(sp.x() - ha, sp.y() - ha, 2 * ha, 2 * ha))
+                        label_col = c_al
                     painter.restore()
-                    self._draw_track_label_ods(painter, plot, sp, col)
+                    self._draw_track_label_ods(painter, plot, sp, label_col)
                 return
 
             is_psr = False
@@ -5220,24 +5385,17 @@ class RadarWidget(_RadarBase):
             elif getattr(plot, 'has_reflection', False) and not getattr(self, 'modo_crudo', False):
                 plot_color = QColor(255, 128, 0)
             else:
-                if is_fused:
-                    plot_color = QColor("#FFFFFF")  # Blanco para fusionado/CAT62
-                elif is_adsb:
-                    plot_color = QColor("#FFFF00")  # Amarillo para ADS-B/CAT21
-                elif is_mlat:
-                    plot_color = QColor(255, 0, 255)  # Magenta para MLAT
-                elif is_psr:
-                    plot_color = QColor(204, 85, 0)  # Naranja oscuro para PSR
-                elif is_ssr or is_combined:
-                    # CAT48/01 sin SSR (squawk) o sin FL → celeste claro (plot inválido/incompleto)
-                    has_valid_ssr = ssr_code and ssr_code not in ("----", "0000", "")
-                    has_fl = plot.flight_level is not None
-                    if plot.category in (1, 48) and (not has_valid_ssr or not has_fl):
-                        plot_color = QColor(100, 200, 255)  # Celeste claro = inválido
-                    else:
-                        plot_color = COLOR_GREEN_NEON  # Verde neón para SSR / combinado
+                mono = None
+                if getattr(self, '_ciclo_activo', False):
+                    from player.tracking.lifecycle import identidad_codigo, CONFIRMED, TENTATIVE, COASTING
+                    cod = identidad_codigo(plot)
+                    mono = self._mono_estado.get(cod) if cod else None
+                if mono is not None and mono[0] in (CONFIRMED, COASTING):
+                    plot_color = QColor("#FFFFFF")   # confirmada/coasting = blanco
                 else:
-                    plot_color = self._get_sensor_color(plot.sac, plot.sic)
+                    plot_color = self._color_por_tipo(is_fused, is_adsb, is_mlat,
+                                                      is_psr, is_ssr, is_combined,
+                                                      ssr_code, plot)
                 
             if plot.highlighted:
                 base_color = QColor(255, 255, 0, alpha)
@@ -5495,11 +5653,22 @@ class RadarWidget(_RadarBase):
                     # Draw text lines
                     painter.setPen(label_pen_color)
                     total_hitbox = None
+                    # Coasting monoradar: flecha junto al valor del código SSR.
+                    if getattr(self, '_ciclo_activo', False):
+                        from player.tracking.lifecycle import identidad_codigo
+                        _cod = identidad_codigo(plot)
+                    else:
+                        _cod = None
+                    _faltas = self._mono_estado.get(_cod, (None, 0))[1] if _cod else 0
+                    _ssr_ok = bool(ssr_code) and ssr_code not in ("----", "0000", "")
+                    _arrow = None
                     for i, line in enumerate(lines):
                         y_pos = dy + i * 14
                         text_pos = QPointF(dx, y_pos)
                         painter.drawText(text_pos, line)
-                        
+                        if _faltas >= 1 and _arrow is None and _ssr_ok and ssr_code in line:
+                            _arrow = (dx + fm.horizontalAdvance(line) + 4, y_pos)
+
                         br = fm.boundingRect(int(text_pos.x()), int(text_pos.y()), int(1e6), int(1e6),
                                               Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, line)
                         mapped_rect = painter.transform().mapRect(br)
@@ -5507,14 +5676,26 @@ class RadarWidget(_RadarBase):
                             total_hitbox = QRectF(mapped_rect)
                         else:
                             total_hitbox = total_hitbox.united(QRectF(mapped_rect))
-                            
+
+                    if _faltas >= 1:
+                        # Si no se halló la línea del SSR, al final del bloque.
+                        if _arrow is None:
+                            _arrow = (dx + max_w + 4, dy)
+                        _ax, _ay = _arrow[0], _arrow[1] - 5
+                        painter.setPen(QPen(QColor("#FF5050"), 1.5))
+                        _L = 6.0
+                        _tx, _ty = _ax + _L, _ay + _L
+                        painter.drawLine(QPointF(_ax, _ay), QPointF(_tx, _ty))
+                        painter.drawLine(QPointF(_tx, _ty), QPointF(_tx - 4, _ty))
+                        painter.drawLine(QPointF(_tx, _ty), QPointF(_tx, _ty - 4))
+
                 finally:
                     painter.restore()
                     
                 if total_hitbox is not None:
                     self.label_hitboxes[plot.id] = total_hitbox
                     plot.label_rect = total_hitbox
-                    
+
         except Exception as e:
             print(f"[RENDER WARNING] Error drawing OACI target: {e}")
 
@@ -5526,8 +5707,19 @@ class RadarWidget(_RadarBase):
         self._draw_oaci_track(painter, plot, z, inv_z, alertas_dict)
 
     def get_all_areas(self):
-        """Devuelve la combinación de áreas de la base de datos y de usuario."""
-        from player import atm_db
-        db_a = atm_db.restricted_airspaces() if atm_db.available() else []
-        usr_a = getattr(self, 'user_areas', [])
-        return db_a + usr_a
+        """Devuelve la combinación de áreas de la base de datos y de usuario.
+
+        Las áreas de la base son estáticas en la sesión: se cachean tras la
+        primera lectura (antes se reconsultaba la DB —una query por área— en cada
+        pasada de APW, ~75 ms/seg en el hilo de UI). `invalidar_cache_areas()`
+        fuerza relectura si cambian.
+        """
+        if getattr(self, '_db_areas_cache', None) is None:
+            from player import atm_db
+            self._db_areas_cache = (atm_db.restricted_airspaces()
+                                    if atm_db.available() else [])
+        return self._db_areas_cache + getattr(self, 'user_areas', [])
+
+    def invalidar_cache_areas(self):
+        """Fuerza relectura de las áreas de la base en la próxima evaluación."""
+        self._db_areas_cache = None

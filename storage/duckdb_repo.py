@@ -103,8 +103,11 @@ class DuckDBRepository:
 
     def log_repo(self, msg):
         import time
+        import os
         try:
-            with open("C:\\documentos\\decode_asterix\\technical_import.log", "a", encoding="utf-8") as f:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            log_path = os.path.join(base_dir, "technical_import.log")
+            with open(log_path, "a", encoding="utf-8") as f:
                 f.write(f"[{time.strftime('%H:%M:%S')}] [Repo] {msg}\n")
         except Exception:
             pass
