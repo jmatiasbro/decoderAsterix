@@ -32,3 +32,6 @@ ui-ux-pro-max-skill/
 
 # Cartografia base pesada (no versionar)
 data/firmap/argentina.mbtiles
+
+# DBs temporales de fallback de DuckDB (basura por contencion de lock)
+pass_analytics_fallback_*.duckdb*
