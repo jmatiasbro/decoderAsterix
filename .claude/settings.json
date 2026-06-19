@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git rm *)",
+      "Bash(git commit -q -m 'test\\(ods\\): infra pytest aislada del paquete raiz legacy \\(rootdir=tests\\) *)",
+      "Bash(git commit -m ' *)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/stats/test_data_source.py -v)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/stats/ -q)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/stats/test_metric_registry.py -v)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/stats/test_chart_renderer.py -v)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/centro_tecnico/test_window.py -v)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/centro_tecnico/test_coverage_widget.py -v)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/centro_tecnico/ -q)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/centro_tecnico/test_window.py::test_monitor_tab_is_technical_monitor -v)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -c \"import os; os.environ.setdefault\\('QT_QPA_PLATFORM','offscreen'\\); from PyQt6.QtWidgets import QApplication; app=QApplication\\([]\\); from player.pass_dashboard import PassDashboardDialog; d=PassDashboardDialog\\({}\\); print\\('OK has tabs:', hasattr\\(d,'tabs'\\)\\)\")",
+      "Bash(QT_QPA_PLATFORM=offscreen \"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/centro_tecnico/test_window.py -v)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -c \"import player.centro_tecnico.window as w; print\\('import OK'\\)\")",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/stats tests/centro_tecnico -q)",
+      "Bash(\"C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -c \"import ast; ast.parse\\(open\\('player/main_window.py',encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe -c ' *)",
+      "Bash(PYTHONIOENCODING=utf-8 C:/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe -c ' *)",
+      "Bash(git commit *)",
+      "PowerShell(& \"C:\\\\Users\\\\Usuario\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m pytest tests/geo/test_declination_grid.py -v)",
+      "Bash(\"C:\\\\Users\\\\Usuario\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" tools/gen_declination_grid.py)",
+      "Bash(\"/c/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" tools/load_msaw_profiles.py)",
+      "Bash(\"/c/Users/Usuario/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/msaw/test_profiles_db.py -q)"
+    ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": false,
+    "feature-dev@claude-plugins-official": true,
+    "atomic-agents@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "duckdb-skills@claude-plugins-official": true
+  }
+}
