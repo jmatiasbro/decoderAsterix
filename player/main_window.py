@@ -1043,6 +1043,22 @@ class MainWindow(QMainWindow):
         self.act_fir.setCheckable(True)
         self.act_fir.toggled.connect(self._toggle_vista_fir)
 
+        # Menú Ayuda — guía de funcionamiento (se abre en el navegador)
+        menu_ayuda = menu_bar.addMenu("Ayuda")
+        menu_ayuda.addAction(_icon("fa5s.book"), "Guía de la aplicación", self._abrir_ayuda)
+
+    def _abrir_ayuda(self):
+        """Abre la guía de funcionamiento (HTML) en el navegador por defecto."""
+        import os
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ruta = os.path.join(base_dir, "docs", "ayuda", "index.html")
+        if not os.path.exists(ruta):
+            QMessageBox.warning(self, "Ayuda", f"No se encontró la guía:\n{ruta}")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(ruta))
+
     def _toggle_vista_fir(self, on: bool):
         """Vista FIR satelital EMBEBIDA: cubre el PPI (hija del radar). Off -> oculta."""
         import os
