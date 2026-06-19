@@ -29,3 +29,6 @@ ui-ux-pro-max-skill/
 
 # Backups del calibrador de registración
 *.bak
+
+# Cartografia base pesada (no versionar)
+data/firmap/argentina.mbtiles
