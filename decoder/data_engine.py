@@ -188,9 +188,12 @@ class DataEngine:
         
         self._running = True
  
-        # Inicializar repositorio analítico DuckDB
-        from storage.duckdb_repo import DuckDBRepository
-        self.repo_db = repo_db or DuckDBRepository()
+        # Repositorio analítico DuckDB: conexión PEREZOSA. Abrir el archivo en el
+        # constructor hace que cada scan/playback contienda el lock del .duckdb
+        # compartido (su hilo escritor + I/O compiten durante la decodificación),
+        # inflando la carga ~6× aunque scan_pcap corra en bulk y no persista nada.
+        # Se crea recién en el primer uso real (guardar_plot / query / PASS).
+        self._repo_db = repo_db
         self.bulk_import_mode = False
 
         # Arquitectura dual de ingestión
@@ -221,11 +224,24 @@ class DataEngine:
     def stop(self):
         self._running = False
 
+    @property
+    def repo_db(self):
+        """Repo DuckDB perezoso: se conecta recién al primer acceso real."""
+        if self._repo_db is None:
+            from storage.duckdb_repo import DuckDBRepository
+            self._repo_db = DuckDBRepository()
+        return self._repo_db
+
+    @repo_db.setter
+    def repo_db(self, value):
+        self._repo_db = value
+
     def close(self):
         """Cierra de forma limpia el repositorio analítico de DuckDB."""
-        if hasattr(self, 'repo_db') and self.repo_db:
+        # No usar la property: cerrar no debe forzar la creación de un repo no usado.
+        if getattr(self, '_repo_db', None) is not None:
             try:
-                self.repo_db.close()
+                self._repo_db.close()
             except Exception:
                 pass
 
