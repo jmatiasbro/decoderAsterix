@@ -409,7 +409,9 @@ class DataEngine:
         cache_filename = f"{hasher.hexdigest()}.cache.pkl"
         return os.path.join(self.cache_dir, cache_filename)
 
-    def _read_cache(self, pcap_file: str) -> Optional[List[AsterixPlot]]:
+    def _read_cache(self, pcap_file: str, incluir_raw_bytes: bool = False) -> Optional[List[AsterixPlot]]:
+        # Caché local generado por la propia app desde un PCAP local (no es entrada
+        # externa no confiable); el uso de pickle aquí es consistente con el resto.
         cache_path = self._get_cache_filepath(pcap_file)
         if not os.path.exists(cache_path):
             return None
@@ -422,8 +424,8 @@ class DataEngine:
 
             with open(cache_path, 'rb') as f:
                 cache_data = pickle.load(f)
-            
-            CACHE_VERSION = 19
+
+            CACHE_VERSION = 20
             metadata = cache_data.get('metadata', {})
             if (metadata.get('pcap_size') != pcap_size or
                 metadata.get('pcap_mtime') != pcap_mtime or
@@ -431,8 +433,23 @@ class DataEngine:
                 print("[DataEngine] Cache obsoleto o versión de estructura diferente. Re-decodificando.")
                 return None
 
+            plots = cache_data.get('plots', [])
+            # raw_bytes (solo lo usa el inspector de la suite) vive en un archivo
+            # lateral; el playback no lo necesita y así el caché principal es más
+            # liviano. Se reanexa solo si se pide explícitamente.
+            if incluir_raw_bytes:
+                side_path = cache_path + ".rawbytes"
+                if not os.path.exists(side_path):
+                    print("[DataEngine] Falta el lateral de raw_bytes; re-decodificando para la suite.")
+                    return None
+                with open(side_path, 'rb') as f:
+                    raws = pickle.load(f)
+                if len(raws) == len(plots):
+                    for p, rb in zip(plots, raws):
+                        p.raw_bytes = rb
+
             print("[DataEngine] Cache válido. Cargando plots desde el caché.")
-            return cache_data.get('plots', [])
+            return plots
         except Exception as e:
             print(f"[DataEngine] Error leyendo caché: {e}. Re-decodificando.")
             return None
@@ -444,18 +461,30 @@ class DataEngine:
             pcap_size = os.path.getsize(pcap_file)
             pcap_mtime = os.path.getmtime(pcap_file)
 
+            # raw_bytes va a un archivo lateral: el caché principal (que usa el
+            # playback) queda más liviano. Se extrae sin mutar los objetos vivos
+            # (se restauran tras picklear el principal).
+            raws = [getattr(p, 'raw_bytes', None) for p in plots]
+            for p in plots:
+                p.raw_bytes = None
             cache_data = {
                 'metadata': {
                     'pcap_path': os.path.abspath(pcap_file),
                     'pcap_size': pcap_size,
                     'pcap_mtime': pcap_mtime,
                     'cache_time': time.time(),
-                    'cache_version': 19
+                    'cache_version': 20
                 },
                 'plots': plots
             }
-            with open(cache_path, 'wb') as f:
-                pickle.dump(cache_data, f)
+            try:
+                with open(cache_path, 'wb') as f:
+                    pickle.dump(cache_data, f)
+            finally:
+                for p, rb in zip(plots, raws):
+                    p.raw_bytes = rb
+            with open(cache_path + ".rawbytes", 'wb') as f:
+                pickle.dump(raws, f)
         except Exception as e:
             print(f"[DataEngine] Error escribiendo al caché: {e}")
 
@@ -731,10 +760,14 @@ class DataEngine:
                     
                     synthetic_time += 0.02
 
-    def scan_pcap(self, pcap_files) -> Tuple[List[AsterixPlot], float, Set[Tuple[int, int]]]:
+    def scan_pcap(self, pcap_files, incluir_raw_bytes: bool = False) -> Tuple[List[AsterixPlot], float, Set[Tuple[int, int]]]:
         """
         Escanea y decodifica uno o múltiples archivos PCAP, PCAPNG o ASTERIX Binarios Crudos.
         Retorna (plots, duración total, sensores_detectados).
+
+        `incluir_raw_bytes`: solo la suite técnica (inspector) lo necesita. Por
+        defecto False -> el playback no carga ni retiene los bloques crudos
+        (menos RAM y caché más liviano).
         """
         self.set_playback_mode(True)
         self.bulk_import_mode = True
@@ -750,7 +783,7 @@ class DataEngine:
                 print(f"[DataEngine] Archivo no encontrado: {pcap_file}")
                 continue
 
-            cached_plots = self._read_cache(pcap_file)
+            cached_plots = self._read_cache(pcap_file, incluir_raw_bytes)
             if cached_plots is not None:
                 print(f"[DataEngine] Usando caché para {pcap_file} ({len(cached_plots)} plots)")
                 all_plots.extend(cached_plots)
@@ -1000,6 +1033,12 @@ class DataEngine:
         self.duration = last_tod - first_tod
         if self.duration < 0: 
             self.duration += SECONDS_PER_DAY
+
+        # Si no se pidieron, liberar los bloques crudos: en cold ya se persistieron
+        # al lateral del caché; el playback no los usa y así no ocupan RAM.
+        if not incluir_raw_bytes:
+            for p in all_plots:
+                p.raw_bytes = None
 
         self.plots = all_plots
         return all_plots, self.duration, sensores_vistos
