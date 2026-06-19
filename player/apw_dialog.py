@@ -6,7 +6,9 @@ class APWDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("⚠️ APW")
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
+        # Sin WindowStaysOnTopHint: flota sobre la app (Tool con parent) pero no
+        # sobre otras aplicaciones del escritorio.
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         
         self.setFixedSize(280, 110)

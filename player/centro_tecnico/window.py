@@ -10,6 +10,7 @@ from player.centro_tecnico.stats_widget import StatsWidget
 from player.centro_tecnico.coverage_widget import CoverageWidget
 from player.centro_tecnico.inspector_widget import InspectorWidget
 from player.technical_monitor import TechnicalMonitorWidget
+from player.calib_dialog import CalibrationWidget
 
 
 class TechnicalImportWorker(QThread):
@@ -29,15 +30,21 @@ class TechnicalImportWorker(QThread):
 
     def log_import(self, msg):
         import time
+        import os
         try:
-            with open("C:\\documentos\\decode_asterix\\technical_import.log", "a", encoding="utf-8") as f:
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            log_path = os.path.join(base_dir, "technical_import.log")
+            with open(log_path, "a", encoding="utf-8") as f:
                 f.write(f"[{time.strftime('%H:%M:%S')}] [Worker] {msg}\n")
         except Exception:
             pass
 
     def run(self):
+        import os
         try:
-            with open("C:\\documentos\\decode_asterix\\technical_import.log", "w", encoding="utf-8") as f:
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            log_path = os.path.join(base_dir, "technical_import.log")
+            with open(log_path, "w", encoding="utf-8") as f:
                 f.write("")
         except Exception:
             pass
@@ -143,6 +150,13 @@ class CentroTecnicoWindow(QMainWindow):
         self.inspector_tab = InspectorWidget(self._repo_db, self._worker, self)
         self.tabs.addTab(self.inspector_tab, "🔬 Inspector")
         self.tabs.addTab(self.coverage_tab, "🛰 Cobertura")
+
+        # Análisis y Calibración de registración (antes diálogo del menú Config).
+        sensores = getattr(self.parent(), "sensores", {})
+        pcap_path = getattr(self.parent(), "pcap_path", "")
+        self.calib_tab = CalibrationWidget(sensores, pcap_path=pcap_path, parent=self)
+        self.calib_tab.cambios_guardados.connect(self._on_calib_guardado)
+        self.tabs.addTab(self.calib_tab, "🛠 Calibración")
 
         # Barra de herramientas superior prominente
         self._build_toolbar()
@@ -480,3 +494,9 @@ class CentroTecnicoWindow(QMainWindow):
             self.stats_tab.on_source_changed()
         if hasattr(self.coverage_tab, "on_source_changed"):
             self.coverage_tab.on_source_changed()
+
+    def _on_calib_guardado(self):
+        """Tras guardar/desactivar correcciones: el app recarga sus sensores."""
+        app = self.parent()
+        if app is not None and hasattr(app, "_recargar_sensores_calib"):
+            app._recargar_sensores_calib()
