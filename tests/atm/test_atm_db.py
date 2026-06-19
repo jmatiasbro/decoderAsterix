@@ -39,14 +39,16 @@ def test_airports_coords_reales():
 @needs_db
 def test_airways_clasificacion_excluyente():
     sup = {w["name"] for w in atm_db.airways("SUP")}
-    rnav = {w["name"] for w in atm_db.airways("RNAV")}
-    assert sup and rnav
-    assert sup.isdisjoint(rnav)  # RNAV separada de superiores
+    inf = {w["name"] for w in atm_db.airways("INF")}
+    assert sup and inf
+    assert sup.isdisjoint(inf)  # superiores (U…) separadas de inferiores
+    assert all(n.startswith("U") for n in sup)
+    assert all(not n.startswith("U") for n in inf)
 
 
 @needs_db
 def test_segmentos_aerovia_empiezan_con_move():
-    segs = atm_maps.airway_segments("RNAV")
+    segs = atm_maps.airway_segments("SUP")
     assert segs and segs[0][0] == "M"
     assert all(len(s) == 4 for s in segs)
 
