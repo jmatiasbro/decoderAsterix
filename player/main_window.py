@@ -3354,6 +3354,9 @@ class MainWindow(QMainWindow):
         self.radar.altimetry.qnh_local = float(value)
         self._actualizar_tl_hud()
         self.radar.update()
+        tl = self.radar.altimetry.transition_level
+        tl_str = f"FL{tl}" if tl is not None else "—"
+        self.system_bus.inyectar("INFO", "APP", f"QNH ajustado a {value} hPa (TL {tl_str})")
 
     def _aplicar_rol(self, perfil_data: dict):
         """Aplica el rol operativo: vista limpia + bloqueo de playback para el controlador.
