@@ -35,3 +35,6 @@ data/firmap/argentina.mbtiles
 
 # DBs temporales de fallback de DuckDB (basura por contencion de lock)
 pass_analytics_fallback_*.duckdb*
+
+# Logs de eventos de sistema (auditoria local, no versionar)
+logs/
