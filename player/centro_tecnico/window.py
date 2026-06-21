@@ -199,33 +199,6 @@ class CentroTecnicoWindow(QMainWindow):
         self.btn_import_tech = btn_import
         toolbar.addWidget(btn_import)
 
-        btn_msgs = QPushButton("📋 Mensajes de Sistema")
-        btn_msgs.setStyleSheet("""
-            QPushButton {
-                background-color: #3B4252;
-                color: #ECEFF4;
-                border: 1px solid #4C566A;
-                border-radius: 6px;
-                padding: 8px 18px;
-                font-size: 10pt;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #434C5E; border: 1px solid #88C0D0; }
-        """)
-        btn_msgs.clicked.connect(self._abrir_mensajes_sistema)
-        toolbar.addWidget(btn_msgs)
-
-    def _abrir_mensajes_sistema(self):
-        bus = getattr(self.parent(), "system_bus", None)
-        if bus is None:
-            return
-        if getattr(self, "_msgs_dialog", None) is None:
-            from player.centro_tecnico.system_events import SystemMessagesDialog
-            self._msgs_dialog = SystemMessagesDialog(bus, self)
-        self._msgs_dialog.show()
-        self._msgs_dialog.raise_()
-        self._msgs_dialog.activateWindow()
-
     def _build_pass_page(self, resultados=None) -> QWidget:
         if resultados:
             from player.pass_dashboard import PassDashboardDialog

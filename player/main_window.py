@@ -1358,10 +1358,45 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.hud_bar.addWidget(spacer)
+
+        # Mensajes de Sistema — disponible para ambos roles (técnico y controlador).
+        self.btn_hud_msgs = QPushButton(" MSG")
+        self.btn_hud_msgs.setToolTip("Lista de mensajes de sistema (eventos sin reconocer)")
+        self.btn_hud_msgs.clicked.connect(self._abrir_mensajes_sistema)
+        self.hud_bar.addWidget(self.btn_hud_msgs)
+        self.system_bus.cola_cambiada.connect(self._actualizar_badge_msgs)
+        self._actualizar_badge_msgs()
+        self.hud_bar.addSeparator()
+
         cont_utc, self.lbl_hud_utc = _campo("UTC", "00:00:00", "#39FF14")
         self._act_hud_utc = self.hud_bar.addWidget(cont_utc)
 
         self._actualizar_hud(self.profile_manager.profile)
+
+    def _actualizar_badge_msgs(self):
+        """Refresca el contador/color del botón de Mensajes de Sistema."""
+        if not hasattr(self, 'btn_hud_msgs'):
+            return
+        n = self.system_bus.pendientes
+        self.btn_hud_msgs.setText(f" MSG ({n})" if n else " MSG")
+        if self.system_bus.hay_criticos:
+            borde, fondo, txt = "#FF3333", "#2A1414", "#FF6666"
+        elif n:
+            borde, fondo, txt = "#FFCC00", "#2A2614", "#FFD700"
+        else:
+            borde, fondo, txt = "#4B5263", "#121824", "#6B7A8D"
+        self.btn_hud_msgs.setStyleSheet(
+            f"QPushButton {{ background-color: {fondo}; color: {txt}; border: 1px solid {borde};"
+            f" border-radius: 4px; padding: 3px 10px; font-weight: bold; font-size: 9pt; }}"
+            f"QPushButton:hover {{ border: 1px solid #88C0D0; }}")
+
+    def _abrir_mensajes_sistema(self):
+        from player.centro_tecnico.system_events import SystemMessagesDialog
+        if getattr(self, "_msgs_dialog", None) is None:
+            self._msgs_dialog = SystemMessagesDialog(self.system_bus, self)
+        self._msgs_dialog.show()
+        self._msgs_dialog.raise_()
+        self._msgs_dialog.activateWindow()
 
     def _actualizar_hud(self, perfil_data: dict):
         """Refresca los campos del HUD desde el perfil operativo."""
@@ -2153,6 +2188,10 @@ class MainWindow(QMainWindow):
             self._playback_player.set_filename(
                 os.path.basename(file_paths[0]) if len(file_paths) == 1
                 else f"{len(file_paths)} archivos")
+
+        _desc_pcap = (os.path.basename(file_paths[0]) if len(file_paths) == 1
+                      else f"{len(file_paths)} archivos")
+        self.system_bus.inyectar("INFO", "APP", f"PCAP cargado: {_desc_pcap}")
 
         # Iniciar fase de decodificación/carga inmediatamente
         self.btn_play.setEnabled(False)
@@ -3440,6 +3479,9 @@ class MainWindow(QMainWindow):
         # Cargar áreas de usuario del store
         self._cargar_areas_usuario(nombre or "Default")
 
+        rol = str(perfil_data.get("rol", "tecnico")).strip().upper()
+        self.system_bus.inyectar("INFO", "APP", f"Perfil aplicado: {nombre or 'Default'} ({rol})")
+
         self.radar.update()
 
     def _abrir_filtro_calidad(self):
@@ -4364,6 +4406,7 @@ class MainWindow(QMainWindow):
             self.btn_pass.setEnabled(True)
 
             _puertos_str = ",".join(str(p) for p in puertos_escucha)
+            self.system_bus.inyectar("INFO", "APP", f"Feed UDP conectado: {ip_escucha}:{_puertos_str}")
             print(f"[UDP Live] Conectado exitosamente. Escuchando en {ip_escucha}:{_puertos_str}")
             self.setWindowTitle(f"ASTERIX Radar Decoder - LIVE UDP ({ip_escucha}:{_puertos_str})")
         else:
@@ -4426,6 +4469,7 @@ class MainWindow(QMainWindow):
     def _on_udp_error(self, message: str):
         # Desconectar ante error de red/socket
         print(f"[UDP Live Error] {message}")
+        self.system_bus.inyectar("CRITICAL", "RED", f"Error de feed UDP: {message}")
         self._desconectar_udp_ui()
         from PyQt6.QtWidgets import QMessageBox
         QMessageBox.critical(self, "Error de Conexión UDP", message)

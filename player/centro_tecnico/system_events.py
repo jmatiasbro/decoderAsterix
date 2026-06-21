@@ -60,6 +60,7 @@ class SystemEventBus(QObject):
     """Modelo de eventos + auditoría. Vive en el hilo GUI; thread-safe en publish."""
 
     evento_agregado = pyqtSignal(object)      # SystemEvent
+    cola_cambiada = pyqtSignal()              # alta/baja: refrescar badges
     _publicar = pyqtSignal(str, str, str)     # marshalling worker -> GUI
 
     def __init__(self, parent=None):
@@ -77,17 +78,28 @@ class SystemEventBus(QObject):
         self.activos.append(ev)
         getattr(_logger, nivel.lower())(f"Inyección - Origen: {origen} | {desc}")
         self.evento_agregado.emit(ev)
+        self.cola_cambiada.emit()
+
+    @property
+    def pendientes(self) -> int:
+        return len(self.activos)
+
+    @property
+    def hay_criticos(self) -> bool:
+        return any(e.nivel == "CRITICAL" for e in self.activos)
 
     def ack(self, ev: SystemEvent):
         if ev in self.activos:
             self.activos.remove(ev)
         _logger.info(f"ACK OPERADOR - Removido -> Origen: {ev.origen} | {ev.desc}")
+        self.cola_cambiada.emit()
 
     def ack_all(self):
         n = len(self.activos)
         if n:
             _logger.warning(f"ACK GENERAL - Limpieza masiva: {n} eventos removidos.")
         self.activos.clear()
+        self.cola_cambiada.emit()
 
 
 class SystemMessagesDialog(QDialog):
