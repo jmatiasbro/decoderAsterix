@@ -1336,6 +1336,8 @@ class MainWindow(QMainWindow):
             "background-color: #121824; color: #39FF14; border: 1px solid #4B5263;"
             " border-radius: 4px; font-weight: bold;")
         self.sb_qnh.valueChanged.connect(self._on_qnh_changed)
+        self.sb_qnh.editingFinished.connect(self._on_qnh_committed)
+        self._qnh_logged = self.sb_qnh.value()
         lay_qnh.addWidget(t_qnh)
         lay_qnh.addWidget(self.sb_qnh)
         self.hud_bar.addWidget(cont_qnh)
@@ -3354,6 +3356,13 @@ class MainWindow(QMainWindow):
         self.radar.altimetry.qnh_local = float(value)
         self._actualizar_tl_hud()
         self.radar.update()
+
+    def _on_qnh_committed(self):
+        """Registra el QNH solo cuando se confirma el valor final (Enter/foco)."""
+        value = self.sb_qnh.value()
+        if value == getattr(self, "_qnh_logged", None):
+            return
+        self._qnh_logged = value
         tl = self.radar.altimetry.transition_level
         tl_str = f"FL{tl}" if tl is not None else "—"
         self.system_bus.inyectar("INFO", "APP", f"QNH ajustado a {value} hPa (TL {tl_str})")
