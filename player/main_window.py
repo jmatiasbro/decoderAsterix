@@ -779,6 +779,9 @@ class MainWindow(QMainWindow):
         }
         
         self.worker: Optional[PlaybackWorker] = None
+        from player.centro_tecnico.system_events import SystemEventBus
+        self.system_bus = SystemEventBus(self)
+        self._health_alarmas_prev: dict = {}
         self.profile_manager = ProfileManager()
         self.techo_incumbencia = self.profile_manager.get_nivel_incumbencia()
         self.cache_dir = tempfile.mkdtemp(prefix="asterix_cache_")
@@ -818,6 +821,7 @@ class MainWindow(QMainWindow):
             sensores=self.sensores,
             declinacion_magnetica=self.profile_manager.get_declinacion_magnetica()
         )
+        self.radar.system_bus = self.system_bus
         self.radar.plot_filter_fn = self._plot_passes_filters
         self.radar.sensores_visibles = self.sensores_activos.copy()
         self.radar.setStyleSheet("background-color: #0B0E14;")
@@ -921,7 +925,7 @@ class MainWindow(QMainWindow):
         menu_ver.addAction(self.act_toggle_dock)
         
         self.act_toggle_tech_dock = self.dock_technical.toggleViewAction()
-        self.act_toggle_tech_dock.setText("Diagnóstico Técnico ATSEP")
+        self.act_toggle_tech_dock.setText("Analista CAT 34/23")
         menu_ver.addAction(self.act_toggle_tech_dock)
         
         self.act_toggle_reloj = menu_ver.addAction("Reloj UTC Flotante")
@@ -1642,6 +1646,7 @@ class MainWindow(QMainWindow):
         self.chk_modo_crudo.toggled.connect(self._on_modo_crudo_toggled)
 
         self.chk_ocultar_parrot = self._make_toggle_button("Ocultar Parrot (Sqwk 0000)", "#FFA500")
+        self.chk_ocultar_parrot.toggled.connect(self._on_ocultar_parrot_toggled)
 
         l_hist.addWidget(self.chk_show_history)
         l_hist.addLayout(l_modo)
@@ -1761,7 +1766,7 @@ class MainWindow(QMainWindow):
 
     def _setup_technical_monitor_dock(self):
         from player.technical_monitor import TechnicalMonitorWidget
-        self.dock_technical = QDockWidget("Diagnóstico Técnico ATSEP (CAT 034 / 023)", self)
+        self.dock_technical = QDockWidget("Analista CAT 34/23", self)
         self.tech_monitor = TechnicalMonitorWidget(self)
         self.dock_technical.setWidget(self.tech_monitor)
         self.dock_technical.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea)
@@ -1911,6 +1916,20 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'radar') and self.radar is not None:
             self.radar.mtr_visible = checked
             self.radar.update()
+
+    def _on_ocultar_parrot_toggled(self, checked: bool):
+        """Al activar, purga al instante los tracks parrot (Sqwk 0000) ya vivos;
+        si no, esperarían a expirar por lifecycle y el botón parece no responder."""
+        if not (hasattr(self, 'radar') and self.radar is not None):
+            return
+        if checked:
+            for store in (getattr(self.radar, 'tracks', {}),
+                          getattr(self.radar, 'pending_tracks', {})):
+                muertos = [tid for tid, trk in store.items()
+                           if str(getattr(trk, 'mode3a', '') or '').strip() == "0000"]
+                for tid in muertos:
+                    store.pop(tid, None)
+        self.radar.update()
 
     def _clear_history(self):
         if hasattr(self.radar, 'history'):
@@ -2193,6 +2212,7 @@ class MainWindow(QMainWindow):
         self.worker.sensor_detected.connect(self._on_sensor_detected)
         self.worker.rotation_speed_detected.connect(self._on_rotation_speed_detected)
         self.worker.radar_health_changed.connect(self.tech_monitor.update_sensor_status)
+        self.worker.radar_health_changed.connect(self._on_health_evento)
         
         self.worker.start()
 
@@ -2369,6 +2389,37 @@ class MainWindow(QMainWindow):
         else:
             self.btn_play.setText("Error en PCAP")
             self._show_panel()
+
+    def _on_health_evento(self, key, data: dict):
+        """Publica al bus de mensajes de sistema solo las transiciones de alarma."""
+        flags_fault = {"sys_nogo": "NOGO"}
+        flags_warn = {"ovl_rdp": "OVL RDP", "ovl_xmt": "OVL XMT", "time_invalid": "TIME INVALID",
+                      "psr_ovl": "PSR OVL", "ssr_ovl": "SSR OVL", "mds_ovl": "MDS OVL",
+                      "monitor_disc": "MONITOR DISC"}
+        actuales = set()
+        for campo in (*flags_fault, *flags_warn):
+            if data.get(campo):
+                actuales.add(campo)
+        ss = data.get("system_state")
+        if ss == 3:
+            actuales.add("system_critical")
+        elif ss in (1, 2):
+            actuales.add("system_degraded")
+
+        previas = self._health_alarmas_prev.get(key, set())
+        nuevas = actuales - previas
+        self._health_alarmas_prev[key] = actuales
+        if not nuevas:
+            return
+        origen = f"SENSOR {key[0]}/{key[1]}"
+        for f in nuevas:
+            if f in flags_fault or f == "system_critical":
+                nivel, desc = "CRITICAL", flags_fault.get(f, "Falla crítica de la estación")
+            elif f == "system_degraded":
+                nivel, desc = "WARNING", "Estación degradada / sobrecarga"
+            else:
+                nivel, desc = "WARNING", flags_warn[f]
+            self.system_bus.inyectar(nivel, origen, desc)
 
     def _on_sensor_detected(self, sac: int, sic: int):
         sensor_id = f"{sac}/{sic}"
@@ -4268,6 +4319,7 @@ class MainWindow(QMainWindow):
             self.worker.error_occurred.connect(self._on_udp_error)
             self.worker.playback_finished.connect(self._on_udp_finished)
             self.worker.radar_health_changed.connect(self.tech_monitor.update_sensor_status)
+            self.worker.radar_health_changed.connect(self._on_health_evento)
 
             # 5. Deshabilitar controles históricos conflictivos
             self.btn_cargar.setEnabled(False)
