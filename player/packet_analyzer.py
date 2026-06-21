@@ -364,7 +364,7 @@ class AsterixAnalyzerWindow(QDialog):
     # Reproducir solo las aeronaves filtradas: (t_inicial, lat_c, lon_c, radio_nm, set[claves]).
     reproducir_filtrado = pyqtSignal(float, float, float, float, object)
 
-    LIMIT = 5000
+    LIMIT = 50000
 
     def __init__(self, repo_db, worker=None, parent=None):
         super().__init__(parent)
@@ -496,8 +496,16 @@ class AsterixAnalyzerWindow(QDialog):
         self.tabla.resizeColumnsToContents()
         self._header._reposicionar()
         n = len(rows)
-        tope = " (tope alcanzado)" if n >= self.LIMIT else ""
-        self.lbl_estado.setText(f"{n} registros{tope}")
+        if n >= self.LIMIT and rows:
+            # Truncado: mostrar el tramo cargado y el total del archivo para que se
+            # vea qué quedó afuera (la query carga los primeros N por ToD ascendente).
+            t_ini, t_fin = rows[0][0], rows[-1][0]
+            _, t_total = self._rango_tiempo()
+            self.lbl_estado.setText(
+                f"{n} registros (tope alcanzado: {_fmt_tod(t_ini)}–{_fmt_tod(t_fin)} "
+                f"de {_fmt_tod(t_total)}; acotá el rango en Configurar Filtros para ver el resto)")
+        else:
+            self.lbl_estado.setText(f"{n} registros")
 
     def _targets_visibles(self):
         """Devuelve (t0, lat_c, lon_c, radio_nm, keys) de las filas visibles. Las `keys`
@@ -527,6 +535,13 @@ class AsterixAnalyzerWindow(QDialog):
                 keys.add(("ms", str(ms).strip()))
             if tn is not None:
                 keys.add(("tn", str(ss), str(tn)))
+            # SSR (squawk) como identidad de respaldo: plots de radar sin Track#/
+            # Mode-S/Callsign (PSR+SSR) solo se distinguen por su código Mode-3/A.
+            if not (cs or ms or tn is not None):
+                sq = self.modelo_tabla.value_at(src_row, _IDX["mode3a"])
+                sq = str(sq).strip() if sq is not None else ""
+                if sq and sq not in ("----", "0000"):
+                    keys.add(("ssr", str(ss), sq))
         lat_c = lon_c = 0.0
         radio_nm = 0.0
         if coords:
