@@ -20,23 +20,20 @@ class Metric:
 ALL_DIMS = ("radar", "hour", "mode3a", "fl_band", "category", "callsign", "mode_s", "garbled")
 
 
+# Métricas agregables (sobre columnas numéricas). Se quitaron las antiguas
+# no-agregables (lat/lon/mode_s/callsign/sac_sic/mode3a como "métrica"): eran
+# dimensiones, no magnitudes a promediar.
 METRICS = [
-    Metric("count",     "Nº detecciones",   "",          "count", ALL_DIMS),
-    Metric("avg_range", "Rango medio (NM)", "raw_range", "avg",   ALL_DIMS),
-    Metric("p95_range", "Rango p95 (NM)",   "raw_range", "p95",   ALL_DIMS),
-    Metric("raw_azimuth", "Azimut (°)", "raw_azimuth", "avg", ALL_DIMS),
-    Metric("raw_range", "Rango (NM)", "raw_range", "avg", ALL_DIMS),
-    Metric("timestamp", "Tiempo (s)", "timestamp", "avg", ALL_DIMS),
-    Metric("altitude_ft", "Modo C / Altitud (ft)", "altitude_ft", "avg", ALL_DIMS),
-    Metric("mode3a", "Modo A / SSR (Código)", "mode3a", "count", ALL_DIMS),
-    Metric("pd", "Probabilidad de Detección (Pd, %)", "pd", "avg", ALL_DIMS),
-    Metric("garbled", "Garbling", "garbled", "avg", ALL_DIMS),
-    Metric("sac_sic", "SIC/SAC", "sac_sic", "count", ALL_DIMS),
-    Metric("mode_s", "Aircraft Address (Mode S)", "mode_s", "count", ALL_DIMS),
-    Metric("callsign", "Callsign", "callsign", "count", ALL_DIMS),
-    Metric("lat", "Latitud (°)", "lat", "avg", ALL_DIMS),
-    Metric("lon", "Longitud (°)", "lon", "avg", ALL_DIMS),
-    Metric("frequency", "Frecuencia (MHz)", "frequency", "avg", ALL_DIMS),
+    Metric("count",         "Nº detecciones",       "",            "count", ALL_DIMS),
+    Metric("avg_range",     "Rango medio (NM)",     "raw_range",   "avg",   ALL_DIMS),
+    Metric("p95_range",     "Rango p95 (NM)",       "raw_range",   "p95",   ALL_DIMS),
+    Metric("avg_azimuth",   "Azimut medio (°)",     "raw_azimuth", "avg",   ALL_DIMS),
+    Metric("avg_altitude",  "Altitud media (ft)",   "altitude_ft", "avg",   ALL_DIMS),
+    Metric("p95_altitude",  "Altitud p95 (ft)",     "altitude_ft", "p95",   ALL_DIMS),
+    Metric("avg_fl",        "Nivel medio (FL)",     "flight_level","avg",   ALL_DIMS),
+    Metric("avg_gs",        "Velocidad media (kt)", "ground_speed","avg",   ALL_DIMS),
+    Metric("avg_pd",        "Pd medio (%)",         "pd",          "avg",   ALL_DIMS),
+    Metric("garbled_rate",  "Tasa de garbling",     "garbled",     "avg",   ALL_DIMS),
 ]
 
 
@@ -83,7 +80,17 @@ def aggregate(rows, metric, dimension):
         if metric.agg == "count":
             v = float(len(group))
         else:
-            vals = [g.get(metric.column) for g in group if g.get(metric.column) is not None]
+            # Coerción numérica robusta: flight_level llega como str ("100"),
+            # garbled como bool. Se descartan los no convertibles.
+            vals = []
+            for g in group:
+                x = g.get(metric.column)
+                if x is None:
+                    continue
+                try:
+                    vals.append(float(x))
+                except (TypeError, ValueError):
+                    continue
             if not vals:
                 continue
             if metric.agg == "avg":

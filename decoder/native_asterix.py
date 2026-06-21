@@ -274,9 +274,13 @@ def decode_cat062(payload: bytes, offset: int, length: int, category: int,
             current_frn = 13
             if record_offsets is not None: _marks.append((13, offset))
             if len(fspec) > 12 and fspec[12]:
+                _first_status = True
                 while offset < len(payload):
                     sb = payload[offset]
                     offset += 1
+                    if _first_status:
+                        record['spi'] = bool(sb & 0x40)  # I062/080 bit 7: SPI present en el último report
+                        _first_status = False
                     if (sb & 0x01) == 0: break
                 if offset > len(payload): raise IndexError("Buffer too small for I062/080")
             

@@ -3,10 +3,11 @@
 
 `data` para bar/line/pie/box/stacked100/spider es list[(label, value)].
 Para heatmap_hourday es list[(hour_label, day_label, value)].
+Para scatter (X vs Y) es list[(serie_label, [(x, y), ...])]; cada serie es un color.
 """
 import numpy as np
 
-CHART_TYPES = ("bar", "line", "pie", "box", "stacked100", "heatmap_hourday", "spider")
+CHART_TYPES = ("bar", "line", "pie", "box", "stacked100", "heatmap_hourday", "spider", "scatter")
 
 
 def _labels_values(data):
@@ -68,6 +69,18 @@ def _render_extended(figure, data, chart_type, xlabel, ylabel):
         ax.plot(ang, vals, marker="o")
         ax.fill(ang, vals, alpha=0.25)
         ax.set_xticks(ang[:-1]); ax.set_xticklabels(labels, fontsize=8)
+    elif chart_type == "scatter":
+        ax = figure.add_subplot(111)
+        for serie_label, puntos in data:
+            if not puntos:
+                continue
+            xs = [float(p[0]) for p in puntos]
+            ys = [float(p[1]) for p in puntos]
+            ax.scatter(xs, ys, s=6, alpha=0.5, label=str(serie_label))
+        ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+        # Leyenda solo si hay más de una serie (color por radar/categoría/…).
+        if len(data) > 1:
+            ax.legend(fontsize=7, markerscale=2)
     elif chart_type == "heatmap_hourday":
         ax = figure.add_subplot(111)
         hours = sorted({d[0] for d in data})
