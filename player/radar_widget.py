@@ -895,6 +895,8 @@ class RadarWidget(_RadarBase):
         self._safety_interval = 1.0       # s entre evaluaciones completas
         self._safety_last = 0.0
         self._safety_pending = False
+        # Estado previo por subsistema para publicar al bus solo transiciones.
+        self._safety_eventos_prev: dict = {}
 
         # Enable mouse tracking for tooltip on history points
         self.setMouseTracking(True)
@@ -1785,7 +1787,16 @@ class RadarWidget(_RadarBase):
                 elif (data.get('id') or '').startswith('PSR_'):
                     target_id = data['id']
                 else:
-                    return None
+                    # Sin identidad SSR/Mode-S (p.ej. parrot / field-monitor con squawk
+                    # 0000 en posición fija): no descartar. Se usa un id estable
+                    # cuantizado por posición polar para mostrarlo sin fusionar
+                    # distintos blancos 0000 entre sí.
+                    rho_q = data.get('rho_render') or data.get('raw_range')
+                    th_q = data.get('theta_render') or data.get('raw_azimuth')
+                    if rho_q is not None and th_q is not None:
+                        target_id = f"FIX_{sensor_id}_{round(float(rho_q) * 4) / 4:.2f}_{int(round(float(th_q))) % 360:03d}"
+                    else:
+                        return None
 
             # 4. Correlación / Actualización del Diccionario de Pistas
             def update_track(track: RadarPlot):
@@ -2459,6 +2470,7 @@ class RadarWidget(_RadarBase):
             self.apw_activos = []
             if hasattr(self, 'apw_dialog') and self.apw_dialog:
                 self.apw_dialog.actualizar_alertas([])
+            self._publicar_eventos_safety("APW", {})
             self.evaluar_msaw()
             return
 
@@ -2469,12 +2481,33 @@ class RadarWidget(_RadarBase):
             ahora = datetime.datetime.fromtimestamp(SimulationTime.time())
             alertas = engine_evaluar_apw(self.tracks.values(), self.get_all_areas(), ahora)
             self.apw_activos = alertas
-            
+
             if hasattr(self, 'apw_dialog') and self.apw_dialog:
                 self.apw_dialog.actualizar_alertas(alertas, self)
+            self._publicar_eventos_safety("APW", {
+                (a.track_id, a.area_name, a.tipo): (
+                    "CRITICAL" if a.tipo == "VIOLATION" else "WARNING",
+                    "APW",
+                    f"{a.tipo} {a.area_name}: {a.track_id}")
+                for a in alertas})
         except Exception as e:
             print(f"[APW ERROR] Error al evaluar APW: {e}")
         self.evaluar_msaw()
+
+    def _publicar_eventos_safety(self, subsistema: str, eventos: dict):
+        """Publica al bus de mensajes de sistema solo las claves nuevas.
+
+        eventos: {clave_estable: (nivel, origen, desc)}.
+        """
+        bus = getattr(self, 'system_bus', None)
+        if bus is None:
+            return
+        prev = self._safety_eventos_prev.get(subsistema, set())
+        actuales = set(eventos)
+        for clave in actuales - prev:
+            nivel, origen, desc = eventos[clave]
+            bus.inyectar(nivel, origen, desc)
+        self._safety_eventos_prev[subsistema] = actuales
 
     def evaluar_msaw(self):
         """Evalúa MSAW (altitud mínima de sector) para las pistas en TMA."""
@@ -2482,6 +2515,7 @@ class RadarWidget(_RadarBase):
             self.msaw_activos = []
             if getattr(self, 'msaw_dialog', None):
                 self.msaw_dialog.actualizar_alertas([])
+            self._publicar_eventos_safety("MSAW", {})
             return
         try:
             from player.msaw.engine import evaluar_msaw as _engine
@@ -2525,6 +2559,12 @@ class RadarWidget(_RadarBase):
                                         suppression=self._msaw_suppression)
             if getattr(self, 'msaw_dialog', None):
                 self.msaw_dialog.actualizar_alertas(self.msaw_activos, self)
+            self._publicar_eventos_safety("MSAW", {
+                (a.track_id, a.icao, a.tipo): (
+                    "CRITICAL" if a.tipo == "VIOLATION" else "WARNING",
+                    "MSAW",
+                    f"{a.tipo} {a.icao}: {a.track_id} a {a.alt_ft}ft (MSA {a.msa_ft}ft)")
+                for a in self.msaw_activos})
         except Exception as e:
             print(f"[MSAW ERROR] {e}")
 
@@ -2545,6 +2585,7 @@ class RadarWidget(_RadarBase):
             self.conflictos_activos = []
             if hasattr(self, 'stca_dialog') and self.stca_dialog:
                 self.stca_dialog.actualizar_alertas([])
+            self._publicar_eventos_safety("STCA", {})
             self.evaluar_apw()
             return
 
@@ -2674,6 +2715,14 @@ class RadarWidget(_RadarBase):
         # 2. Actualizar la UI flotante
         if hasattr(self, 'stca_dialog') and self.stca_dialog:
             self.stca_dialog.actualizar_alertas(conflictos, self)
+
+        self._publicar_eventos_safety("STCA", {
+            (tuple(sorted((t1, t2))), est): (
+                "CRITICAL" if est == "VIOLATION" else "WARNING",
+                "STCA",
+                f"{est} {l1}/{l2}" + (f" (CPA {tm}s)" if est == "PREDICTION" else ""))
+            for (l1, l2, est, _t, _dh, _dv), (t1, t2, _e, tm)
+            in zip(conflictos, self.conflictos_activos)})
 
         # 3. Evaluar alertas APW
         self.evaluar_apw()
@@ -5291,6 +5340,15 @@ class RadarWidget(_RadarBase):
                     painter.save()
                     painter.resetTransform()
                     _sym.draw_symbol(painter, spec, sp.x(), sp.y(), col)
+                    # SPI / IDENT: el piloto activó el pulso de identificación a
+                    # pedido del controlador. Halo circular parpadeante (~1 Hz).
+                    if plot.raw_dict.get('spi') and self.blink_flag:
+                        hi = spec.size_px + 5.0
+                        spi_col = QColor(0, 229, 255)
+                        spi_col.setAlpha(int(alpha))
+                        painter.setPen(QPen(spi_col, 2.0))
+                        painter.setBrush(Qt.BrushStyle.NoBrush)
+                        painter.drawEllipse(sp, hi, hi)
                     if seleccionado:
                         s = spec.size_px + 4.0
                         sel_col = QColor(*_pal.SELECTED)
@@ -5439,6 +5497,21 @@ class RadarWidget(_RadarBase):
             finally:
                 painter.restore()
                 
+            # 2b. SPI / IDENT: halo circular cian parpadeante (~1 Hz) cuando el
+            # piloto activó el pulso de identificación a pedido del controlador.
+            if plot.raw_dict.get('spi') and self.blink_flag:
+                try:
+                    painter.save()
+                    painter.translate(x, y)
+                    spi_col = QColor(0, 229, 255, alpha)
+                    painter.setPen(QPen(spi_col, safe_divide(2.0, z, 0.5)))
+                    painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                    r_spi = safe_divide(13.0, z, 2.0)
+                    painter.drawEllipse(QPointF(0, 0), r_spi, r_spi)
+                    painter.restore()
+                except Exception:
+                    pass
+
             # 3. Dibujar encuadre concéntrico de selección o hover en el símbolo
             is_focused = self.focused_target_id and plot.id == self.focused_target_id
             is_hovered = getattr(self, 'hovered_target_id', None) and plot.id == self.hovered_target_id
