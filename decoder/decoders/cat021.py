@@ -129,6 +129,8 @@ def decode_cat021_v026(payload: bytes, offset: int, block_length: int, category:
                     plot['extra_data']['track_angle'] = ta_raw * 360.0 / 65536.0
                 elif frn == 18: # I021/170 Target Identification
                     plot['callsign'] = _decode_callsign(payload[offset:offset+6])
+                elif frn == 21: # I021/200 Target Status
+                    plot['spi'] = (payload[offset] & 0x03) == 3  # SS=3: SPI set
                 elif frn == 27: # I021/070 Mode-3/A Code
                     mode3a_raw = struct.unpack('>H', payload[offset:offset + 2])[0]
                     plot['mode_3a'] = mode3a_raw & 0x0FFF
@@ -275,6 +277,8 @@ def decode(payload: bytes, offset: int, block_length: int, category: int,
                         plot['extra_data'] = {}
                     plot['extra_data']['ground_speed_nms'] = gs_raw * 0.00006103515625
                     plot['extra_data']['track_angle'] = ta_raw * 360.0 / 65536.0
+                elif frn == 23: # I021/200 Target Status
+                    plot['spi'] = (payload[offset] & 0x03) == 3  # SS=3: SPI set
                 elif frn == 29: # I021/170 Target Identification
                     plot['callsign'] = _decode_callsign(payload[offset:offset+6])
 

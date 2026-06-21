@@ -1,4 +1,5 @@
-from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget, QGridLayout, QScrollArea, QHBoxLayout, QDockWidget
+from PyQt6.QtWidgets import (QFrame, QLabel, QVBoxLayout, QWidget, QGridLayout, QScrollArea,
+                             QHBoxLayout, QDockWidget, QDialog, QTextBrowser, QPushButton)
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QTimer, QSize
 from PyQt6.QtGui import QColor, QFont
 
@@ -8,6 +9,22 @@ COLOR_TEXT_PRIMARY   = QColor("#FFFFFF")
 COLOR_TEXT_SECONDARY = QColor("#AAAAAA")
 COLOR_ACCENT_CYAN    = QColor("#00FFFF")
 
+# Descripción operativa de cada alarma: (severidad, origen ASTERIX, explicación).
+ALARM_INFO = {
+    "NOGO":            ("CRÍTICA",  "CAT 034 I034/050 (COM/NOGO)", "El sistema reporta operación inhibida: los datos NO deben usarse operacionalmente."),
+    "OVL RDP":         ("DEGRADADA","CAT 034 I034/050 (COM/OVLRDP)", "Sobrecarga del procesador de datos radar (RDP)."),
+    "OVL XMT":         ("DEGRADADA","CAT 034 I034/050 (COM/OVLXMT)", "Sobrecarga del subsistema de transmisión."),
+    "MONITOR DISC":    ("AVISO",    "CAT 034 I034/050 (COM/MSC)", "Sistema de monitoreo desconectado del sensor."),
+    "TIME INVALID":    ("DEGRADADA","CAT 034 I034/050 (COM/TSV)", "Fuente de tiempo inválida: el sellado temporal puede no ser confiable."),
+    "PSR OVL":         ("DEGRADADA","CAT 034 I034/050 (PSR)", "Sobrecarga del canal primario (PSR)."),
+    "SSR OVL":         ("DEGRADADA","CAT 034 I034/050 (SSR)", "Sobrecarga del canal secundario (SSR)."),
+    "MDS OVL":         ("DEGRADADA","CAT 034 I034/050 (MDS)", "Sobrecarga del canal Mode S."),
+    "SYSTEM CRITICAL": ("CRÍTICA",  "CAT 023 (system_state=3)", "Falla crítica de la estación: el sistema reporta estado no operativo."),
+    "OVERLOAD":        ("DEGRADADA","CAT 023 (system_state=2)", "Sobrecarga del sistema: capacidad de procesamiento excedida."),
+    "DEGRADED":        ("DEGRADADA","CAT 023 (system_state=1)", "Servicio degradado: el sistema opera con prestaciones reducidas."),
+    "UPS ACTIVE":      ("AVISO",    "CAT 023", "Alimentación por UPS activa: corte de la red eléctrica primaria."),
+}
+
 class RadarStatusCard(QFrame):
     """Tarjeta visual que representa un sensor físico en la red ATSEP en PyQt6."""
     def __init__(self, key, name="Sensor", parent=None):
@@ -16,19 +33,29 @@ class RadarStatusCard(QFrame):
         self.name = name
         self.channel_ab = "UNKNOWN"
         self.antenna_azimuth = None
-        self.com_fault = False
-        self.ext_fault = False
-        self.ant_fault = False
+        # Estado COM de I034/050 (CAT 034)
+        self.sys_nogo = False
+        self.ovl_rdp = False
+        self.ovl_xmt = False
+        self.monitor_disc = False
+        self.time_invalid = False
+        self.psr_ovl = False
+        self.ssr_ovl = False
+        self.mds_ovl = False
+        # Estado de estación (CAT 023)
         self.system_state = None
         self.ups_active = None
         self.last_update_time = 0.0  # tiempo real
         self.is_offline = True
         self.fruit_events = []  # Lista de eventos {"ssr": ssr, "timestamp": timestamp}
+        self.state = "OFFLINE"
+        self.active_alarms = []  # Lista de códigos de alarma activos (claves de ALARM_INFO)
 
         self.setMinimumWidth(220)
         self.setMaximumWidth(280)
         self.setFixedHeight(110)
         self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._set_style("OFFLINE")
         self.init_ui()
 
@@ -88,12 +115,10 @@ class RadarStatusCard(QFrame):
             self.channel_ab = data["channel_ab"]
         if "antenna_azimuth" in data:
             self.antenna_azimuth = data["antenna_azimuth"]
-        if "com_fault" in data:
-            self.com_fault = data["com_fault"]
-        if "ext_fault" in data:
-            self.ext_fault = data["ext_fault"]
-        if "ant_fault" in data:
-            self.ant_fault = data["ant_fault"]
+        for campo in ("sys_nogo", "ovl_rdp", "ovl_xmt", "monitor_disc", "time_invalid",
+                      "psr_ovl", "ssr_ovl", "mds_ovl"):
+            if campo in data:
+                setattr(self, campo, data[campo])
         if "system_state" in data:
             self.system_state = data["system_state"]
         if "ups_active" in data:
@@ -104,16 +129,30 @@ class RadarStatusCard(QFrame):
         is_fault = False
         is_degraded = False
 
-        # Alarmas de CAT 034
-        if self.ant_fault:
-            alarmas.append("ANTENNA")
+        # Alarmas de CAT 034 (I034/050)
+        if self.sys_nogo:
+            alarmas.append("NOGO")
             is_fault = True
-        if self.com_fault:
-            alarmas.append("COMMS")
-            is_fault = True
-        if self.ext_fault:
-            alarmas.append("EXTRACTOR")
-            is_degraded = True # Falla del extractor usualmente degrada
+        if self.ovl_rdp:
+            alarmas.append("OVL RDP")
+            is_degraded = True
+        if self.ovl_xmt:
+            alarmas.append("OVL XMT")
+            is_degraded = True
+        if self.time_invalid:
+            alarmas.append("TIME INVALID")
+            is_degraded = True
+        if self.psr_ovl:
+            alarmas.append("PSR OVL")
+            is_degraded = True
+        if self.ssr_ovl:
+            alarmas.append("SSR OVL")
+            is_degraded = True
+        if self.mds_ovl:
+            alarmas.append("MDS OVL")
+            is_degraded = True
+        if self.monitor_disc:
+            alarmas.append("MONITOR DISC")
 
         # Alarmas de CAT 023
         if self.system_state == 3: # Falla Crítica
@@ -143,6 +182,8 @@ class RadarStatusCard(QFrame):
             self.lbl_status.setText(f"STATUS: OPERATIONAL")
             self.lbl_status.setStyleSheet("color: #33FF33; font-weight: bold; border: none; background-color: transparent;")
 
+        self.state = state
+        self.active_alarms = list(alarmas)
         self._set_style(state)
 
         # Detalles
@@ -159,9 +200,58 @@ class RadarStatusCard(QFrame):
 
     def marcar_offline(self):
         self.is_offline = True
+        self.state = "OFFLINE"
+        self.active_alarms = []
         self.lbl_status.setText("STATUS: TIMEOUT / OFFLINE")
         self.lbl_status.setStyleSheet("color: #888; font-weight: bold; border: none; background-color: transparent;")
         self._set_style("OFFLINE")
+
+    def mousePressEvent(self, event):
+        """Al hacer click, si el sensor está alarmado abre la ventana de evento."""
+        if event.button() == Qt.MouseButton.LeftButton and self.active_alarms:
+            self._mostrar_evento()
+        super().mousePressEvent(event)
+
+    def _mostrar_evento(self):
+        """Ventana con la descripción detallada del/los evento(s) que alarmaron al sensor."""
+        sev_color = "#FF3333" if self.state == "FAULT" else "#FFCC33"
+        filas = []
+        for cod in self.active_alarms:
+            sev, origen, desc = ALARM_INFO.get(cod, ("AVISO", "—", "Evento sin descripción."))
+            filas.append(
+                f"<tr>"
+                f"<td style='color:{sev_color}; font-weight:bold; padding:4px 10px 4px 0;'>{cod}</td>"
+                f"<td style='color:#AAAAAA; padding:4px 10px 4px 0;'>{sev}</td>"
+                f"<td style='color:#7FB0FF; padding:4px 10px 4px 0;'>{origen}</td>"
+                f"<td style='color:#E0E0E0; padding:4px 0;'>{desc}</td>"
+                f"</tr>"
+            )
+        az_str = f"{self.antenna_azimuth:.1f}°" if self.antenna_azimuth is not None else "--°"
+        html = (
+            f"<h3 style='color:{sev_color}; margin:0 0 8px 0;'>{self.name} ({self.key[0]}/{self.key[1]}) — {self.state}</h3>"
+            f"<p style='color:#AAAAAA; margin:0 0 10px 0;'>Canal: {self.channel_ab} &nbsp;|&nbsp; Antena: {az_str}</p>"
+            f"<table style='border-collapse:collapse;'>"
+            f"<tr style='color:#00FFFF;'><th align='left' style='padding:0 10px 6px 0;'>Alarma</th>"
+            f"<th align='left' style='padding:0 10px 6px 0;'>Severidad</th>"
+            f"<th align='left' style='padding:0 10px 6px 0;'>Origen</th>"
+            f"<th align='left' style='padding:0 0 6px 0;'>Descripción</th></tr>"
+            f"{''.join(filas)}"
+            f"</table>"
+        )
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Evento — {self.name} ({self.key[0]}/{self.key[1]})")
+        dlg.setMinimumWidth(560)
+        dlg.setStyleSheet("QDialog { background-color: #141820; }")
+        lay = QVBoxLayout(dlg)
+        browser = QTextBrowser()
+        browser.setStyleSheet("background-color: #1A1F2A; border: 1px solid #2A3A4A; color: #E0E0E0;")
+        browser.setHtml(html)
+        lay.addWidget(browser)
+        btn = QPushButton("Cerrar")
+        btn.clicked.connect(dlg.accept)
+        lay.addWidget(btn, alignment=Qt.AlignmentFlag.AlignRight)
+        dlg.exec()
 
     def registrar_fruit_evento(self, ssr_code, timestamp):
         """Registra un evento FRUIT y actualiza la UI y el tooltip."""
@@ -196,7 +286,7 @@ class TechnicalMonitorWidget(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        header = QLabel("ATSEP TECHNICAL MONITORING HMI (CAT 034 / 023)")
+        header = QLabel("ANALISTA CAT 34/23 — Estado de sensores (CAT 034 / 023)")
         header.setStyleSheet("color: #00FFFF; font-family: 'Consolas', 'Monospace'; font-size: 14px; font-weight: bold; padding: 4px;")
         main_layout.addWidget(header)
 

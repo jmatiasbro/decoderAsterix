@@ -180,6 +180,9 @@ class PlaybackWorker(QThread):
         if plot.track_number is not None and \
                 ("tn", str(plot.sac_sic), str(plot.track_number)) in targets:
             return True
+        sq = (plot.mode3a or "").strip()
+        if sq and ("ssr", str(plot.sac_sic), sq) in targets:
+            return True
         return False
 
     def seek_to_time(self, t: float):
@@ -235,8 +238,21 @@ class PlaybackWorker(QThread):
             return
             
         try:
-            plots, duration, sensores_vistos = self.engine.scan_pcap(self.pcap_file)
-            
+            # incluir_raw_bytes=True: el analizador/inspector de la pantalla principal
+            # lee los bloques crudos desde DuckDB. Se persisten una sola vez en bulk
+            # (sin contención del lock por registro) y luego se liberan de RAM, que el
+            # playback no los usa.
+            plots, duration, sensores_vistos = self.engine.scan_pcap(
+                self.pcap_file, incluir_raw_bytes=True)
+
+            try:
+                self.engine.repo_db.guardar_plots_bulk([p.to_dict() for p in plots])
+            except Exception as e:
+                print(f"[PlaybackWorker] No se pudo poblar el analizador: {e}")
+            finally:
+                for p in plots:
+                    p.raw_bytes = None
+
             self._mutex.lock()
             self._plots = plots
             self._duration = duration

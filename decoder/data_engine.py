@@ -523,9 +523,14 @@ class DataEngine:
                     data_health = self.radar_health.get((sac, sic), {
                         "channel_ab": "UNKNOWN",
                         "antenna_azimuth": None,
-                        "com_fault": False,
-                        "ext_fault": False,
-                        "ant_fault": False,
+                        "sys_nogo": False,
+                        "ovl_rdp": False,
+                        "ovl_xmt": False,
+                        "monitor_disc": False,
+                        "time_invalid": False,
+                        "psr_ovl": False,
+                        "ssr_ovl": False,
+                        "mds_ovl": False,
                         "system_state": None,
                         "ups_active": False
                     }).copy()
@@ -539,12 +544,20 @@ class DataEngine:
                         if 'antenna_rpm' in extra and self.on_rotation_speed_detected:
                             self.on_rotation_speed_detected(sac, sic, extra['antenna_rpm'])
                             
-                        # Extraer telemetría de CAT 34
+                        # Extraer telemetría de CAT 34 (I034/050 subcampo COM)
                         data_health["channel_ab"] = rec.get("channel_ab", "UNKNOWN")
                         data_health["antenna_azimuth"] = rec.get("azimuth")
-                        data_health["com_fault"] = rec.get("com_fault", False)
-                        data_health["ext_fault"] = rec.get("ext_fault", False)
-                        data_health["ant_fault"] = rec.get("ant_fault", False)
+                        # Solo actualizar el estado COM cuando el mensaje lo trae
+                        # (mensajes de sector/norte no incluyen I034/050).
+                        if "sys_nogo" in rec:
+                            data_health["sys_nogo"] = rec.get("sys_nogo", False)
+                            data_health["ovl_rdp"] = rec.get("ovl_rdp", False)
+                            data_health["ovl_xmt"] = rec.get("ovl_xmt", False)
+                            data_health["monitor_disc"] = rec.get("monitor_disc", False)
+                            data_health["time_invalid"] = rec.get("time_invalid", False)
+                            data_health["psr_ovl"] = rec.get("psr_ovl", False)
+                            data_health["ssr_ovl"] = rec.get("ssr_ovl", False)
+                            data_health["mds_ovl"] = rec.get("mds_ovl", False)
                     
                     elif cat == 23:
                         # Extraer telemetría de CAT 23
