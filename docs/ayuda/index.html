@@ -28,6 +28,7 @@
   th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
   th{background:var(--panel);color:var(--cyan);font-size:13px;text-transform:uppercase;letter-spacing:.5px}
   .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:bold}
+  .kbd{display:inline-block;padding:1px 6px;border-radius:4px;border:1px solid #2d456e;background:#101724;font-family:Consolas,monospace;font-size:12px}
   .ctrl{background:rgba(0,229,255,.15);color:var(--cyan)}
   .tec{background:rgba(57,255,20,.15);color:var(--green)}
   .note{background:var(--panel);border-left:3px solid var(--cyan);padding:10px 14px;border-radius:0 6px 6px 0;margin:14px 0}
@@ -52,6 +53,7 @@
   <a href="#hud">Barra superior (HUD)</a>
   <a href="#lateral">Barra lateral</a>
   <a href="#menus">Menús</a>
+  <a href="#finder">Finder táctico</a>
   <a href="#modos">Modos de operación</a>
   <a href="#filtros">Filtros avanzados</a>
   <a href="#mapas">Mapas y capas VFR</a>
@@ -176,7 +178,8 @@
         <td>Trayectorias y reproducción animada a Google Earth (KMZ), cobertura real (KMZ),
             heatmap a QGIS (CSV), datos a Power BI (Parquet).</td></tr>
     <tr><td><strong>Ver</strong></td><td>Panel lateral, vector velocidad, reloj UTC flotante,
-        panel de sensores flotante, diagnóstico ATSEP.</td></tr>
+        panel de sensores flotante, diagnóstico ATSEP, Analizador de Paquetes y
+        <strong>Finder Táctico…</strong> (<span class="kbd">Ctrl+F</span>, ver abajo).</td></tr>
     <tr><td><strong>Configuración</strong></td><td>Perfil Operativo / Jurisdicción, Cambiar Perfil,
         Rol Operativo, Centro Técnico ATSEP <span class="pill tec">Técnico</span>.</td></tr>
     <tr><td><strong>Mapas</strong></td><td>Aerovías, procedimientos, fixes, VFR, sectores VFR y carga de
@@ -186,6 +189,32 @@
         Vista FIR (satélite).</td></tr>
     <tr><td><strong>Ayuda</strong></td><td>Esta guía.</td></tr>
   </table>
+
+  <h2 class="sec" id="finder">Finder táctico</h2>
+  <p>Ventana flotante para <strong>localizar y centrar</strong> un elemento en la pantalla radar.
+  Se abre desde <em>Ver → Finder Táctico…</em> o con <span class="kbd">Ctrl+F</span>; queda siempre
+  arriba y no bloquea la operación. Se escribe el criterio y se presiona <span class="kbd">Enter</span>.
+  El buscador discrimina automáticamente el tipo de entrada:</p>
+  <table>
+    <tr><th>Si se escribe…</th><th>Busca</th><th>Ejemplo</th></tr>
+    <tr><td><strong>Callsign</strong></td><td>Pista viva por identificación del plan de vuelo.</td><td>ARG1340</td></tr>
+    <tr><td><strong>Código SSR (Modo 3/A)</strong></td><td>Pista viva por squawk.</td><td>4321</td></tr>
+    <tr><td><strong>Aeropuerto / Waypoint</strong></td><td>Punto fijo de la base ATM offline (ICAO o fix).</td><td>SACO, DILOM</td></tr>
+    <tr><td><strong>Coordenadas</strong></td><td>Posición geográfica directa (decimal o DMS, ver abajo).</td><td>-31.41,-64.18</td></tr>
+  </table>
+  <p>Formatos de <strong>coordenadas</strong> admitidos:</p>
+  <table>
+    <tr><th>Formato</th><th>Ejemplo</th></tr>
+    <tr><td>Decimal <code>lat,lon</code> (signo −&nbsp;= Sur/Oeste)</td><td><code>-31.41,-64.18</code></td></tr>
+    <tr><td>DMS empacado AIP (sufijo N/S/E/W)</td><td><code>312436S 0641048W</code></td></tr>
+    <tr><td>DMS con espacios</td><td><code>31 24 36 S, 64 10 48 W</code></td></tr>
+    <tr><td>DMS con segundos decimales</td><td><code>325755.5S 0640721.2W</code></td></tr>
+  </table>
+  <p>El orden lat/lon es indistinto cuando se usa DMS: se asigna por hemisferio (N/S→latitud, E/W→longitud).</p>
+  <p>Al encontrarlo, la vista se <strong>centra sobre el objetivo sin perder las pistas vivas</strong> y
+  aparece un <strong>anillo de mira cian parpadeante</strong> con la etiqueta del elemento; para aeronaves,
+  además se resalta la pista. El resaltado <strong>se apaga solo a los 15&nbsp;s</strong> (o al iniciar otra
+  búsqueda). Si el elemento no existe o está fuera de cobertura, lo informa.</p>
 
   <h2 class="sec" id="modos">Modos de operación (menú Modo)</h2>
   <table>
@@ -325,9 +354,30 @@
   análisis (se persisten en una base DuckDB de analítica). Las pestañas se detallan a continuación.</p>
 
   <h3>📊 Estadísticas</h3>
-  <p>Constructor configurable de gráficos por combinación <strong>métrica × dimensión × tipo de gráfico</strong>:
-  se elige qué medir (p. ej. conteo de plots/pistas/mensajes), contra qué eje (sensor, FL, categoría, hora, etc.)
-  y el formato (barras, líneas, torta). Útil para perfilar el volumen y la distribución de los datos.</p>
+  <p>Constructor de gráficos orientado a análisis radar, con un selector de <strong>Vista</strong> y de
+  <strong>Sensores</strong> (individual, varios o todos). Ofrece presets de dominio (un clic) y dos modos avanzados.</p>
+  <p><strong>Presets de dominio:</strong></p>
+  <table>
+    <tr><th>Vista</th><th>Qué muestra</th></tr>
+    <tr><td><strong>Cobertura PPI</strong> (rango × azimut)</td><td>Detecciones en polar, centrado en el radar.</td></tr>
+    <tr><td><strong>Cobertura geográfica</strong> (lon × lat)</td><td>Posición real sobre el mapa; funciona para cualquier categoría (incl. ADS-B), sin depender del sensor.</td></tr>
+    <tr><td><strong>Pd vs Azimut</strong></td><td>Probabilidad de detección real por sector (obs/esperado, vía motor PASS), una curva por sensor.</td></tr>
+    <tr><td><strong>Rosa de azimut</strong></td><td>Conteo de detecciones por sector angular.</td></tr>
+    <tr><td><strong>Cobertura vertical</strong> (alt × rango)</td><td>Envolvente vertical; la altitud se deriva del FL cuando no hay Modo C geométrico.</td></tr>
+    <tr><td><strong>Histograma de rango</strong></td><td>Detecciones por anillo de distancia.</td></tr>
+  </table>
+  <p><strong>Modos avanzados:</strong></p>
+  <ul>
+    <li><strong>Métrica × dimensión</strong> — se elige qué medir (Nº detecciones, alcance máx, rango medio/p95,
+    techo y nivel medio en FL, velocidad máx/media, tasa de garbling) contra qué eje (sensor, hora del ToD,
+    Modo&nbsp;A, banda de FL, categoría, callsign, Mode&nbsp;S, garbling) en barras o líneas.</li>
+    <li><strong>Dispersión X / Y</strong> — scatter de dos campos numéricos cualesquiera (rango, azimut, altitud,
+    FL, velocidad, lat/lon, tiempo…), con color por dimensión.</li>
+  </ul>
+  <p class="note">Nota: las vistas polares (PPI, Rosa, Pd vs Azimut, vertical) requieren coordenadas de radar.
+  Para datos <strong>ADS-B (CAT&nbsp;21)</strong>, que traen posición GPS, el rango/azimut se derivan respecto a la
+  estación receptora <em>si su posición está configurada en los sensores</em>; si no, usar la <strong>Cobertura
+  geográfica</strong>, que siempre tiene datos.</p>
 
   <h3>✅ PASS / SASS-C</h3>
   <p>Análisis de desempeño de la vigilancia al estilo EUROCONTROL <strong>SASS-C/PASS</strong>, calculado sobre los

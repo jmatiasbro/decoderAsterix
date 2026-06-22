@@ -939,6 +939,8 @@ class MainWindow(QMainWindow):
             lambda v: self.panel_sensores.setVisible(v) or (self.panel_sensores.raise_() if v else None))
         menu_ver.addSeparator()
         self.act_analizador_paquetes = menu_ver.addAction("Analizador de Paquetes…", self._abrir_analizador_paquetes)
+        self.act_finder = menu_ver.addAction("Finder Táctico…", self._abrir_finder)
+        self.act_finder.setShortcut("Ctrl+F")
         menu_ver.addSeparator()
         self.act_toggle_incumbencia = menu_ver.addAction("Vista de Incumbencia (Jurisdicción)")
         self.act_toggle_incumbencia.setCheckable(True)
@@ -1399,6 +1401,17 @@ class MainWindow(QMainWindow):
         self._msgs_dialog.show()
         self._msgs_dialog.raise_()
         self._msgs_dialog.activateWindow()
+
+    def _abrir_finder(self):
+        from player.radar_finder_dialog import RadarFinderDialog
+        if getattr(self, "_finder_dialog", None) is None:
+            self._finder_dialog = RadarFinderDialog(self.radar, self)
+            self._finder_dialog.target_located.connect(self.radar.localizar_objetivo_finder)
+        self._finder_dialog.show()
+        self._finder_dialog.raise_()
+        self._finder_dialog.activateWindow()
+        self._finder_dialog.txt_search.setFocus()
+        self._finder_dialog.txt_search.selectAll()
 
     def _actualizar_hud(self, perfil_data: dict):
         """Refresca los campos del HUD desde el perfil operativo."""

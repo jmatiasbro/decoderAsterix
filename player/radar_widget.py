@@ -825,6 +825,13 @@ class RadarWidget(_RadarBase):
         self.blink_timer.timeout.connect(self._toggle_blink)
         self.blink_timer.start(500)  # Parpadeo cada 500ms
 
+        # Finder táctico: marcador de mira sobre el objetivo localizado (lat/lon),
+        # con auto-apagado a los 15 s (se reinicia en cada nueva búsqueda).
+        self._finder_mark = None
+        self._finder_timer = QTimer(self)
+        self._finder_timer.setSingleShot(True)
+        self._finder_timer.timeout.connect(self._limpiar_finder)
+
         # Throttle de repintados: el paint redibuja toda la escena (~40 ms) y los
         # caminos calientes (ingesta de plots, tick a 20 Hz) pedían update() más
         # rápido de lo que el paint puede completar, saturando el hilo de UI con
@@ -1386,6 +1393,27 @@ class RadarWidget(_RadarBase):
         # 4) Forzar actualización visual
         self.update()
         print(f"[GEODESIA] Vista centrada en Lat: {target_lat:.5f}, Lon: {target_lon:.5f}")
+
+    def localizar_objetivo_finder(self, lat: float, lon: float,
+                                   tipo: str, ident: str):
+        """Slot del Finder: centra la vista (sin destruir tracks) y arma el anillo
+        de mira parpadeante. Para aeronaves reusa el resaltado por filtro existente."""
+        self.centrar_en_coordenadas(lat, lon)          # NO destructivo (preserva tracks)
+        self._finder_mark = {"lat": lat, "lon": lon, "label": ident}
+        if tipo == "AIRCRAFT" and ident:
+            # set_highlight_filter es por-track (RadarPlot): se aplica a las pistas
+            # vivas para que solo la coincidente (callsign/squawk) quede resaltada.
+            for t in self.tracks.values():
+                t.set_highlight_filter(ident)
+        self._finder_timer.start(15000)   # auto-apagado a los 15 s
+        self.update()
+
+    def _limpiar_finder(self):
+        """Apaga el marcador del Finder y el resaltado de pistas (timeout o nueva búsqueda)."""
+        self._finder_mark = None
+        for t in self.tracks.values():
+            t.set_highlight_filter("")
+        self.update()
 
     def configurar_vista_perfil(self, lat: float, lon: float):
         """
@@ -4180,11 +4208,44 @@ class RadarWidget(_RadarBase):
                 except Exception:
                     pass
 
+            # Finder táctico: anillo de mira sobre el objetivo localizado (encima de
+            # todo, parpadeante con blink_flag). En coords de pantalla vía proy.
+            if self._finder_mark is not None and self.blink_flag \
+                    and getattr(self, 'proy', None) is not None and self.proy.activo:
+                try:
+                    self._draw_finder_mark(painter)
+                except Exception:
+                    pass
+
         except Exception as e:
             print(f"[RadarWidget] Error en paintEvent: {e}")
             painter.restore()
         finally:
             painter.end()
+
+    def _draw_finder_mark(self, painter):
+        """Doble anillo concéntrico cian flúor + etiqueta sobre el objetivo del Finder."""
+        m = self._finder_mark
+        wx, wy = self.proy.latlon_to_xy(m["lat"], m["lon"])
+        p = self._world_to_screen(wx, wy)
+        if p is None:
+            return
+        painter.save()
+        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        cian = QColor("#00FFFF")
+        pen = QPen(cian)
+        pen.setWidthF(0.8)                 # trazo fino
+        painter.setPen(pen)
+        painter.drawEllipse(p, 11.0, 11.0)
+        painter.drawEllipse(p, 18.0, 18.0)
+        # Marcas de mira: 4 ticks cortos (N/S/E/O), no una cruz completa
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            painter.drawLine(QPointF(p.x() + dx * 11, p.y() + dy * 11),
+                             QPointF(p.x() + dx * 18, p.y() + dy * 18))
+        # Etiqueta
+        painter.setFont(QFont("Consolas", 8, QFont.Weight.Bold))
+        painter.drawText(QPointF(p.x() + 22, p.y() - 20), f"◎ {m['label']}")
+        painter.restore()
 
     def _draw_compass_rose(self, painter):
         """Rosa de rumbos sobre el anillo de área de control (centrada en el
