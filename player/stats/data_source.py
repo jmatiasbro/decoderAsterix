@@ -54,7 +54,10 @@ class SessionSource(DataSource):
             "raw_azimuth": r.get("raw_azimuth"),
             "category": r.get("category"),
             "callsign": r.get("callsign"),
-            "mode_s": r.get("mode_s") or r.get("track_id") or r.get("target_address"),
+            # SOLO la dirección Mode S real (24 bits). El fallback a track_id metía
+            # el squawk (Mode 3/A) cuando no había dirección — la dimensión "Mode S"
+            # mostraba códigos SSR octales en vez de aircraft addresses.
+            "mode_s": r.get("mode_s") or r.get("target_address"),
             "altitude_ft": r.get("altitude_ft"),
             "ground_speed": r.get("ground_speed"),
             "track_angle": r.get("track_angle"),
@@ -107,7 +110,7 @@ class DuckDBSource(DataSource):
             where.append("timestamp <= ?"); params.append(t_max)
         clause = (" WHERE " + " AND ".join(where)) if where else ""
         sql = ("SELECT sac_sic, timestamp, lat, lon, flight_level, mode3a, "
-               "raw_range, raw_azimuth, category, callsign, COALESCE(NULLIF(mode_s, ''), track_id) AS mode_s, altitude_ft, "
+               "raw_range, raw_azimuth, category, callsign, NULLIF(mode_s, '') AS mode_s, altitude_ft, "
                "ground_speed, track_angle, vertical_rate, garbled, frequency, pd FROM asterix_plots" + clause)
         return self._query(sql, params)
 

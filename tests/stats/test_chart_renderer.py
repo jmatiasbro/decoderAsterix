@@ -5,10 +5,12 @@ from matplotlib.figure import Figure
 from player.stats.chart_renderer import render, CHART_TYPES
 
 DATA = [("25/01", 12.0), ("07/10", 8.0), ("MTR", 5.0)]
+SERIES = [("25/01", [(10.0, 1.0), (20.0, 2.0)]), ("07/10", [(15.0, 3.0)])]
 
-def test_chart_types_v1():
-    assert {"bar", "line", "pie", "box", "stacked100",
-            "heatmap_hourday", "spider"}.issubset(set(CHART_TYPES))
+
+def test_chart_types_v2():
+    assert set(CHART_TYPES) == {"bar", "line", "curves", "scatter", "ppi", "rose"}
+
 
 def test_render_bar_draws_axes():
     fig = Figure()
@@ -17,34 +19,39 @@ def test_render_bar_draws_axes():
     assert len(ax.patches) == 3            # 3 barras
     assert ax.get_title() == "t"
 
-def test_render_line_and_pie_no_error():
-    for ct in ("line", "pie"):
-        fig = Figure()
-        render(fig, DATA, ct)
-        assert fig.axes                     # algo dibujado
+
+def test_render_line_no_error():
+    fig = Figure()
+    render(fig, DATA, "line")
+    assert fig.axes
+
 
 def test_render_unknown_type_raises():
     import pytest
     with pytest.raises(ValueError):
         render(Figure(), DATA, "nope")
 
-def test_render_box():
+
+def test_render_curves_multiserie():
     fig = Figure()
-    render(fig, [("25/01", [1.0, 2.0, 3.0]), ("07/10", [2.0, 4.0])], "box")
+    render(fig, SERIES, "curves", xlabel="Rango", ylabel="Pd")
+    assert len(fig.axes[0].lines) == 2     # una curva por serie
+
+
+def test_render_scatter():
+    fig = Figure()
+    render(fig, SERIES, "scatter")
     assert fig.axes
 
-def test_render_stacked100():
-    fig = Figure()
-    render(fig, [("25/01", 12.0), ("07/10", 8.0)], "stacked100")
-    assert fig.axes
 
-def test_render_spider():
+def test_render_ppi_polar():
     fig = Figure()
-    render(fig, [("Pd", 0.9), ("RMS", 0.7), ("Disp", 0.8)], "spider")
-    assert fig.axes
+    render(fig, SERIES, "ppi", title="PPI")
+    assert fig.axes[0].name == "polar"
 
-def test_render_heatmap_hourday():
+
+def test_render_rose_polar():
     fig = Figure()
-    data = [("00:00", "Lun", 5.0), ("01:00", "Lun", 3.0), ("00:00", "Mar", 1.0)]
-    render(fig, data, "heatmap_hourday")
-    assert fig.axes
+    render(fig, [("", [(5.0, 3.0), (15.0, 7.0)])], "rose")
+    assert fig.axes[0].name == "polar"
+    assert fig.axes[0].patches      # barras dibujadas

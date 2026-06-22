@@ -141,7 +141,10 @@ class CentroTecnicoWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
-        self.stats_tab = StatsWidget(self.source_provider)
+        self.stats_tab = StatsWidget(
+            self.source_provider,
+            sensores_provider=lambda: getattr(self.parent(), "sensores", {}) or {},
+            rpms_provider=lambda: self._sensor_rpms or {})
         self.coverage_tab = CoverageWidget(self.source_provider, db_path=db_path,
                                            repo_db_provider=lambda: self._repo_db)
         self.tabs.addTab(self.stats_tab, "📊 Estadísticas")

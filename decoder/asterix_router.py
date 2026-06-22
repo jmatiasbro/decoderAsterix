@@ -206,6 +206,12 @@ class AsterixRouter:
                     if rho is not None and theta is not None:
                         plot['rho_render'] = rho
                         plot['theta_render'] = theta
+                        # Canónicos para análisis (PASS/estadísticas): el decode
+                        # nativo sólo dejaba las polares en *_render, perdiéndolas
+                        # al construir el AsterixPlot. setdefault no pisa lo que ya
+                        # haya puesto un decoder Python (cat048/cat001).
+                        plot.setdefault('raw_range', rho)
+                        plot.setdefault('raw_azimuth', theta)
 
                     # Bytes crudos del bloque ASTERIX (CAT + LEN + registros) para el
                     # inspector de bajo nivel. Es el bloque completo: si trae varios
