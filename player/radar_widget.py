@@ -424,8 +424,11 @@ class RadarPlot:
     def highlighted(self) -> bool:
         if not self._highlight_filter:
             return False
-        return (self._highlight_filter in self.mode3a or
-                self._highlight_filter.lower() in self.callsign.lower())
+        # None-safe: pistas solo-squawk (callsign None) o sin Modo A (mode3a None)
+        # antes lanzaban y se omitía su dibujo cuando había un filtro activo.
+        f = self._highlight_filter
+        return (f in (self.mode3a or "") or
+                f.lower() in (self.callsign or "").lower())
 
     def illuminate(self):
         self.is_illuminated = True
@@ -1398,7 +1401,20 @@ class RadarWidget(_RadarBase):
                                    tipo: str, ident: str):
         """Slot del Finder: centra la vista (sin destruir tracks) y arma el anillo
         de mira parpadeante. Para aeronaves reusa el resaltado por filtro existente."""
-        self.centrar_en_coordenadas(lat, lon)          # NO destructivo (preserva tracks)
+        # Centrar PANEANDO (pan_x/pan_y), sin mover el origen de proyección: así no se
+        # reproyecta nada (la reproyección con lat vs lat_render hacía saltar las pistas
+        # y dejaba rastros, p. ej. en CAT62 en vivo). Si no hay proyección activa, se
+        # cae al recentrado geográfico clásico.
+        proy = getattr(self, 'proy', None)
+        if proy is not None and proy.activo:
+            try:
+                tx, ty = proy.latlon_to_xy(lat, lon)
+                self.pan_x = -tx * self.zoom_factor
+                self.pan_y = ty * self.zoom_factor
+            except Exception:
+                self.centrar_en_coordenadas(lat, lon)
+        else:
+            self.centrar_en_coordenadas(lat, lon)
         self._finder_mark = {"lat": lat, "lon": lon, "label": ident}
         if tipo == "AIRCRAFT" and ident:
             # set_highlight_filter es por-track (RadarPlot): se aplica a las pistas
