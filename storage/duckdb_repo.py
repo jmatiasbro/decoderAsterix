@@ -219,8 +219,10 @@ class DuckDBRepository:
                     fl_val = plot.get('flight_level')
                     fl_str = '---' if fl_val is None else str(fl_val)
 
-                    az_val = plot.get('raw_azimuth') or 0.0
-                    rg_val = plot.get('raw_range') or 0.0
+                    az_raw = plot.get('raw_azimuth')
+                    rg_raw = plot.get('raw_range')
+                    az_val = None if az_raw is None else float(az_raw)
+                    rg_val = None if rg_raw is None else float(rg_raw)
 
                     tn_raw = plot.get('track_number')
                     track_number_val = int(tn_raw) if tn_raw is not None else None
@@ -240,7 +242,10 @@ class DuckDBRepository:
                     garbled_val = bool(plot.get('garbled', False))
                     freq_raw = plot.get('frequency')
                     freq_val = float(freq_raw) if freq_raw is not None else None
-                    pd_val = float(plot.get('pd', 100.0))
+                    # Pd NO es un valor por-plot: el cálculo real (obs/esperado) vive
+                    # en el motor PASS. Ausente => NULL, no un 100 ficticio.
+                    pd_raw = plot.get('pd')
+                    pd_val = None if pd_raw is None else float(pd_raw)
 
                     w.writerow([
                         float(time_val),
@@ -253,8 +258,8 @@ class DuckDBRepository:
                         float(lat_val),
                         float(lon_val),
                         fl_str,
-                        float(az_val),
-                        float(rg_val),
+                        az_val,
+                        rg_val,
                         track_number_val,
                         mode_s_val,
                         None if alt_ft_val is None else float(alt_ft_val),
@@ -383,8 +388,10 @@ class DuckDBRepository:
                 fl_val = plot.get('flight_level')
                 fl_str = '---' if fl_val is None else str(fl_val)
 
-                az_val = plot.get('raw_azimuth') or 0.0
-                rg_val = plot.get('raw_range') or 0.0
+                az_raw = plot.get('raw_azimuth')
+                rg_raw = plot.get('raw_range')
+                az_val = None if az_raw is None else float(az_raw)
+                rg_val = None if rg_raw is None else float(rg_raw)
 
                 # Campos específicos por categoría (se guardan crudos; None => NULL/blanco)
                 tn_raw = plot.get('track_number')
@@ -401,7 +408,8 @@ class DuckDBRepository:
                 garbled_val = bool(plot.get('garbled', False))
                 freq_raw = plot.get('frequency')
                 freq_val = float(freq_raw) if freq_raw is not None else None
-                pd_val = float(plot.get('pd', 100.0))
+                pd_raw = plot.get('pd')
+                pd_val = None if pd_raw is None else float(pd_raw)
 
                 lote.append((
                     float(time_val),
@@ -414,8 +422,8 @@ class DuckDBRepository:
                     float(lat_val),
                     float(lon_val),
                     fl_str,
-                    float(az_val),
-                    float(rg_val),
+                    az_val,
+                    rg_val,
                     track_number_val,
                     mode_s_val,
                     None if alt_ft_val is None else float(alt_ft_val),

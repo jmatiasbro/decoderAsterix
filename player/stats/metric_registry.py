@@ -20,20 +20,26 @@ class Metric:
 ALL_DIMS = ("radar", "hour", "mode3a", "fl_band", "category", "callsign", "mode_s", "garbled")
 
 
-# Métricas agregables (sobre columnas numéricas). Se quitaron las antiguas
-# no-agregables (lat/lon/mode_s/callsign/sac_sic/mode3a como "métrica"): eran
-# dimensiones, no magnitudes a promediar.
+# Métricas agregables. Criterio: que la magnitud sea real y la columna esté
+# poblada con datos monoradar.
+#   - Se eliminó "Azimut medio": el azimut es CIRCULAR, su media aritmética no
+#     tiene sentido (promediar 350° y 10° da 180°). El azimut es coordenada, no
+#     magnitud — para verlo usar Rosa de azimut / PPI.
+#   - Se eliminó "Pd medio": el Pd no es un valor por-plot (ver pestaña PASS y el
+#     preset "Pd vs Azimut", que lo computan obs/esperado).
+#   - Vertical = flight_level (siempre poblado en CAT048/001 vía Mode C); se quitó
+#     altitude_ft, que sólo se llena con altitud geométrica y suele venir NULL.
+#   - No todo es promedio: count, máximos (alcance/techo/velocidad), p95 y tasa.
 METRICS = [
-    Metric("count",         "Nº detecciones",       "",            "count", ALL_DIMS),
-    Metric("avg_range",     "Rango medio (NM)",     "raw_range",   "avg",   ALL_DIMS),
-    Metric("p95_range",     "Rango p95 (NM)",       "raw_range",   "p95",   ALL_DIMS),
-    Metric("avg_azimuth",   "Azimut medio (°)",     "raw_azimuth", "avg",   ALL_DIMS),
-    Metric("avg_altitude",  "Altitud media (ft)",   "altitude_ft", "avg",   ALL_DIMS),
-    Metric("p95_altitude",  "Altitud p95 (ft)",     "altitude_ft", "p95",   ALL_DIMS),
-    Metric("avg_fl",        "Nivel medio (FL)",     "flight_level","avg",   ALL_DIMS),
-    Metric("avg_gs",        "Velocidad media (kt)", "ground_speed","avg",   ALL_DIMS),
-    Metric("avg_pd",        "Pd medio (%)",         "pd",          "avg",   ALL_DIMS),
-    Metric("garbled_rate",  "Tasa de garbling",     "garbled",     "avg",   ALL_DIMS),
+    Metric("count",         "Nº detecciones",        "",            "count", ALL_DIMS),
+    Metric("max_range",     "Alcance máx (NM)",      "raw_range",   "max",   ALL_DIMS),
+    Metric("avg_range",     "Rango medio (NM)",      "raw_range",   "avg",   ALL_DIMS),
+    Metric("p95_range",     "Rango p95 (NM)",        "raw_range",   "p95",   ALL_DIMS),
+    Metric("max_fl",        "Techo (FL)",            "flight_level","max",   ALL_DIMS),
+    Metric("avg_fl",        "Nivel medio (FL)",      "flight_level","avg",   ALL_DIMS),
+    Metric("max_gs",        "Velocidad máx (kt)",    "ground_speed","max",   ALL_DIMS),
+    Metric("avg_gs",        "Velocidad media (kt)",  "ground_speed","avg",   ALL_DIMS),
+    Metric("garbled_rate",  "Tasa de garbling (%)",  "garbled",     "rate",  ALL_DIMS),
 ]
 
 
@@ -95,8 +101,12 @@ def aggregate(rows, metric, dimension):
                 continue
             if metric.agg == "avg":
                 v = float(np.mean(vals))
+            elif metric.agg == "max":
+                v = float(np.max(vals))
             elif metric.agg == "p95":
                 v = float(np.percentile(vals, 95))
+            elif metric.agg == "rate":      # fracción de True → porcentaje
+                v = float(np.mean(vals)) * 100.0
             else:
                 raise ValueError(metric.agg)
         out.append((k, v))
