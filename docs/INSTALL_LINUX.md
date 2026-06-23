@@ -16,16 +16,19 @@ sistema para el plugin de plataforma (xcb) y OpenGL. En Debian/Ubuntu:
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-venv python3-pip \
-    libgl1 libegl1 libxkbcommon0 libxcb-cursor0 \
+    libgl1 libegl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \
     libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
     libxcb-render-util0 libxcb-shape0 libdbus-1-3
 ```
+
+> `libxkbcommon-x11-0` es **imprescindible**: sin ella el plugin Qt `xcb` no carga.
+> La app se ejecuta bajo **xcb** (X11/XWayland), no Wayland nativo (ver nota en §4).
 
 En Fedora/RHEL:
 
 ```bash
 sudo dnf install -y python3 python3-pip \
-    mesa-libGL libxkbcommon xcb-util-cursor dbus-libs
+    mesa-libGL libxkbcommon libxkbcommon-x11 xcb-util-cursor dbus-libs
 ```
 
 No se necesita `libpcap`: los archivos PCAP se parsean con `dpkt` (puro Python) y la
@@ -57,6 +60,12 @@ python main.py
 
 ## 4. Notas de portabilidad
 
+- **Wayland vs X11 (importante):** la app usa `QT_QPA_PLATFORM=xcb` (lo fija
+  `run_linux.sh`). Bajo **Wayland nativo** las ventanas flotantes de alertas
+  (MSAW/APW) aparecen centradas sobre el mapa y **no se pueden mover**, porque
+  Wayland no permite a las apps posicionar/mover sus propias ventanas. Con `xcb`
+  (X11 directo o XWayland) se posicionan y arrastran normalmente. Si forzás
+  `QT_QPA_PLATFORM=wayland`, perdés esa capacidad.
 - **Fuentes:** la UI pide `Consolas` (fuente de Windows). En Linux Qt la sustituye
   automáticamente por una monospace del sistema; se ve distinto pero funciona. Para que
   se parezca más, instalá una monospace común: `sudo apt install fonts-dejavu`.
