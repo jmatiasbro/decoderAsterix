@@ -1,23 +1,22 @@
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QListWidget, QLabel, QListWidgetItem
-from PyQt6.QtCore import Qt, QPoint
+from PyQt6.QtWidgets import QVBoxLayout, QListWidget, QLabel, QListWidgetItem
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QBrush
 
-class STCADialog(QDialog):
+from player.alert_panel import AlertOverlayPanel
+
+
+class STCADialog(AlertOverlayPanel):
+    DEFAULT_POS = (15, 15)
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("⚠️ STCA")
-        # Ventana de herramienta sin bordes. Sin WindowStaysOnTopHint: flota sobre
-        # la app (Tool con parent) pero no sobre otras aplicaciones del escritorio.
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        
         # Tamaño fijo mucho más fino y compacto para el panel táctico
         self.setFixedSize(280, 110)
-        
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(3)
-        
+
         self.lbl_titulo = QLabel("⚠️ Short-Term Conflict Alert (STCA)")
         self.lbl_titulo.setStyleSheet("""
             color: #FFFFFF;
@@ -32,10 +31,6 @@ class STCADialog(QDialog):
         """)
         self.lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.lbl_titulo)
-
-        self._drag_pos = None
-        self._user_moved = False
-        self._radar_ref = None
 
         self.lista_alertas = QListWidget()
         self.lista_alertas.itemClicked.connect(self._on_item_clicked)
@@ -82,31 +77,12 @@ class STCADialog(QDialog):
             self.lista_alertas.addItem(item)
 
         if not self.isVisible():
-            if self.parent() and not self._user_moved:
-                parent = self.parent()
-                # Posicionar en la esquina superior izquierda del widget del radar
-                pos = parent.mapToGlobal(parent.rect().topLeft())
-                self.move(pos.x() + 15, pos.y() + 15)
-            self.show()
+            self._mostrar_overlay()
 
     def _on_item_clicked(self, item):
         par = item.data(Qt.ItemDataRole.UserRole)
         if par and self._radar_ref is not None:
             self._radar_ref.resaltar_tracks_alerta(list(par))
-
-    def mousePressEvent(self, e):
-        if e.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            e.accept()
-
-    def mouseMoveEvent(self, e):
-        if self._drag_pos is not None and (e.buttons() & Qt.MouseButton.LeftButton):
-            self.move(e.globalPosition().toPoint() - self._drag_pos)
-            self._user_moved = True
-            e.accept()
-
-    def mouseReleaseEvent(self, e):
-        self._drag_pos = None
 
     def limpiar(self):
         self.lista_alertas.clear()
