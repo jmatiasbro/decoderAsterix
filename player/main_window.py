@@ -4751,6 +4751,16 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self._limpiar_worker()
         shutil.rmtree(self.cache_dir, ignore_errors=True)
+        # Cerrar las ventanas flotantes (Qt.Tool: paneles MSAW/APW, finder, reloj,
+        # panel de sensores, vista FIR…). Si no, quedan visibles y mantienen vivo el
+        # proceso al cerrar la principal (se ve sobre todo en Linux/X11).
+        from PyQt6.QtWidgets import QApplication
+        for w in QApplication.topLevelWidgets():
+            if w is not self:
+                try:
+                    w.close()
+                except Exception:
+                    pass
         event.accept()
 
 if __name__ == '__main__':
