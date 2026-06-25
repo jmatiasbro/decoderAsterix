@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ayuda — ASTERIX Radar Decoder</title>
+<style>
+  :root{
+    --bg:#0B0E14; --panel:#121824; --txt:#E0E6ED; --muted:#6B7A8D;
+    --cyan:#00E5FF; --green:#39FF14; --amber:#FFB040; --red:#FF3B3B; --gold:#FFD700;
+    --border:rgba(0,229,255,.25);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;font-size:15px}
+  .wrap{display:flex;max-width:1200px;margin:0 auto}
+  nav{position:sticky;top:0;align-self:flex-start;width:250px;padding:24px 16px;height:100vh;overflow:auto;
+      border-right:1px solid var(--border)}
+  nav h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:18px 0 6px}
+  nav a{display:block;color:var(--txt);text-decoration:none;padding:4px 8px;border-radius:6px;font-size:14px}
+  nav a:hover{background:rgba(0,229,255,.08);color:var(--cyan)}
+  main{flex:1;padding:32px 40px;min-width:0}
+  h1{color:var(--cyan);font-size:28px;margin-top:0}
+  h2.sec{color:var(--cyan);border-bottom:1px solid var(--border);padding-bottom:6px;margin-top:40px}
+  h3{color:var(--green);margin-top:26px}
+  code{background:var(--panel);padding:2px 6px;border-radius:4px;color:var(--gold);font-size:13px}
+  table{width:100%;border-collapse:collapse;margin:14px 0}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel);color:var(--cyan);font-size:13px;text-transform:uppercase;letter-spacing:.5px}
+  .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:bold}
+  .kbd{display:inline-block;padding:1px 6px;border-radius:4px;border:1px solid #2d456e;background:#101724;font-family:Consolas,monospace;font-size:12px}
+  .ctrl{background:rgba(0,229,255,.15);color:var(--cyan)}
+  .tec{background:rgba(57,255,20,.15);color:var(--green)}
+  .note{background:var(--panel);border-left:3px solid var(--cyan);padding:10px 14px;border-radius:0 6px 6px 0;margin:14px 0}
+  .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  footer{color:var(--muted);font-size:12px;margin-top:50px;border-top:1px solid var(--border);padding-top:16px}
+  ul{padding-left:22px}
+  figure{margin:18px 0;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto}
+  figure svg{display:block;max-width:100%}
+  figure img{display:block;max-width:100%;border-radius:6px}
+  figcaption{color:var(--muted);font-size:13px;margin-top:10px;text-align:center}
+  .shot{border:1px dashed var(--border);border-radius:6px;min-height:120px;display:flex;
+        align-items:center;justify-content:center;color:var(--muted);font-size:13px;padding:18px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <strong style="color:var(--cyan)">📡 Ayuda</strong>
+  <h2>Contenido</h2>
+  <a href="#intro">Introducción</a>
+  <a href="#roles">Roles operativos</a>
+  <a href="#hud">Barra superior (HUD)</a>
+  <a href="#lateral">Barra lateral</a>
+  <a href="#menus">Menús</a>
+  <a href="#finder">Finder táctico</a>
+  <a href="#modos">Modos de operación</a>
+  <a href="#filtros">Filtros avanzados</a>
+  <a href="#mapas">Mapas y capas VFR</a>
+  <a href="#areas">Áreas y referencias</a>
+  <a href="#safety">Redes de seguridad</a>
+  <a href="#exportar">Exportación</a>
+  <a href="#suite">Suite técnica (ATSEP)</a>
+  <a href="#simbologia">Simbología y etiquetas</a>
+  <a href="#fuentes">Fuentes de datos</a>
+  <a href="#acronimos">Acrónimos</a>
+  <a href="#faq">Preguntas frecuentes</a>
+</nav>
+<main>
+  <h1>ASTERIX Radar Decoder — Guía de funcionamiento</h1>
+  <p>Herramienta de vigilancia de tránsito aéreo: decodifica datos <strong>ASTERIX</strong>
+  (EUROCONTROL), convierte coordenadas a WGS-84 y muestra los tracks en un indicador
+  panorámico (PPI) en tiempo real, con redes de seguridad, fusión multi-radar y vista
+  EUROCONTROL ODS.</p>
+  <p>Etiquetas usadas en esta guía:
+  <span class="pill ctrl">Controlador</span> función disponible en rol controlador ·
+  <span class="pill tec">Técnico</span> función disponible en rol técnico.</p>
+
+  <h2 class="sec" id="intro">Introducción</h2>
+  <p>La aplicación trabaja en dos modos de alimentación de datos:</p>
+  <ul>
+    <li><strong>En vivo (UDP):</strong> recibe ASTERIX por red, puerto por defecto
+      <code>20000</code> (un socket por puerto permite varios sensores). Es el modo del controlador.</li>
+    <li><strong>Playback (PCAP):</strong> reproduce una captura grabada para análisis. Exclusivo del técnico.</li>
+  </ul>
+
+  <h2 class="sec" id="roles">Roles operativos</h2>
+  <p>El rol se define en el perfil (<em>Configuración → Perfil Operativo</em>) y se cambia rápido
+  en <em>Configuración → Rol Operativo</em>.</p>
+  <table>
+    <tr><th>Aspecto</th><th>Controlador</th><th>Técnico</th></tr>
+    <tr><td>Alimentación</td><td>En vivo (UDP)</td><td>Playback (PCAP) y en vivo</td></tr>
+    <tr><td>Vista</td><td>ODS limpia, centrada en el área de control</td><td>Diagnóstico completo</td></tr>
+    <tr><td>Barra lateral</td><td>Oculta por defecto</td><td>Visible</td></tr>
+    <tr><td>QNH</td><td>Editable (barra superior)</td><td>Solo lectura</td></tr>
+    <tr><td>Menú Exportar</td><td>Deshabilitado</td><td>Habilitado</td></tr>
+    <tr><td>Panel de Sensores / Reloj UTC del HUD</td><td>Ocultos</td><td>Visibles</td></tr>
+    <tr><td>Centro Técnico ATSEP / Calibración</td><td>No</td><td>Sí</td></tr>
+  </table>
+  <div class="note">Al pasar a <strong>controlador</strong> se aplican por defecto: barra lateral oculta,
+  5 históricos, modo integrado activo, menú Exportar deshabilitado, panel de sensores y reloj UTC del HUD
+  ocultos. El reloj <em>flotante</em> UTC se mantiene siempre.</div>
+
+  <h2 class="sec" id="hud">Barra superior (HUD)</h2>
+  <p>Siempre visible. Muestra el estado operativo:</p>
+
+  <figure>
+    <svg viewBox="0 0 980 54" xmlns="http://www.w3.org/2000/svg" font-family="Consolas,monospace" font-size="13">
+      <rect x="0" y="0" width="980" height="54" fill="#0E1420" stroke="rgba(0,229,255,.35)"/>
+      <text x="14" y="26" fill="#6B7A8D" font-weight="bold">OP</text>
+      <text x="40" y="26" fill="#00E5FF" font-weight="bold">M. BRO (CONTROLADOR)</text>
+      <text x="14" y="44" fill="#6B7A8D" font-weight="bold">APT</text>
+      <text x="48" y="44" fill="#00E5FF" font-weight="bold">SACO</text>
+      <line x1="220" y1="8" x2="220" y2="46" stroke="rgba(0,229,255,.25)"/>
+      <text x="234" y="26" fill="#6B7A8D" font-weight="bold">TWR/GND/APP</text>
+      <text x="234" y="44" fill="#FFD700" font-weight="bold">118.5 / 121.9 / 124.7</text>
+      <line x1="430" y1="8" x2="430" y2="46" stroke="rgba(0,229,255,.25)"/>
+      <text x="444" y="34" fill="#6B7A8D" font-weight="bold">QNH</text>
+      <rect x="482" y="18" width="92" height="22" rx="4" fill="#121824" stroke="#4B5263"/>
+      <text x="492" y="34" fill="#39FF14" font-weight="bold">1013 hPa ▾</text>
+      <line x1="592" y1="8" x2="592" y2="46" stroke="rgba(0,229,255,.25)"/>
+      <text x="606" y="34" fill="#6B7A8D" font-weight="bold">TL</text>
+      <text x="634" y="34" fill="#39FF14" font-weight="bold">FL055</text>
+      <rect x="700" y="16" width="116" height="24" rx="4" fill="#121824" stroke="#00E5FF"/>
+      <text x="714" y="33" fill="#00E5FF" font-weight="bold">⌖ Centrar Mapa</text>
+      <text x="892" y="26" fill="#6B7A8D" font-weight="bold">UTC</text>
+      <text x="892" y="44" fill="#39FF14" font-weight="bold">14:32:07</text>
+    </svg>
+    <figcaption>Diagrama de la barra superior (rol controlador): QNH editable, TL dinámico y botón Centrar Mapa.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="img/hud.png" alt="Captura de la barra HUD"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="shot" style="display:none">Captura real opcional — pegá la imagen en <code>docs/ayuda/img/hud.png</code></div>
+    <figcaption>Captura real de la barra superior.</figcaption>
+  </figure>
+
+  <table>
+    <tr><th>Campo</th><th>Significado</th></tr>
+    <tr><td><strong>OP</strong></td><td>Usuario y rol activo.</td></tr>
+    <tr><td><strong>APT</strong></td><td>Aeropuerto de trabajo del perfil.</td></tr>
+    <tr><td><strong>TWR/GND/APP</strong></td><td>Frecuencias de sector configuradas.</td></tr>
+    <tr><td><strong>QNH</strong></td><td>Presión de referencia. <span class="pill ctrl">Controlador</span>
+      editable; recalcula el TL en caliente. En técnico es solo lectura.</td></tr>
+    <tr><td><strong>TL</strong></td><td>Nivel de Transición dinámico (tabla AIP ENR 1.7), varía según el QNH.</td></tr>
+    <tr><td><strong>Centrar Mapa</strong></td><td><span class="pill ctrl">Controlador</span> recentra la vista
+      en el área de control (en técnico este botón vive en la barra lateral).</td></tr>
+    <tr><td><strong>UTC</strong></td><td>Hora UTC. En el rol controlador este campo se oculta (queda el reloj flotante).</td></tr>
+  </table>
+
+  <h2 class="sec" id="lateral">Barra lateral (Controles y Filtros)</h2>
+  <p><span class="pill tec">Técnico</span> Panel acoplable a la derecha. Se muestra/oculta desde
+  <em>Ver → Panel Lateral de Controles</em>.</p>
+  <ul>
+    <li><strong>Carga rápida:</strong> abrir un PCAP (Modo Playback) y botón <em>Centrar Mapa</em>.</li>
+    <li><strong>Proyección:</strong> sensor sobre el que se centra/proyecta la vista (autocentrado por defecto).</li>
+    <li><strong>Históricos:</strong> cantidad de posiciones previas (estela) a mostrar por track.</li>
+    <li><strong>Toggles tácticos:</strong> Barrido Radar, Cono de Silencio, Modo Integrado (MRT),
+      Obstáculos MTR, Ver Plots Crudos (sin filtros) y Ocultar Parrot (Sqwk 0000).</li>
+  </ul>
+  <div class="note"><strong>Modo Integrado (MRT):</strong> fusiona los reportes de todos los sensores en
+  un único track por aeronave. Desactivado, se ve el dato crudo por sensor.</div>
+
+  <figure>
+    <img src="img/lateral.png" alt="Captura de la barra lateral"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="shot" style="display:none">Captura real opcional — pegá la imagen en <code>docs/ayuda/img/lateral.png</code></div>
+    <figcaption>Barra lateral con carga rápida, proyección, históricos y toggles tácticos.</figcaption>
+  </figure>
+
+
+  <h2 class="sec" id="menus">Menús</h2>
+  <table>
+    <tr><th>Menú</th><th>Contenido principal</th></tr>
+    <tr><td><strong>Archivo</strong></td><td>Ver Log de Alertas STCA, Log de Eventos, Salir.</td></tr>
+    <tr><td><strong>Exportar</strong> <span class="pill tec">Técnico</span></td>
+        <td>Trayectorias y reproducción animada a Google Earth (KMZ), cobertura real (KMZ),
+            heatmap a QGIS (CSV), datos a Power BI (Parquet).</td></tr>
+    <tr><td><strong>Ver</strong></td><td>Panel lateral, vector velocidad, reloj UTC flotante,
+        panel de sensores flotante, diagnóstico ATSEP, Analizador de Paquetes y
+        <strong>Finder Táctico…</strong> (<span class="kbd">Ctrl+F</span>, ver abajo).</td></tr>
+    <tr><td><strong>Configuración</strong></td><td>Perfil Operativo / Jurisdicción, Cambiar Perfil,
+        Rol Operativo, Centro Técnico ATSEP <span class="pill tec">Técnico</span>.</td></tr>
+    <tr><td><strong>Mapas</strong></td><td>Aerovías, procedimientos, fixes, VFR, sectores VFR y carga de
+        mapas personalizados (ver abajo).</td></tr>
+    <tr><td><strong>Áreas</strong></td><td>Espacios restringidos y capas de referencia (ver abajo).</td></tr>
+    <tr><td><strong>Modo</strong></td><td>Modo Playback, Modo Consola, Vista ODS, Intensidad Visual,
+        Vista FIR (satélite).</td></tr>
+    <tr><td><strong>Ayuda</strong></td><td>Esta guía.</td></tr>
+  </table>
+
+  <h2 class="sec" id="finder">Finder táctico</h2>
+  <p>Ventana flotante para <strong>localizar y centrar</strong> un elemento en la pantalla radar.
+  Se abre desde <em>Ver → Finder Táctico…</em> o con <span class="kbd">Ctrl+F</span>; queda siempre
+  arriba y no bloquea la operación. Se escribe el criterio y se presiona <span class="kbd">Enter</span>.
+  El buscador discrimina automáticamente el tipo de entrada:</p>
+  <table>
+    <tr><th>Si se escribe…</th><th>Busca</th><th>Ejemplo</th></tr>
+    <tr><td><strong>Callsign</strong></td><td>Pista viva por identificación del plan de vuelo.</td><td>ARG1340</td></tr>
+    <tr><td><strong>Código SSR (Modo 3/A)</strong></td><td>Pista viva por squawk.</td><td>4321</td></tr>
+    <tr><td><strong>Aeropuerto / Waypoint</strong></td><td>Punto fijo de la base ATM offline (ICAO o fix).</td><td>SACO, DILOM</td></tr>
+    <tr><td><strong>Coordenadas</strong></td><td>Posición geográfica directa (decimal o DMS, ver abajo).</td><td>-31.41,-64.18</td></tr>
+  </table>
+  <p>Formatos de <strong>coordenadas</strong> admitidos:</p>
+  <table>
+    <tr><th>Formato</th><th>Ejemplo</th></tr>
+    <tr><td>Decimal <code>lat,lon</code> (signo −&nbsp;= Sur/Oeste)</td><td><code>-31.41,-64.18</code></td></tr>
+    <tr><td>DMS empacado AIP (sufijo N/S/E/W)</td><td><code>312436S 0641048W</code></td></tr>
+    <tr><td>DMS con espacios</td><td><code>31 24 36 S, 64 10 48 W</code></td></tr>
+    <tr><td>DMS con segundos decimales</td><td><code>325755.5S 0640721.2W</code></td></tr>
+  </table>
+  <p>El orden lat/lon es indistinto cuando se usa DMS: se asigna por hemisferio (N/S→latitud, E/W→longitud).</p>
+  <p>Al encontrarlo, la vista se <strong>centra sobre el objetivo sin perder las pistas vivas</strong> y
+  aparece un <strong>anillo de mira cian parpadeante</strong> con la etiqueta del elemento; para aeronaves,
+  además se resalta la pista. El resaltado <strong>se apaga solo a los 15&nbsp;s</strong> (o al iniciar otra
+  búsqueda). Si el elemento no existe o está fuera de cobertura, lo informa.</p>
+
+  <h2 class="sec" id="modos">Modos de operación (menú Modo)</h2>
+  <table>
+    <tr><th>Modo</th><th>Para qué sirve</th></tr>
+    <tr><td><strong>Modo Playback</strong> <span class="pill tec">Técnico</span></td>
+        <td>Abre el reproductor flotante para cargar y reproducir una captura <code>.pcap</code>: play/pausa,
+            stop, velocidad, búsqueda (seek) y recorte de tramo horario. Vedado al controlador.</td></tr>
+    <tr><td><strong>Modo Consola</strong></td>
+        <td>Conexión de datos <strong>en vivo</strong> por UDP: se ingresa IP y puerto (por defecto
+            <code>20000</code>) para recibir ASTERIX de los sensores en tiempo real.</td></tr>
+    <tr><td><strong>Vista ODS</strong></td>
+        <td>Activa la simbología y paleta EUROCONTROL ODS (vista del controlador): símbolos por estado de track,
+            etiquetas FDB y barrido apagado. Es el modo de presentación operativo.</td></tr>
+    <tr><td><strong>Intensidad Visual</strong></td>
+        <td>Sliders 0–100&nbsp;% por capa (mapa, etiquetas, anillos, estela, símbolos, compás, herramientas)
+            para regular el brillo sobre el fondo.</td></tr>
+    <tr><td><strong>Vista FIR (satélite)</strong></td>
+        <td>Superpone cartografía satelital de la FIR (mbtiles) bajo los tracks, centrada en el aeropuerto del perfil.</td></tr>
+  </table>
+
+  <h2 class="sec" id="filtros">Filtros avanzados</h2>
+  <p>En la barra lateral, grupo <strong>Filtros Avanzados</strong>, hay tres herramientas. El toggle
+  <em>Ver Plots Crudos (Sin Filtros)</em> desactiva temporalmente todo el filtrado.</p>
+
+  <h3>Filtro Datos</h3>
+  <p>Decide <strong>qué plots se procesan/muestran</strong>. Permite filtrar por:</p>
+  <ul>
+    <li><strong>Códigos (Squawk):</strong> habilitar filtro de códigos Modo A/C (incluye códigos especiales).</li>
+    <li><strong>Rangos:</strong> Distancia, Acimut, Altura, cantidad de Mensajes e ID de CAT 21 (límite inferior/superior).</li>
+    <li><strong>Tipos de informe:</strong> Plots Secundarios/Primarios, Pistas Secundarias/Primarias, Servicio, Meteos, ADS-B.</li>
+    <li><strong>Sensores (SAC/SIC):</strong> activar/desactivar cada sensor cargado.</li>
+  </ul>
+  <p>Un contador muestra «Seleccionados: N de M mensajes ASTERIX» según el filtro aplicado.</p>
+
+  <h3>Filtro Etiquetas</h3>
+  <p>Controla <strong>qué campos aparecen en la etiqueta</strong> del track y el criterio de selección
+  (por Código A o por Posición). Campos disponibles: Código A, Número de Mensaje, Código C, Dirección
+  Aeronave, Número de Respuestas, Velocidad, Hora UTC, Número de Pista, Identificación de Aeronave,
+  Altitud ADS-B, Categoría Emisor ADS-B, Velocidad Vertical ADS-B, RHO/THETA, Rumbo Verdadero (°V) y
+  Rumbo Magnético (°M). Los campos sin datos en la captura activa quedan deshabilitados.</p>
+
+  <h3>Filtros de Calidad (DQF)</h3>
+  <p>Activa/desactiva en tiempo real los filtros de degradación de datos. Cuando un plot se marca como
+  degradado, su símbolo cambia de color:</p>
+  <table>
+    <tr><th>Filtro</th><th>Qué descarta</th><th>Color al degradar</th></tr>
+    <tr><td><strong>Garbling</strong></td><td>Solapamiento de señales SSR (respuestas superpuestas).</td>
+        <td><span class="dot" style="background:#FF00FF"></span>magenta</td></tr>
+    <tr><td><strong>FRUIT / Ruido</strong></td><td>Ploteo huérfano aislado (interferencia/ruido).</td>
+        <td><span class="dot" style="background:#FFA500"></span>naranja</td></tr>
+    <tr><td><strong>Pistas Inmaduras</strong></td><td>Pistas con menos de ~2 vueltas de radar (sin confirmar).</td>
+        <td><span class="dot" style="background:#FFD700"></span>dorado</td></tr>
+  </table>
+
+  <h2 class="sec" id="mapas">Mapas y capas VFR</h2>
+  <ul>
+    <li><strong>Aerovías:</strong> <em>Superiores</em> (nombre que empieza con <code>U</code>, espacio superior)
+      e <em>Inferiores</em> (el resto).</li>
+    <li><strong>Procedimientos por Aeropuerto:</strong> SID / STAR / IAP de cada ICAO.</li>
+    <li><strong>Puntos y Fixes:</strong> VOR, NDB, DME, ruta y terminal.</li>
+    <li><strong>VFR:</strong> capas conmutables — ATZs, Corredores VFR, Pistas y Nombres.</li>
+    <li><strong>Sectores de Vuelo VFR:</strong> sectores ORONIO (fuera de áreas restringidas).</li>
+    <li><strong>Cargar Mapa Personalizado:</strong> archivos GeoJSON (<code>.geojson</code>/<code>.json</code>)
+      con geometrías <code>LineString</code> y <code>Point</code>. Siempre es la última opción del menú.</li>
+  </ul>
+  <div class="note">Los mapas en formato legacy <code>.map</code> (coordenadas DMS) se convierten a GeoJSON
+  con el conversor <code>tools/map_to_geojson.py</code>.</div>
+
+  <h2 class="sec" id="areas">Áreas y referencias</h2>
+  <ul>
+    <li><strong>Restringidas (R) / Prohibidas (P) / Peligrosas (D):</strong> espacios aéreos de la base ATM;
+      cada uno se activa individualmente desde una lista.</li>
+    <li><strong>Sectores MSA</strong> y <strong>zonas MSA (polígonos):</strong> altitud mínima de sector.</li>
+    <li><strong>Corredores APM</strong> y <strong>corredores por waypoints:</strong> perfiles de aproximación.</li>
+    <li><strong>Isógonas:</strong> líneas de declinación magnética.</li>
+  </ul>
+
+  <h2 class="sec" id="safety">Redes de seguridad (Safety Nets)</h2>
+  <p>Se evalúan de forma continua (~1&nbsp;Hz) en la cadena <strong>STCA → APW → MSAW</strong> y resaltan
+  la aeronave en el PPI:</p>
+  <table>
+    <tr><th>Red</th><th>Qué detecta</th></tr>
+    <tr><td><strong>STCA</strong></td><td>Pérdida de separación entre dos aeronaves (conflicto de tránsito).</td></tr>
+    <tr><td><strong>APW</strong></td><td>Proximidad o penetración de un área (Area Proximity Warning).</td></tr>
+    <tr><td><strong>MSAW</strong></td><td>Descenso por debajo de la altitud mínima de seguridad del sector.</td></tr>
+  </table>
+  <p>Colores del recuadro de alarma sobre el avión (también en la vista ODS):</p>
+  <ul>
+    <li><span class="dot" style="background:var(--red)"></span><strong>VIOLATION</strong> (rojo, parpadea): alerta activa.</li>
+    <li><span class="dot" style="background:var(--amber)"></span><strong>PREDICTED</strong> (ámbar): alerta predicha.</li>
+  </ul>
+
+  <figure>
+    <svg viewBox="0 0 520 150" xmlns="http://www.w3.org/2000/svg" font-family="Consolas,monospace" font-size="12">
+      <rect x="0" y="0" width="520" height="150" fill="#0B0E14"/>
+      <!-- VIOLATION -->
+      <rect x="40" y="55" width="40" height="40" fill="none" stroke="#FF3B3B" stroke-width="2"/>
+      <rect x="52" y="67" width="16" height="16" fill="none" stroke="#FF3B3B"/>
+      <text x="60" y="120" fill="#FF3B3B" text-anchor="middle" font-weight="bold">VIOLATION</text>
+      <text x="60" y="136" fill="#6B7A8D" text-anchor="middle">rojo · parpadea</text>
+      <!-- PREDICTED -->
+      <rect x="240" y="55" width="40" height="40" fill="none" stroke="#FFB040" stroke-width="2"/>
+      <rect x="252" y="67" width="16" height="16" fill="none" stroke="#FFB040"/>
+      <text x="260" y="120" fill="#FFB040" text-anchor="middle" font-weight="bold">PREDICTED</text>
+      <text x="260" y="136" fill="#6B7A8D" text-anchor="middle">ámbar · fijo</text>
+      <!-- Normal -->
+      <rect x="440" y="67" width="16" height="16" fill="none" stroke="#39FF14"/>
+      <text x="448" y="120" fill="#39FF14" text-anchor="middle" font-weight="bold">Normal</text>
+      <text x="448" y="136" fill="#6B7A8D" text-anchor="middle">sin recuadro</text>
+    </svg>
+    <figcaption>Resaltado de alarma sobre el símbolo del track según severidad.</figcaption>
+  </figure>
+  <div class="note">Las redes se pueden habilitar/inhibir desde el perfil (STCA y APW) y corren tanto en modo
+  integrado como crudo, siempre que existan tracks vivos.</div>
+
+  <h2 class="sec" id="exportar">Exportación (menú Exportar)</h2>
+  <p><span class="pill tec">Técnico</span> Disponible una vez procesada una captura. Cada opción genera un
+  archivo para una herramienta externa:</p>
+  <table>
+    <tr><th>Opción</th><th>Formato</th><th>Contenido / uso</th></tr>
+    <tr><td><strong>Trayectorias a Google Earth</strong></td><td>KMZ</td>
+        <td>Trayectorias de los vuelos (pistas con ≥5 puntos) para visualizar en Google Earth.</td></tr>
+    <tr><td><strong>Reproducción de Vuelo Animado</strong></td><td>KMZ</td>
+        <td>Animación temporal (timeline) de un vuelo para reproducir su evolución en Google Earth.</td></tr>
+    <tr><td><strong>Mapa de Cobertura Real</strong></td><td>KMZ</td>
+        <td>Envolvente de cobertura del/los radar(es) por banda de FL (alcance real, no teórico).</td></tr>
+    <tr><td><strong>Heatmap a QGIS</strong></td><td>CSV</td>
+        <td>Tabla de densidad/posiciones para mapas de calor y análisis SIG en QGIS.</td></tr>
+    <tr><td><strong>Datos a Power BI</strong></td><td>Parquet</td>
+        <td>Dataset analítico columnar para tableros e informes en Power BI.</td></tr>
+  </table>
+
+  <h2 class="sec" id="suite">Suite técnica — Centro Técnico ATSEP</h2>
+  <p><span class="pill tec">Técnico</span> Hub de herramientas técnicas para el personal ATSEP, con pestañas
+  especializadas. Se abre desde <em>Configuración → Centro Técnico ATSEP…</em> (deshabilitado en rol controlador).</p>
+  <p>Desde su barra superior se pueden <strong>importar datos técnicos</strong> de una captura para alimentar el
+  análisis (se persisten en una base DuckDB de analítica). Las pestañas se detallan a continuación.</p>
+
+  <h3>📊 Estadísticas</h3>
+  <p>Constructor de gráficos orientado a análisis radar, con un selector de <strong>Vista</strong> y de
+  <strong>Sensores</strong> (individual, varios o todos). Ofrece presets de dominio (un clic) y dos modos avanzados.</p>
+  <p><strong>Presets de dominio:</strong></p>
+  <table>
+    <tr><th>Vista</th><th>Qué muestra</th></tr>
+    <tr><td><strong>Cobertura PPI</strong> (rango × azimut)</td><td>Detecciones en polar, centrado en el radar.</td></tr>
+    <tr><td><strong>Cobertura geográfica</strong> (lon × lat)</td><td>Posición real sobre el mapa; funciona para cualquier categoría (incl. ADS-B), sin depender del sensor.</td></tr>
+    <tr><td><strong>Pd vs Azimut</strong></td><td>Probabilidad de detección real por sector (obs/esperado, vía motor PASS), una curva por sensor.</td></tr>
+    <tr><td><strong>Rosa de azimut</strong></td><td>Conteo de detecciones por sector angular.</td></tr>
+    <tr><td><strong>Cobertura vertical</strong> (alt × rango)</td><td>Envolvente vertical; la altitud se deriva del FL cuando no hay Modo C geométrico.</td></tr>
+    <tr><td><strong>Histograma de rango</strong></td><td>Detecciones por anillo de distancia.</td></tr>
+  </table>
+  <p><strong>Modos avanzados:</strong></p>
+  <ul>
+    <li><strong>Métrica × dimensión</strong> — se elige qué medir (Nº detecciones, alcance máx, rango medio/p95,
+    techo y nivel medio en FL, velocidad máx/media, tasa de garbling) contra qué eje (sensor, hora del ToD,
+    Modo&nbsp;A, banda de FL, categoría, callsign, Mode&nbsp;S, garbling) en barras o líneas.</li>
+    <li><strong>Dispersión X / Y</strong> — scatter de dos campos numéricos cualesquiera (rango, azimut, altitud,
+    FL, velocidad, lat/lon, tiempo…), con color por dimensión.</li>
+  </ul>
+  <p class="note">Nota: las vistas polares (PPI, Rosa, Pd vs Azimut, vertical) requieren coordenadas de radar.
+  Para datos <strong>ADS-B (CAT&nbsp;21)</strong>, que traen posición GPS, el rango/azimut se derivan respecto a la
+  estación receptora <em>si su posición está configurada en los sensores</em>; si no, usar la <strong>Cobertura
+  geográfica</strong>, que siempre tiene datos.</p>
+
+  <h3>✅ PASS / SASS-C</h3>
+  <p>Análisis de desempeño de la vigilancia al estilo EUROCONTROL <strong>SASS-C/PASS</strong>, calculado sobre los
+  mismos plots que usa la consola. Presenta una tabla por sensor y diagramas de cobertura polar y vertical.
+  Campos que informa:</p>
+  <table>
+    <tr><th>Campo</th><th>Qué mide</th><th>Meta</th></tr>
+    <tr><td><strong>Pd Global (SSR)</strong></td><td>Probabilidad de detección global del secundario.</td><td>≥ 95 %</td></tr>
+    <tr><td><strong>Overlap Pd</strong></td><td>Pd en la zona de solapamiento con otro radar (co-detección entre sensores).</td><td>—</td></tr>
+    <tr><td><strong>Pd vs ADS-B</strong></td><td>Co-detección del radar respecto de los blancos vistos por ADS-B.</td><td>—</td></tr>
+    <tr><td><strong>Pd Modo A — Válido / Correcto</strong></td><td>Detección del código Modo A (Squawk): presencia válida y acierto del valor.</td><td>≥ 98 %</td></tr>
+    <tr><td><strong>Pd Modo C — Válido / Correcto</strong></td><td>Detección de la altitud Modo C: presencia válida y acierto del valor.</td><td>≥ 95 %</td></tr>
+    <tr><td><strong>Sesgo R (m)</strong></td><td>Error sistemático en distancia (bias radial).</td><td>→ 0</td></tr>
+    <tr><td><strong>Sesgo Az (°)</strong></td><td>Error sistemático en acimut (bias angular).</td><td>→ 0</td></tr>
+    <tr><td><strong>Jitter R (m)</strong></td><td>Dispersión aleatoria en distancia (ruido).</td><td>bajo</td></tr>
+    <tr><td><strong>Jitter Az (°)</strong></td><td>Dispersión aleatoria en acimut.</td><td>bajo</td></tr>
+    <tr><td><strong>Split Plots (%)</strong></td><td>Porcentaje de plots desdoblados (un mismo blanco reportado dos veces).</td><td>bajo</td></tr>
+    <tr><td><strong>RPM</strong></td><td>Velocidad de rotación de la antena del sensor.</td><td>—</td></tr>
+  </table>
+  <p>Los diagramas <strong>Cobertura Polar</strong> y <strong>Cobertura Vertical</strong> muestran el Pd&nbsp;% por
+  azimut y por FL; la pestaña de <em>Overlap</em> grafica curvas de Pd vs. rango y vs. FL para comparar el
+  solapamiento entre radares (requiere seleccionar ≥2 sensores).</p>
+
+  <h3>📡 Monitor ATSEP</h3>
+  <p>Tablero de salud de cada sensor en tiempo real (a partir de CAT 034/023): estado ONLINE/OFFLINE, posición de
+  antena, canal, alarmas y conteo de FRUIT. Permite vigilar la operatividad de la red de radares.</p>
+
+  <h3>🔬 Inspector</h3>
+  <p>Inspector de bajo nivel de un registro ASTERIX: desglosa el FSPEC, los ítems presentes y el valor de cada
+  campo, byte a byte. Es la herramienta de diagnóstico para entender o depurar un mensaje puntual.</p>
+
+  <h3>🛰 Cobertura</h3>
+  <p>Calcula el <strong>contorno real de cobertura</strong> por banda de FL en vista polar y sobre el mapa. Se elige
+  el radar y qué bandas FL mostrar; el percentil de alcance por azimut (p. ej. P95 = el radar cubre hasta ese
+  rango en el 95 % de los casos) define la envolvente. Se puede exportar el resultado.</p>
+
+  <h3>🛠 Calibración</h3>
+  <p>Registración/calibración multi-radar (módulo de fusión): estima y aplica correcciones de alineación
+  (sesgos de distancia y acimut) entre sensores para que sus reportes coincidan. Al guardar, la consola recarga
+  los sensores con las correcciones aplicadas.</p>
+
+  <div class="note">La <strong>calibración</strong> y el conjunto de la suite técnica son exclusivos del rol técnico;
+  quedan vedados al controlador.</div>
+
+  <figure>
+    <img src="img/centro_tecnico.png" alt="Captura del Centro Técnico ATSEP"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="shot" style="display:none">Captura real opcional — pegá la imagen en <code>docs/ayuda/img/centro_tecnico.png</code></div>
+    <figcaption>Centro Técnico ATSEP con sus pestañas (Estadísticas, PASS/SASS-C, Monitor, Inspector, Cobertura, Calibración).</figcaption>
+  </figure>
+
+  <h2 class="sec" id="simbologia">Simbología y etiquetas</h2>
+
+  <figure>
+    <svg viewBox="0 0 520 160" xmlns="http://www.w3.org/2000/svg" font-family="Consolas,monospace" font-size="13">
+      <rect x="0" y="0" width="520" height="160" fill="#0B0E14"/>
+      <!-- track en jurisdiccion -->
+      <rect x="70" y="95" width="14" height="14" fill="none" stroke="#39FF14" stroke-width="1.6"/>
+      <line x1="84" y1="95" x2="150" y2="55" stroke="#39FF14"/>
+      <text x="152" y="50" fill="#39FF14" font-weight="bold">AR1234</text>
+      <text x="152" y="66" fill="#39FF14" font-weight="bold">F350  450</text>
+      <text x="60" y="135" fill="#6B7A8D">En jurisdicción (brillante)</text>
+      <!-- track fuera de jurisdiccion (tenue) -->
+      <rect x="340" y="95" width="14" height="14" fill="none" stroke="#39FF14" stroke-width="1.6" opacity=".45"/>
+      <line x1="354" y1="95" x2="420" y2="55" stroke="#39FF14" opacity=".45"/>
+      <text x="422" y="50" fill="#39FF14" font-weight="bold" opacity=".45">IB456</text>
+      <text x="422" y="66" fill="#39FF14" font-weight="bold" opacity=".45">F410  480</text>
+      <text x="330" y="135" fill="#6B7A8D">Fuera de jurisdicción (tenue)</text>
+    </svg>
+    <figcaption>Etiqueta (FDB) con leader line. El tráfico fuera de jurisdicción se atenúa.</figcaption>
+  </figure>
+
+  <ul>
+    <li><strong>Etiqueta (FDB):</strong> identificación, nivel y código del track, con leader line arrastrable.
+      A intensidad máxima de capa se muestra en negrita para mayor legibilidad.</li>
+    <li><strong>Tráfico fuera de jurisdicción:</strong> símbolo y etiqueta atenuados (fuera del radio operativo
+      o por encima del techo FL del perfil).</li>
+    <li><strong>Nivel A/F:</strong> según la Altitud de Transición del perfil y el QNH, la altitud se muestra como
+      <code>Axxx</code> (altitud, bajo el TA) o <code>Fxxx</code> (nivel de vuelo, sobre el TA).</li>
+    <li><strong>Intensidad Visual</strong> (<em>Modo → Intensidad Visual</em>): regula por capa el brillo de mapa,
+      etiquetas, anillos, estela, símbolos y compás.</li>
+  </ul>
+
+  <h2 class="sec" id="fuentes">Fuentes de datos</h2>
+  <ul>
+    <li><strong>ASTERIX:</strong> CAT 001/002/010/020/021/034/048/062 (monoradar, ADS-B, MLAT, system tracks).</li>
+    <li><strong>Base ATM</strong> (<code>data/atm/atm.duckdb</code>): aeropuertos, aerovías, procedimientos, fixes,
+      espacios restringidos y parámetros MSAW.</li>
+    <li><strong>Cartografía base:</strong> capa satelital FIR (<em>Modo → Vista FIR</em>) y mapas GeoJSON.</li>
+  </ul>
+
+  <h2 class="sec" id="acronimos">Acrónimos</h2>
+  <table>
+    <tr><th>Sigla</th><th>Significado</th></tr>
+    <tr><td><strong>ADS-B</strong></td><td>Automatic Dependent Surveillance – Broadcast (vigilancia dependiente automática).</td></tr>
+    <tr><td><strong>APM</strong></td><td>Approach Path Monitoring (monitoreo de la senda de aproximación).</td></tr>
+    <tr><td><strong>APP</strong></td><td>Approach (control de aproximación).</td></tr>
+    <tr><td><strong>APW</strong></td><td>Area Proximity Warning (aviso de proximidad a un área).</td></tr>
+    <tr><td><strong>ASTERIX</strong></td><td>All Purpose Structured Eurocontrol Surveillance Information Exchange.</td></tr>
+    <tr><td><strong>ATSEP</strong></td><td>Air Traffic Safety Electronics Personnel (personal técnico de electrónica de seguridad ATS).</td></tr>
+    <tr><td><strong>ATZ</strong></td><td>Aerodrome Traffic Zone (zona de tránsito de aeródromo).</td></tr>
+    <tr><td><strong>CAT</strong></td><td>Category (categoría de mensaje ASTERIX, p. ej. CAT 048).</td></tr>
+    <tr><td><strong>DQF</strong></td><td>Data Quality Filter (filtro de calidad de datos).</td></tr>
+    <tr><td><strong>FDB</strong></td><td>Full Data Block (etiqueta completa del track).</td></tr>
+    <tr><td><strong>FIR</strong></td><td>Flight Information Region (región de información de vuelo).</td></tr>
+    <tr><td><strong>FL</strong></td><td>Flight Level (nivel de vuelo).</td></tr>
+    <tr><td><strong>FRUIT</strong></td><td>False Replies Unsynchronized In Time (respuestas SSR espurias/asincrónicas).</td></tr>
+    <tr><td><strong>GND</strong></td><td>Ground (control de superficie/tierra).</td></tr>
+    <tr><td><strong>HMI</strong></td><td>Human–Machine Interface (interfaz hombre-máquina).</td></tr>
+    <tr><td><strong>IAP</strong></td><td>Instrument Approach Procedure (procedimiento de aproximación por instrumentos).</td></tr>
+    <tr><td><strong>LDB</strong></td><td>Limited Data Block (etiqueta reducida del track).</td></tr>
+    <tr><td><strong>MLAT</strong></td><td>Multilateration (multilateración).</td></tr>
+    <tr><td><strong>MRT</strong></td><td>Multi-Radar Tracking (seguimiento multi-radar / modo integrado).</td></tr>
+    <tr><td><strong>MSA</strong></td><td>Minimum Sector Altitude (altitud mínima de sector).</td></tr>
+    <tr><td><strong>MSAW</strong></td><td>Minimum Safe Altitude Warning (aviso de altitud mínima de seguridad).</td></tr>
+    <tr><td><strong>MTR</strong></td><td>Obstáculos/zonas de referencia en el PPI (capa de obstáculos).</td></tr>
+    <tr><td><strong>ODS</strong></td><td>Operational Display System (sistema de presentación operativa EUROCONTROL).</td></tr>
+    <tr><td><strong>PASS</strong></td><td>Performance Analysis Surveillance System (análisis de desempeño de la vigilancia).</td></tr>
+    <tr><td><strong>PCAP</strong></td><td>Packet Capture (archivo de captura de tráfico de red).</td></tr>
+    <tr><td><strong>Pd</strong></td><td>Probability of Detection (probabilidad de detección).</td></tr>
+    <tr><td><strong>PPI</strong></td><td>Plan Position Indicator (indicador panorámico de radar).</td></tr>
+    <tr><td><strong>PSR</strong></td><td>Primary Surveillance Radar (radar primario).</td></tr>
+    <tr><td><strong>QNH</strong></td><td>Reglaje altimétrico para indicar elevación sobre el nivel del mar.</td></tr>
+    <tr><td><strong>RNAV</strong></td><td>Area Navigation (navegación de área).</td></tr>
+    <tr><td><strong>RPM</strong></td><td>Revoluciones por minuto (velocidad de rotación de la antena).</td></tr>
+    <tr><td><strong>SAC/SIC</strong></td><td>System Area Code / System Identification Code (identificación del sistema/sensor).</td></tr>
+    <tr><td><strong>SASS-C</strong></td><td>Surveillance Analysis Support System for ATC-Centre (EUROCONTROL).</td></tr>
+    <tr><td><strong>SID</strong></td><td>Standard Instrument Departure (salida normalizada por instrumentos).</td></tr>
+    <tr><td><strong>SSR</strong></td><td>Secondary Surveillance Radar (radar secundario).</td></tr>
+    <tr><td><strong>STAR</strong></td><td>Standard Terminal Arrival Route (llegada normalizada).</td></tr>
+    <tr><td><strong>STCA</strong></td><td>Short Term Conflict Alert (alerta de conflicto a corto plazo).</td></tr>
+    <tr><td><strong>TA</strong></td><td>Transition Altitude (altitud de transición).</td></tr>
+    <tr><td><strong>TL</strong></td><td>Transition Level (nivel de transición).</td></tr>
+    <tr><td><strong>TMA</strong></td><td>Terminal Control Area (área de control terminal).</td></tr>
+    <tr><td><strong>ToD</strong></td><td>Time of Day (marca temporal del mensaje ASTERIX).</td></tr>
+    <tr><td><strong>TWR</strong></td><td>Tower (torre de control).</td></tr>
+    <tr><td><strong>UDP</strong></td><td>User Datagram Protocol (transporte del feed en vivo).</td></tr>
+    <tr><td><strong>UTC</strong></td><td>Coordinated Universal Time (tiempo universal coordinado).</td></tr>
+    <tr><td><strong>VFR</strong></td><td>Visual Flight Rules (reglas de vuelo visual).</td></tr>
+    <tr><td><strong>WGS-84</strong></td><td>World Geodetic System 1984 (sistema geodésico de referencia).</td></tr>
+  </table>
+
+  <h2 class="sec" id="faq">Preguntas frecuentes</h2>
+  <h3>No veo la barra lateral</h3>
+  <p>En rol controlador está oculta por defecto. Mostrala desde <em>Ver → Panel Lateral de Controles</em>
+  o cambiá a rol técnico.</p>
+  <h3>No puedo modificar el QNH</h3>
+  <p>Solo el controlador edita el QNH (en la barra superior). En técnico es de solo lectura.</p>
+  <h3>El menú Exportar está deshabilitado</h3>
+  <p>La exportación es exclusiva del rol técnico.</p>
+  <h3>No se marca el avión en alarma</h3>
+  <p>Verificá que la red correspondiente esté habilitada en el perfil y que haya tracks vivos. La alarma
+  resalta con recuadro rojo (VIOLATION, parpadea) o ámbar (PREDICTED).</p>
+
+  <footer>ASTERIX Radar Decoder · Guía de funcionamiento · Documento local, se abre desde
+  <em>Ayuda → Guía de la aplicación</em>.</footer>
+</main>
+</div>
+</body>
+</html>

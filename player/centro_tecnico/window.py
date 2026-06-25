@@ -69,9 +69,9 @@ class TechnicalImportWorker(QThread):
                 self.detected_rpms[(sac, sic)] = rpm
             engine.on_rotation_speed_detected = on_rpm
 
-            # 2. Escanear (CPU-bound)
+            # 2. Escanear (CPU-bound). La suite SÍ necesita raw_bytes (inspector).
             self.log_import(f"Scanning PCAP paths: {self.file_paths}")
-            plots, duration, sensors = engine.scan_pcap(self.file_paths)
+            plots, duration, sensors = engine.scan_pcap(self.file_paths, incluir_raw_bytes=True)
             self.log_import("Scan completed.")
             
             # Convertir plots a dicts para session_records y PASS
@@ -141,8 +141,12 @@ class CentroTecnicoWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
-        self.stats_tab = StatsWidget(self.source_provider)
-        self.coverage_tab = CoverageWidget(self.source_provider, db_path=db_path)
+        self.stats_tab = StatsWidget(
+            self.source_provider,
+            sensores_provider=lambda: getattr(self.parent(), "sensores", {}) or {},
+            rpms_provider=lambda: self._sensor_rpms or {})
+        self.coverage_tab = CoverageWidget(self.source_provider, db_path=db_path,
+                                           repo_db_provider=lambda: self._repo_db)
         self.tabs.addTab(self.stats_tab, "📊 Estadísticas")
         self.tabs.addTab(self._build_pass_page(), "✅ PASS / SASS-C")
         self.monitor_tab = TechnicalMonitorWidget(self)
@@ -205,8 +209,17 @@ class CentroTecnicoWindow(QMainWindow):
             layout = QVBoxLayout(container)
             layout.setContentsMargins(0, 0, 0, 0)
             dialog = PassDashboardDialog(resultados, self)
-            dialog.tabs.setParent(container)
-            layout.addWidget(dialog.tabs)
+            # Reparentar TODO el cuerpo del diálogo (encabezado + selector de
+            # radares + tabs), no solo las tabs: así el PASS de la suite conserva
+            # el selector de radares igual que el informe de la pantalla principal.
+            cuerpo = dialog.layout()
+            while cuerpo.count():
+                item = cuerpo.takeAt(0)
+                w = item.widget()
+                if w is not None:
+                    layout.addWidget(w)
+                elif item.layout() is not None:
+                    layout.addLayout(item.layout())
             self._pass_dialog = dialog
             return container
         else:

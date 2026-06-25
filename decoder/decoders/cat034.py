@@ -43,7 +43,7 @@ def decode(payload: bytes, offset: int, block_length: int, category: int, record
         3: 3,  # I034/030 Time of Day
         4: 1,  # I034/020 Sector Number
         5: 2,  # I034/041 Antenna Rotation Speed
-        6: -1, # I034/050 System Configuration and Status (variable)
+        # 6: I034/050 se parsea y avanza dentro de su rama (compuesto, sin avance genérico)
         7: -1, # I034/060 System Processing Mode (variable)
         8: -2, # I034/070 Message Count Values (repetitive)
         9: 8,  # I034/100 Generic Polar Window
@@ -104,12 +104,46 @@ def decode(payload: bytes, offset: int, block_length: int, category: int, record
                     if rotation_period > 0:
                         # Convert period (seconds/rotation) to RPM (rotations/minute)
                         plot['extra_data']['antenna_rpm'] = 60.0 / rotation_period
-                elif frn == 6:  # I034/050 System Configuration and Status
-                    status_byte = payload[offset]
-                    plot['com_fault'] = bool(status_byte & 0x80)
-                    plot['ext_fault'] = bool(status_byte & 0x40)
-                    plot['ant_fault'] = bool(status_byte & 0x20)
-                    plot['channel_ab'] = "Channel A" if (status_byte & 0x10) else "Channel B"
+                elif frn == 6:  # I034/050 System Configuration and Status (compuesto)
+                    # Estructura: subcampo primario (mapa de presencia, 1+ octetos con FX)
+                    # seguido de los subcampos COM / PSR / SSR / MDS si están presentes.
+                    p = offset
+                    primary = payload[p]
+                    has_com = bool(primary & 0x80)  # bit 8
+                    has_psr = bool(primary & 0x10)  # bit 5
+                    has_ssr = bool(primary & 0x08)  # bit 4
+                    has_mds = bool(primary & 0x04)  # bit 3
+                    while payload[p] & 0x01:        # FX: avanzar el primario
+                        p += 1
+                    p += 1
+
+                    if has_com:                     # Subcampo COM (1 octeto): estado del sistema
+                        com = payload[p]; p += 1
+                        plot['sys_nogo']     = bool(com & 0x80)  # NOGO: operación inhibida (no usar datos)
+                        plot['ovl_rdp']      = bool(com & 0x10)  # sobrecarga del procesador (RDP)
+                        plot['ovl_xmt']      = bool(com & 0x08)  # sobrecarga de transmisión
+                        plot['monitor_disc'] = bool(com & 0x04)  # MSC: monitoreo desconectado
+                        plot['time_invalid'] = bool(com & 0x02)  # TSV: fuente de tiempo inválida
+                    if has_psr:                     # Subcampo PSR (1 octeto)
+                        psr = payload[p]; p += 1
+                        plot['psr_ant'] = 2 if (psr & 0x80) else 1
+                        plot['psr_chab'] = (psr >> 5) & 0x03
+                        plot['psr_ovl'] = bool(psr & 0x10)
+                    if has_ssr:                     # Subcampo SSR (1 octeto)
+                        ssr = payload[p]; p += 1
+                        plot['ssr_ant'] = 2 if (ssr & 0x80) else 1
+                        plot['ssr_chab'] = (ssr >> 5) & 0x03
+                        plot['ssr_ovl'] = bool(ssr & 0x10)
+                    if has_mds:                     # Subcampo MDS (2 octetos)
+                        mds = struct.unpack('>H', payload[p:p + 2])[0]; p += 2
+                        plot['mds_ant'] = 2 if (mds & 0x8000) else 1
+                        plot['mds_chab'] = (mds >> 14) & 0x03
+                        plot['mds_ovl'] = bool(mds & 0x1000)
+
+                    # Canal a mostrar: priorizar SSR, luego Mode S, luego PSR.
+                    chab = plot.get('ssr_chab') or plot.get('mds_chab') or plot.get('psr_chab') or 0
+                    plot['channel_ab'] = {1: "Channel A", 2: "Channel B", 3: "Diversity"}.get(chab, "--")
+                    offset = p
 
                 # Avanzar offset
                 length = uap_lengths.get(frn)

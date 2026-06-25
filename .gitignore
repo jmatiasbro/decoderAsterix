@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.venv-linux/
 venv/
 
 # Logs
@@ -32,3 +33,9 @@ ui-ux-pro-max-skill/
 
 # Cartografia base pesada (no versionar)
 data/firmap/argentina.mbtiles
+
+# DBs temporales de fallback de DuckDB (basura por contencion de lock)
+pass_analytics_fallback_*.duckdb*
+
+# Logs de eventos de sistema (auditoria local, no versionar)
+logs/

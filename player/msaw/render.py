@@ -46,7 +46,7 @@ def zone_segments(zone):
             lbl = _dest(c[0], c[1], (mid - zone.mag_decl_w) % 360.0, R * 0.6)
         else:
             lbl = c
-        segs.append(("T", MSA_LAYER, lbl[0], lbl[1], f"MSA {s.msa_ft}"))
+        segs.append(("T", MSA_LAYER, lbl[0], lbl[1], f"{s.msa_ft}'"))
     return segs
 
 
@@ -91,7 +91,7 @@ def polygon_segments(zones):
         segs.append(("L", MSA_POLY_LAYER, coords[0][0], coords[0][1]))   # cierre
         clat, clon = _centroid(coords)
         segs.append(("T", MSA_POLY_LAYER, clat, clon,
-                     f"MSA {int(z.get('msa_ft', 0))}"))
+                     f"{int(z.get('msa_ft', 0))}'"))
     return segs
 
 

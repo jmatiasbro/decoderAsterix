@@ -21,10 +21,15 @@ _GRID = "#2A3344"
 
 
 class CoverageWidget(QWidget):
-    def __init__(self, source_provider, db_path="pass_analytics.duckdb", parent=None):
+    def __init__(self, source_provider, db_path="pass_analytics.duckdb",
+                 repo_db_provider=None, parent=None):
         super().__init__(parent)
         self._source_provider = source_provider
         self._db_path = db_path
+        # Proveedor de la conexión viva (repo_db). Permite que el exporter
+        # reutilice la conexión del app en vez de abrir una segunda al mismo
+        # fichero, que DuckDB rechaza por config distinta (read_only != write).
+        self._repo_db_provider = repo_db_provider
         self.result = None
 
         root = QVBoxLayout(self)
@@ -323,18 +328,23 @@ class CoverageWidget(QWidget):
         menu.addAction("Polígonos GeoJSON", self._export_geojson)
         menu.exec(self.btn_export.mapToGlobal(self.btn_export.rect().bottomLeft()))
 
-    def _export_kmz(self):
+    def _exporter(self):
         from analysis.exporters import PassExporter
+        repo_db = self._repo_db_provider() if self._repo_db_provider else None
+        if repo_db is not None:
+            return PassExporter(repo_db=repo_db)
+        return PassExporter(db_path=self._db_path)
+
+    def _export_kmz(self):
         path, _ = QFileDialog.getSaveFileName(self, "KMZ", "cobertura.kmz", "KMZ (*.kmz)")
         if path:
-            PassExporter(db_path=self._db_path).export_coverage_map_kmz(
+            self._exporter().export_coverage_map_kmz(
                 self.cmb_radar.currentText(), output_file=path)
 
     def _export_csv(self):
-        from analysis.exporters import PassExporter
         path, _ = QFileDialog.getSaveFileName(self, "CSV", "heatmap.csv", "CSV (*.csv)")
         if path:
-            PassExporter(db_path=self._db_path).export_heatmap_qgis(output_file=path)
+            self._exporter().export_heatmap_qgis(output_file=path)
 
     def _export_png(self):
         path, _ = QFileDialog.getSaveFileName(self, "PNG", "cobertura.png", "PNG (*.png)")

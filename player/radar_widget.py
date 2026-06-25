@@ -424,8 +424,11 @@ class RadarPlot:
     def highlighted(self) -> bool:
         if not self._highlight_filter:
             return False
-        return (self._highlight_filter in self.mode3a or
-                self._highlight_filter.lower() in self.callsign.lower())
+        # None-safe: pistas solo-squawk (callsign None) o sin Modo A (mode3a None)
+        # antes lanzaban y se omitía su dibujo cuando había un filtro activo.
+        f = self._highlight_filter
+        return (f in (self.mode3a or "") or
+                f.lower() in (self.callsign or "").lower())
 
     def illuminate(self):
         self.is_illuminated = True
@@ -543,6 +546,7 @@ class TargetInspectionDialog(QDialog):
             QTableWidget::item {
                 padding: 6px;
                 border-bottom: 1px solid #1B2232;
+                color: #E0E6ED;
             }
             QTableWidget::item:selected {
                 background-color: rgba(0, 229, 255, 30);
@@ -603,7 +607,7 @@ class TargetInspectionDialog(QDialog):
         self.table.insertRow(row)
         campo = f"{asterix_id} {label}"
         item_campo = QTableWidgetItem(campo)
-        item_campo.setForeground(QColor("#0066CC"))
+        item_campo.setForeground(QColor("#7EB8D4"))
         self.table.setItem(row, 0, item_campo)
         if value is None or value == "" or value is False:
             valor_str = "—"
@@ -614,7 +618,7 @@ class TargetInspectionDialog(QDialog):
         else:
             valor_str = str(value)
         item_valor = QTableWidgetItem(valor_str)
-        item_valor.setForeground(QColor("#222222"))
+        item_valor.setForeground(QColor("#E0E6ED"))
         self.table.setItem(row, 1, item_valor)
 
     def _populate_all_fields(self, plot: 'RadarPlot', sensor_info: Dict):
@@ -825,6 +829,13 @@ class RadarWidget(_RadarBase):
         self.blink_timer.timeout.connect(self._toggle_blink)
         self.blink_timer.start(500)  # Parpadeo cada 500ms
 
+        # Finder táctico: marcador de mira sobre el objetivo localizado (lat/lon),
+        # con auto-apagado a los 15 s (se reinicia en cada nueva búsqueda).
+        self._finder_mark = None
+        self._finder_timer = QTimer(self)
+        self._finder_timer.setSingleShot(True)
+        self._finder_timer.timeout.connect(self._limpiar_finder)
+
         # Throttle de repintados: el paint redibuja toda la escena (~40 ms) y los
         # caminos calientes (ingesta de plots, tick a 20 Hz) pedían update() más
         # rápido de lo que el paint puede completar, saturando el hilo de UI con
@@ -865,6 +876,7 @@ class RadarWidget(_RadarBase):
         self.target_sweep_angle = 0.0
         self.sweep_rpm = 12.0
         self.playback_speed = 1.0
+        self._last_sweep_wall_time: Optional[float] = None
         self.sensor_rpms: Dict[Tuple[int, int], float] = {}
         self.sensor_times: Dict[Tuple[int, int], float] = {}
         self.sweep_visible = True
@@ -895,6 +907,8 @@ class RadarWidget(_RadarBase):
         self._safety_interval = 1.0       # s entre evaluaciones completas
         self._safety_last = 0.0
         self._safety_pending = False
+        # Estado previo por subsistema para publicar al bus solo transiciones.
+        self._safety_eventos_prev: dict = {}
 
         # Enable mouse tracking for tooltip on history points
         self.setMouseTracking(True)
@@ -1017,6 +1031,7 @@ class RadarWidget(_RadarBase):
 
     def reset_sweep_angle(self):
         self.sweep_angle = 0.0
+        self._last_sweep_wall_time = None
 
     def set_sweep_visible(self, visible: bool):
         self.sweep_visible = visible
@@ -1101,7 +1116,7 @@ class RadarWidget(_RadarBase):
             sim_time = SimulationTime.instance()
             sim_time.freeze()
             self._is_playing = False
-            self._last_sweep_tick_time = None
+            self._last_sweep_wall_time = None
         finally:
             self._command_lock.release()
 
@@ -1384,6 +1399,40 @@ class RadarWidget(_RadarBase):
         # 4) Forzar actualización visual
         self.update()
         print(f"[GEODESIA] Vista centrada en Lat: {target_lat:.5f}, Lon: {target_lon:.5f}")
+
+    def localizar_objetivo_finder(self, lat: float, lon: float,
+                                   tipo: str, ident: str):
+        """Slot del Finder: centra la vista (sin destruir tracks) y arma el anillo
+        de mira parpadeante. Para aeronaves reusa el resaltado por filtro existente."""
+        # Centrar PANEANDO (pan_x/pan_y), sin mover el origen de proyección: así no se
+        # reproyecta nada (la reproyección con lat vs lat_render hacía saltar las pistas
+        # y dejaba rastros, p. ej. en CAT62 en vivo). Si no hay proyección activa, se
+        # cae al recentrado geográfico clásico.
+        proy = getattr(self, 'proy', None)
+        if proy is not None and proy.activo:
+            try:
+                tx, ty = proy.latlon_to_xy(lat, lon)
+                self.pan_x = -tx * self.zoom_factor
+                self.pan_y = ty * self.zoom_factor
+            except Exception:
+                self.centrar_en_coordenadas(lat, lon)
+        else:
+            self.centrar_en_coordenadas(lat, lon)
+        self._finder_mark = {"lat": lat, "lon": lon, "label": ident}
+        if tipo == "AIRCRAFT" and ident:
+            # set_highlight_filter es por-track (RadarPlot): se aplica a las pistas
+            # vivas para que solo la coincidente (callsign/squawk) quede resaltada.
+            for t in self.tracks.values():
+                t.set_highlight_filter(ident)
+        self._finder_timer.start(15000)   # auto-apagado a los 15 s
+        self.update()
+
+    def _limpiar_finder(self):
+        """Apaga el marcador del Finder y el resaltado de pistas (timeout o nueva búsqueda)."""
+        self._finder_mark = None
+        for t in self.tracks.values():
+            t.set_highlight_filter("")
+        self.update()
 
     def configurar_vista_perfil(self, lat: float, lon: float):
         """
@@ -1785,7 +1834,16 @@ class RadarWidget(_RadarBase):
                 elif (data.get('id') or '').startswith('PSR_'):
                     target_id = data['id']
                 else:
-                    return None
+                    # Sin identidad SSR/Mode-S (p.ej. parrot / field-monitor con squawk
+                    # 0000 en posición fija): no descartar. Se usa un id estable
+                    # cuantizado por posición polar para mostrarlo sin fusionar
+                    # distintos blancos 0000 entre sí.
+                    rho_q = data.get('rho_render') or data.get('raw_range')
+                    th_q = data.get('theta_render') or data.get('raw_azimuth')
+                    if rho_q is not None and th_q is not None:
+                        target_id = f"FIX_{sensor_id}_{round(float(rho_q) * 4) / 4:.2f}_{int(round(float(th_q))) % 360:03d}"
+                    else:
+                        return None
 
             # 4. Correlación / Actualización del Diccionario de Pistas
             def update_track(track: RadarPlot):
@@ -2459,6 +2517,7 @@ class RadarWidget(_RadarBase):
             self.apw_activos = []
             if hasattr(self, 'apw_dialog') and self.apw_dialog:
                 self.apw_dialog.actualizar_alertas([])
+            self._publicar_eventos_safety("APW", {})
             self.evaluar_msaw()
             return
 
@@ -2469,12 +2528,33 @@ class RadarWidget(_RadarBase):
             ahora = datetime.datetime.fromtimestamp(SimulationTime.time())
             alertas = engine_evaluar_apw(self.tracks.values(), self.get_all_areas(), ahora)
             self.apw_activos = alertas
-            
+
             if hasattr(self, 'apw_dialog') and self.apw_dialog:
                 self.apw_dialog.actualizar_alertas(alertas, self)
+            self._publicar_eventos_safety("APW", {
+                (a.track_id, a.area_name, a.tipo): (
+                    "CRITICAL" if a.tipo == "VIOLATION" else "WARNING",
+                    "APW",
+                    f"{a.tipo} {a.area_name}: {a.track_id}")
+                for a in alertas})
         except Exception as e:
             print(f"[APW ERROR] Error al evaluar APW: {e}")
         self.evaluar_msaw()
+
+    def _publicar_eventos_safety(self, subsistema: str, eventos: dict):
+        """Publica al bus de mensajes de sistema solo las claves nuevas.
+
+        eventos: {clave_estable: (nivel, origen, desc)}.
+        """
+        bus = getattr(self, 'system_bus', None)
+        if bus is None:
+            return
+        prev = self._safety_eventos_prev.get(subsistema, set())
+        actuales = set(eventos)
+        for clave in actuales - prev:
+            nivel, origen, desc = eventos[clave]
+            bus.inyectar(nivel, origen, desc)
+        self._safety_eventos_prev[subsistema] = actuales
 
     def evaluar_msaw(self):
         """Evalúa MSAW (altitud mínima de sector) para las pistas en TMA."""
@@ -2482,6 +2562,7 @@ class RadarWidget(_RadarBase):
             self.msaw_activos = []
             if getattr(self, 'msaw_dialog', None):
                 self.msaw_dialog.actualizar_alertas([])
+            self._publicar_eventos_safety("MSAW", {})
             return
         try:
             from player.msaw.engine import evaluar_msaw as _engine
@@ -2525,6 +2606,12 @@ class RadarWidget(_RadarBase):
                                         suppression=self._msaw_suppression)
             if getattr(self, 'msaw_dialog', None):
                 self.msaw_dialog.actualizar_alertas(self.msaw_activos, self)
+            self._publicar_eventos_safety("MSAW", {
+                (a.track_id, a.icao, a.tipo): (
+                    "CRITICAL" if a.tipo == "VIOLATION" else "WARNING",
+                    "MSAW",
+                    f"{a.tipo} {a.icao}: {a.track_id} a {a.alt_ft}ft (MSA {a.msa_ft}ft)")
+                for a in self.msaw_activos})
         except Exception as e:
             print(f"[MSAW ERROR] {e}")
 
@@ -2545,6 +2632,7 @@ class RadarWidget(_RadarBase):
             self.conflictos_activos = []
             if hasattr(self, 'stca_dialog') and self.stca_dialog:
                 self.stca_dialog.actualizar_alertas([])
+            self._publicar_eventos_safety("STCA", {})
             self.evaluar_apw()
             return
 
@@ -2674,6 +2762,14 @@ class RadarWidget(_RadarBase):
         # 2. Actualizar la UI flotante
         if hasattr(self, 'stca_dialog') and self.stca_dialog:
             self.stca_dialog.actualizar_alertas(conflictos, self)
+
+        self._publicar_eventos_safety("STCA", {
+            (tuple(sorted((t1, t2))), est): (
+                "CRITICAL" if est == "VIOLATION" else "WARNING",
+                "STCA",
+                f"{est} {l1}/{l2}" + (f" (CPA {tm}s)" if est == "PREDICTION" else ""))
+            for (l1, l2, est, _t, _dh, _dv), (t1, t2, _e, tm)
+            in zip(conflictos, self.conflictos_activos)})
 
         # 3. Evaluar alertas APW
         self.evaluar_apw()
@@ -2865,29 +2961,23 @@ class RadarWidget(_RadarBase):
                 sim_time.unfreeze()
             sweep_active = self.sweep_visible and self.sweep_enabled and self._is_playing
             if sweep_active:
-                sim_clock = sim_time.now()
-                target_angle = (sim_clock * 6.0 * self.sweep_rpm) % 360.0
-                
-                # En caso de un salto grande (seek, pausa larga, etc.), sincronizar de inmediato
+                # Avance incremental basado en tiempo real de pared.
+                # La alternativa (epoch_unix * 72 % 360) amplifica el jitter del timer
+                # de Windows (~15 ms) en saltos angulares visibles.
+                now_wall = time_module.time()
+                if self._last_sweep_wall_time is None:
+                    dt_wall = 0.0
+                else:
+                    dt_wall = now_wall - self._last_sweep_wall_time
+                    dt_wall = max(0.0, min(dt_wall, 2.0))   # cap: evita spin tras pausa larga
+                self._last_sweep_wall_time = now_wall
+
                 playback_speed = getattr(self, 'playback_speed', 1.0)
-                is_jump = False
-                if not hasattr(self, '_last_sim_time') or self._last_sim_time is None:
-                    is_jump = True
-                else:
-                    dt_sim = sim_clock - self._last_sim_time
-                    if dt_sim < 0.0 or dt_sim > 5.0 * max(1.0, playback_speed):
-                        is_jump = True
-                self._last_sim_time = sim_clock
-                
                 prev_sweep = self.sweep_angle
-                if is_jump:
-                    self.sweep_angle = target_angle
-                    prev_sweep = target_angle
-                else:
-                    self.sweep_angle = target_angle
+                self.sweep_angle = (self.sweep_angle + dt_wall * playback_speed * 6.0 * self.sweep_rpm) % 360.0
                 curr_sweep = self.sweep_angle
             else:
-                self._last_sim_time = None
+                self._last_sweep_wall_time = None
 
             if sweep_active:
                 to_promote = []
@@ -4131,11 +4221,44 @@ class RadarWidget(_RadarBase):
                 except Exception:
                     pass
 
+            # Finder táctico: anillo de mira sobre el objetivo localizado (encima de
+            # todo, parpadeante con blink_flag). En coords de pantalla vía proy.
+            if self._finder_mark is not None and self.blink_flag \
+                    and getattr(self, 'proy', None) is not None and self.proy.activo:
+                try:
+                    self._draw_finder_mark(painter)
+                except Exception:
+                    pass
+
         except Exception as e:
             print(f"[RadarWidget] Error en paintEvent: {e}")
             painter.restore()
         finally:
             painter.end()
+
+    def _draw_finder_mark(self, painter):
+        """Doble anillo concéntrico cian flúor + etiqueta sobre el objetivo del Finder."""
+        m = self._finder_mark
+        wx, wy = self.proy.latlon_to_xy(m["lat"], m["lon"])
+        p = self._world_to_screen(wx, wy)
+        if p is None:
+            return
+        painter.save()
+        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        cian = QColor("#00FFFF")
+        pen = QPen(cian)
+        pen.setWidthF(0.8)                 # trazo fino
+        painter.setPen(pen)
+        painter.drawEllipse(p, 11.0, 11.0)
+        painter.drawEllipse(p, 18.0, 18.0)
+        # Marcas de mira: 4 ticks cortos (N/S/E/O), no una cruz completa
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            painter.drawLine(QPointF(p.x() + dx * 11, p.y() + dy * 11),
+                             QPointF(p.x() + dx * 18, p.y() + dy * 18))
+        # Etiqueta
+        painter.setFont(QFont("Consolas", 8, QFont.Weight.Bold))
+        painter.drawText(QPointF(p.x() + 22, p.y() - 20), f"◎ {m['label']}")
+        painter.restore()
 
     def _draw_compass_rose(self, painter):
         """Rosa de rumbos sobre el anillo de área de control (centrada en el
@@ -5291,6 +5414,15 @@ class RadarWidget(_RadarBase):
                     painter.save()
                     painter.resetTransform()
                     _sym.draw_symbol(painter, spec, sp.x(), sp.y(), col)
+                    # SPI / IDENT: el piloto activó el pulso de identificación a
+                    # pedido del controlador. Halo circular parpadeante (~1 Hz).
+                    if plot.raw_dict.get('spi') and self.blink_flag:
+                        hi = spec.size_px + 5.0
+                        spi_col = QColor(0, 229, 255)
+                        spi_col.setAlpha(int(alpha))
+                        painter.setPen(QPen(spi_col, 2.0))
+                        painter.setBrush(Qt.BrushStyle.NoBrush)
+                        painter.drawEllipse(sp, hi, hi)
                     if seleccionado:
                         s = spec.size_px + 4.0
                         sel_col = QColor(*_pal.SELECTED)
@@ -5439,6 +5571,21 @@ class RadarWidget(_RadarBase):
             finally:
                 painter.restore()
                 
+            # 2b. SPI / IDENT: halo circular cian parpadeante (~1 Hz) cuando el
+            # piloto activó el pulso de identificación a pedido del controlador.
+            if plot.raw_dict.get('spi') and self.blink_flag:
+                try:
+                    painter.save()
+                    painter.translate(x, y)
+                    spi_col = QColor(0, 229, 255, alpha)
+                    painter.setPen(QPen(spi_col, safe_divide(2.0, z, 0.5)))
+                    painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                    r_spi = safe_divide(13.0, z, 2.0)
+                    painter.drawEllipse(QPointF(0, 0), r_spi, r_spi)
+                    painter.restore()
+                except Exception:
+                    pass
+
             # 3. Dibujar encuadre concéntrico de selección o hover en el símbolo
             is_focused = self.focused_target_id and plot.id == self.focused_target_id
             is_hovered = getattr(self, 'hovered_target_id', None) and plot.id == self.hovered_target_id

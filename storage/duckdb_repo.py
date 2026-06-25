@@ -219,8 +219,10 @@ class DuckDBRepository:
                     fl_val = plot.get('flight_level')
                     fl_str = '---' if fl_val is None else str(fl_val)
 
-                    az_val = plot.get('raw_azimuth') or 0.0
-                    rg_val = plot.get('raw_range') or 0.0
+                    az_raw = plot.get('raw_azimuth')
+                    rg_raw = plot.get('raw_range')
+                    az_val = None if az_raw is None else float(az_raw)
+                    rg_val = None if rg_raw is None else float(rg_raw)
 
                     tn_raw = plot.get('track_number')
                     track_number_val = int(tn_raw) if tn_raw is not None else None
@@ -240,7 +242,10 @@ class DuckDBRepository:
                     garbled_val = bool(plot.get('garbled', False))
                     freq_raw = plot.get('frequency')
                     freq_val = float(freq_raw) if freq_raw is not None else None
-                    pd_val = float(plot.get('pd', 100.0))
+                    # Pd NO es un valor por-plot: el cálculo real (obs/esperado) vive
+                    # en el motor PASS. Ausente => NULL, no un 100 ficticio.
+                    pd_raw = plot.get('pd')
+                    pd_val = None if pd_raw is None else float(pd_raw)
 
                     w.writerow([
                         float(time_val),
@@ -253,8 +258,8 @@ class DuckDBRepository:
                         float(lat_val),
                         float(lon_val),
                         fl_str,
-                        float(az_val),
-                        float(rg_val),
+                        az_val,
+                        rg_val,
                         track_number_val,
                         mode_s_val,
                         None if alt_ft_val is None else float(alt_ft_val),
@@ -353,91 +358,99 @@ class DuckDBRepository:
                     self.cola_insercion.task_done()
                     continue
 
-                # Extraer robustamente campos tanto del diccionario bruto como de AsterixPlot.to_dict()
-                time_val = plot.get('time') or plot.get('timestamp') or 0.0   # TX: ToD del mensaje (seg-del-día)
-                rx_val = plot.get('pcap_time') or 0.0                          # RX: llegada del paquete (epoch)
-                cat_val = plot.get('category') or 0
-                sac_sic_val = plot.get('sac_sic') or 'UNK'
-                
-                track_id = str(
-                    plot.get('mode_s') or 
-                    plot.get('target_address') or 
-                    plot.get('mode_3a') or 
-                    plot.get('mode3a') or 
-                    plot.get('track_number') or 
-                    ''
-                )
-                
-                callsign_val = (plot.get('callsign') or '').strip().upper()
+                try:
+                    # Extraer robustamente campos tanto del diccionario bruto como de AsterixPlot.to_dict()
+                    time_val = plot.get('time') or plot.get('timestamp') or 0.0   # TX: ToD del mensaje (seg-del-día)
+                    rx_val = plot.get('pcap_time') or 0.0                          # RX: llegada del paquete (epoch)
+                    cat_val = plot.get('category') or 0
+                    sac_sic_val = plot.get('sac_sic') or 'UNK'
 
-                # Squawk / Mode 3-A: el plot lo trae como int octal (ej. 0o2375).
-                m3a_raw = plot.get('mode3a')
-                if isinstance(m3a_raw, int):
-                    mode3a_val = f"{m3a_raw:04o}"
-                else:
-                    mode3a_val = str(m3a_raw).strip() if m3a_raw else ''
-
-                lat_val = plot.get('lat') or plot.get('lat_render') or 0.0
-                lon_val = plot.get('lon') or plot.get('lon_render') or 0.0
-
-                fl_val = plot.get('flight_level')
-                fl_str = '---' if fl_val is None else str(fl_val)
-
-                az_val = plot.get('raw_azimuth') or 0.0
-                rg_val = plot.get('raw_range') or 0.0
-
-                # Campos específicos por categoría (se guardan crudos; None => NULL/blanco)
-                tn_raw = plot.get('track_number')
-                track_number_val = int(tn_raw) if tn_raw is not None else None
-                mode_s_val = str(plot.get('mode_s')) if plot.get('mode_s') else ''
-                alt_ft_val = plot.get('altitude_ft')
-                gs_val = plot.get('ground_speed')
-                ta_val = plot.get('track_angle')
-                vr_val = plot.get('vertical_rate_ftmin')
-                plot_id_val = str(plot.get('id') or '')
-                rb = plot.get('raw_bytes')
-                raw_bytes_val = bytes(rb) if rb else None
-                
-                garbled_val = bool(plot.get('garbled', False))
-                freq_raw = plot.get('frequency')
-                freq_val = float(freq_raw) if freq_raw is not None else None
-                pd_val = float(plot.get('pd', 100.0))
-
-                lote.append((
-                    float(time_val),
-                    float(rx_val),
-                    int(cat_val),
-                    str(sac_sic_val),
-                    track_id,
-                    callsign_val,
-                    mode3a_val,
-                    float(lat_val),
-                    float(lon_val),
-                    fl_str,
-                    float(az_val),
-                    float(rg_val),
-                    track_number_val,
-                    mode_s_val,
-                    None if alt_ft_val is None else float(alt_ft_val),
-                    None if gs_val is None else float(gs_val),
-                    None if ta_val is None else float(ta_val),
-                    None if vr_val is None else float(vr_val),
-                    plot_id_val,
-                    raw_bytes_val,
-                    garbled_val,
-                    freq_val,
-                    pd_val,
-                ))
-
-                # Batch Insert de DuckDB
-                if len(lote) >= 10000:
-                    hilo_conn.executemany(
-                        "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        lote
+                    track_id = str(
+                        plot.get('mode_s') or
+                        plot.get('target_address') or
+                        plot.get('mode_3a') or
+                        plot.get('mode3a') or
+                        plot.get('track_number') or
+                        ''
                     )
-                    lote = []
-                    
-                self.cola_insercion.task_done()
+
+                    callsign_val = (plot.get('callsign') or '').strip().upper()
+
+                    m3a_raw = plot.get('mode3a')
+                    if isinstance(m3a_raw, int):
+                        mode3a_val = f"{m3a_raw:04o}"
+                    else:
+                        mode3a_val = str(m3a_raw).strip() if m3a_raw else ''
+
+                    lat_val = plot.get('lat') or plot.get('lat_render') or 0.0
+                    lon_val = plot.get('lon') or plot.get('lon_render') or 0.0
+
+                    fl_val = plot.get('flight_level')
+                    fl_str = '---' if fl_val is None else str(fl_val)
+
+                    az_raw = plot.get('raw_azimuth')
+                    rg_raw = plot.get('raw_range')
+                    az_val = None if az_raw is None else float(az_raw)
+                    rg_val = None if rg_raw is None else float(rg_raw)
+
+                    tn_raw = plot.get('track_number')
+                    track_number_val = int(tn_raw) if tn_raw is not None else None
+                    mode_s_val = str(plot.get('mode_s')) if plot.get('mode_s') else ''
+                    alt_ft_val = plot.get('altitude_ft')
+                    gs_val = plot.get('ground_speed')
+                    ta_val = plot.get('track_angle')
+                    vr_val = plot.get('vertical_rate_ftmin')
+                    plot_id_val = str(plot.get('id') or '')
+                    rb = plot.get('raw_bytes')
+                    raw_bytes_val = bytes(rb) if rb else None
+
+                    garbled_val = bool(plot.get('garbled', False))
+                    freq_raw = plot.get('frequency')
+                    freq_val = float(freq_raw) if freq_raw is not None else None
+                    pd_raw = plot.get('pd')
+                    pd_val = None if pd_raw is None else float(pd_raw)
+
+                    lote.append((
+                        float(time_val),
+                        float(rx_val),
+                        int(cat_val),
+                        str(sac_sic_val),
+                        track_id,
+                        callsign_val,
+                        mode3a_val,
+                        float(lat_val),
+                        float(lon_val),
+                        fl_str,
+                        az_val,
+                        rg_val,
+                        track_number_val,
+                        mode_s_val,
+                        None if alt_ft_val is None else float(alt_ft_val),
+                        None if gs_val is None else float(gs_val),
+                        None if ta_val is None else float(ta_val),
+                        None if vr_val is None else float(vr_val),
+                        plot_id_val,
+                        raw_bytes_val,
+                        garbled_val,
+                        freq_val,
+                        pd_val,
+                    ))
+
+                    # Batch Insert de DuckDB
+                    if len(lote) >= 10000:
+                        try:
+                            hilo_conn.executemany(
+                                "INSERT INTO asterix_plots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                lote
+                            )
+                        except Exception as e:
+                            print(f"[Storage Layer] Error en batch insert: {e}")
+                        lote = []
+
+                except Exception as e:
+                    print(f"[Storage Layer] Error procesando plot en worker: {e}")
+                finally:
+                    self.cola_insercion.task_done()
             except queue.Empty:
                 if lote:
                     try:
