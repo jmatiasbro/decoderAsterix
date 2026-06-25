@@ -412,7 +412,13 @@ class PlaybackWorker(QThread):
                     if records:
                         for rec in records:
                             cat = rec.get('category')
-                            if cat in (2, 34):
+                            if cat in (23, 34):
+                                # _procesar_registro actualiza radar_health, dispara
+                                # on_radar_health_changed (→ TechnicalMonitorWidget) y guarda en repo_db
+                                self.engine._procesar_registro(rec, proy_cache, set(), [])
+                                continue
+
+                            if cat == 2:
                                 sac, sic = rec.get('sac'), rec.get('sic')
                                 extra = rec.get('extra_data', {})
                                 if sac is not None and sic is not None:
@@ -433,8 +439,10 @@ class PlaybackWorker(QThread):
                             except Exception:
                                 pass
 
-                            # Usamos la hora actual para presentación en línea
+                            # Guardar en repo_db (analizador de paquetes) con ToD ASTERIX original
                             plot_dict = plot.to_dict()
+                            self.engine.repo_db.guardar_plot(dict(plot_dict))
+                            # Override de tiempo para presentación en línea en el PPI
                             plot_dict['time'] = pytime.time()
                             batch.append(plot_dict)
 

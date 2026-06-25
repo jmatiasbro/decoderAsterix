@@ -546,6 +546,7 @@ class TargetInspectionDialog(QDialog):
             QTableWidget::item {
                 padding: 6px;
                 border-bottom: 1px solid #1B2232;
+                color: #E0E6ED;
             }
             QTableWidget::item:selected {
                 background-color: rgba(0, 229, 255, 30);
@@ -606,7 +607,7 @@ class TargetInspectionDialog(QDialog):
         self.table.insertRow(row)
         campo = f"{asterix_id} {label}"
         item_campo = QTableWidgetItem(campo)
-        item_campo.setForeground(QColor("#0066CC"))
+        item_campo.setForeground(QColor("#7EB8D4"))
         self.table.setItem(row, 0, item_campo)
         if value is None or value == "" or value is False:
             valor_str = "—"
@@ -617,7 +618,7 @@ class TargetInspectionDialog(QDialog):
         else:
             valor_str = str(value)
         item_valor = QTableWidgetItem(valor_str)
-        item_valor.setForeground(QColor("#222222"))
+        item_valor.setForeground(QColor("#E0E6ED"))
         self.table.setItem(row, 1, item_valor)
 
     def _populate_all_fields(self, plot: 'RadarPlot', sensor_info: Dict):
@@ -875,6 +876,7 @@ class RadarWidget(_RadarBase):
         self.target_sweep_angle = 0.0
         self.sweep_rpm = 12.0
         self.playback_speed = 1.0
+        self._last_sweep_wall_time: Optional[float] = None
         self.sensor_rpms: Dict[Tuple[int, int], float] = {}
         self.sensor_times: Dict[Tuple[int, int], float] = {}
         self.sweep_visible = True
@@ -1029,6 +1031,7 @@ class RadarWidget(_RadarBase):
 
     def reset_sweep_angle(self):
         self.sweep_angle = 0.0
+        self._last_sweep_wall_time = None
 
     def set_sweep_visible(self, visible: bool):
         self.sweep_visible = visible
@@ -1113,7 +1116,7 @@ class RadarWidget(_RadarBase):
             sim_time = SimulationTime.instance()
             sim_time.freeze()
             self._is_playing = False
-            self._last_sweep_tick_time = None
+            self._last_sweep_wall_time = None
         finally:
             self._command_lock.release()
 
@@ -2958,29 +2961,23 @@ class RadarWidget(_RadarBase):
                 sim_time.unfreeze()
             sweep_active = self.sweep_visible and self.sweep_enabled and self._is_playing
             if sweep_active:
-                sim_clock = sim_time.now()
-                target_angle = (sim_clock * 6.0 * self.sweep_rpm) % 360.0
-                
-                # En caso de un salto grande (seek, pausa larga, etc.), sincronizar de inmediato
+                # Avance incremental basado en tiempo real de pared.
+                # La alternativa (epoch_unix * 72 % 360) amplifica el jitter del timer
+                # de Windows (~15 ms) en saltos angulares visibles.
+                now_wall = time_module.time()
+                if self._last_sweep_wall_time is None:
+                    dt_wall = 0.0
+                else:
+                    dt_wall = now_wall - self._last_sweep_wall_time
+                    dt_wall = max(0.0, min(dt_wall, 2.0))   # cap: evita spin tras pausa larga
+                self._last_sweep_wall_time = now_wall
+
                 playback_speed = getattr(self, 'playback_speed', 1.0)
-                is_jump = False
-                if not hasattr(self, '_last_sim_time') or self._last_sim_time is None:
-                    is_jump = True
-                else:
-                    dt_sim = sim_clock - self._last_sim_time
-                    if dt_sim < 0.0 or dt_sim > 5.0 * max(1.0, playback_speed):
-                        is_jump = True
-                self._last_sim_time = sim_clock
-                
                 prev_sweep = self.sweep_angle
-                if is_jump:
-                    self.sweep_angle = target_angle
-                    prev_sweep = target_angle
-                else:
-                    self.sweep_angle = target_angle
+                self.sweep_angle = (self.sweep_angle + dt_wall * playback_speed * 6.0 * self.sweep_rpm) % 360.0
                 curr_sweep = self.sweep_angle
             else:
-                self._last_sim_time = None
+                self._last_sweep_wall_time = None
 
             if sweep_active:
                 to_promote = []

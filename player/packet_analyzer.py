@@ -389,8 +389,12 @@ class AsterixAnalyzerWindow(QDialog):
         self.btn_reproducir.setToolTip(
             "Reproduce en la consola únicamente los plots actualmente filtrados.")
         self.btn_reproducir.clicked.connect(self._reproducir_filtrado)
+        btn_refresh = QPushButton("↺ Refrescar")
+        btn_refresh.setToolTip("Recargar datos desde la base de datos")
+        btn_refresh.clicked.connect(lambda: self.aplicar_filtros_base_datos(None))
         barra.addWidget(self.lbl_estado)
         barra.addStretch()
+        barra.addWidget(btn_refresh)
         barra.addWidget(self.btn_reproducir)
         barra.addWidget(btn_filtros)
         v.addLayout(barra)
