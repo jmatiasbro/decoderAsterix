@@ -180,6 +180,9 @@ class PlaybackWorker(QThread):
         if plot.track_number is not None and \
                 ("tn", str(plot.sac_sic), str(plot.track_number)) in targets:
             return True
+        sq = (plot.mode3a or "").strip()
+        if sq and ("ssr", str(plot.sac_sic), sq) in targets:
+            return True
         return False
 
     def seek_to_time(self, t: float):
@@ -235,8 +238,21 @@ class PlaybackWorker(QThread):
             return
             
         try:
-            plots, duration, sensores_vistos = self.engine.scan_pcap(self.pcap_file)
-            
+            # incluir_raw_bytes=True: el analizador/inspector de la pantalla principal
+            # lee los bloques crudos desde DuckDB. Se persisten una sola vez en bulk
+            # (sin contención del lock por registro) y luego se liberan de RAM, que el
+            # playback no los usa.
+            plots, duration, sensores_vistos = self.engine.scan_pcap(
+                self.pcap_file, incluir_raw_bytes=True)
+
+            try:
+                self.engine.repo_db.guardar_plots_bulk([p.to_dict() for p in plots])
+            except Exception as e:
+                print(f"[PlaybackWorker] No se pudo poblar el analizador: {e}")
+            finally:
+                for p in plots:
+                    p.raw_bytes = None
+
             self._mutex.lock()
             self._plots = plots
             self._duration = duration
@@ -396,7 +412,13 @@ class PlaybackWorker(QThread):
                     if records:
                         for rec in records:
                             cat = rec.get('category')
-                            if cat in (2, 34):
+                            if cat in (23, 34):
+                                # _procesar_registro actualiza radar_health, dispara
+                                # on_radar_health_changed (→ TechnicalMonitorWidget) y guarda en repo_db
+                                self.engine._procesar_registro(rec, proy_cache, set(), [])
+                                continue
+
+                            if cat == 2:
                                 sac, sic = rec.get('sac'), rec.get('sic')
                                 extra = rec.get('extra_data', {})
                                 if sac is not None and sic is not None:
@@ -417,8 +439,10 @@ class PlaybackWorker(QThread):
                             except Exception:
                                 pass
 
-                            # Usamos la hora actual para presentación en línea
+                            # Guardar en repo_db (analizador de paquetes) con ToD ASTERIX original
                             plot_dict = plot.to_dict()
+                            self.engine.repo_db.guardar_plot(dict(plot_dict))
+                            # Override de tiempo para presentación en línea en el PPI
                             plot_dict['time'] = pytime.time()
                             batch.append(plot_dict)
 

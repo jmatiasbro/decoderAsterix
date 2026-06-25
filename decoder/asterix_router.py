@@ -54,14 +54,36 @@ class AsterixRouter:
         # 1. Fast path: check top-level keys first
         for k, v in diccionario.items():
             k_low = str(k).lower()
-            if any(posible in k_low for posible in claves_posibles):
-                return v
+            for posible in claves_posibles:
+                if posible in k_low:
+                    return v
         # 2. Recurse into sub-dictionaries only if top-level match failed
         for v in diccionario.values():
             if isinstance(v, dict):
                 resultado = self._buscar_clave_recursiva(v, claves_posibles)
                 if resultado is not None:
                     return resultado
+        return None
+
+    @staticmethod
+    def _aplanar(diccionario, out):
+        """Aplana el dict a [(clave_minúscula, valor)] en el MISMO orden de visita
+        que _buscar_clave_recursiva (preorden: claves del nodo, luego sub-dicts).
+        Lowercasea cada clave una sola vez para reusar entre varias búsquedas."""
+        for k, v in diccionario.items():
+            out.append(((k if type(k) is str else str(k)).lower(), v))
+        for v in diccionario.values():
+            if isinstance(v, dict):
+                AsterixRouter._aplanar(v, out)
+        return out
+
+    @staticmethod
+    def _match(flat, claves_posibles):
+        """Primera coincidencia por substring sobre el dict ya aplanado."""
+        for k_low, v in flat:
+            for posible in claves_posibles:
+                if posible in k_low:
+                    return v
         return None
 
     def procesar_paquete_udp(self, payload_bytes: bytes, silent: bool = False) -> List[Dict[str, Any]]:
@@ -142,11 +164,15 @@ class AsterixRouter:
 
                     plot['category'] = cat
 
-                    sac = self._buscar_clave_recursiva(plot, ['sac', '010_sac'])
-                    sic = self._buscar_clave_recursiva(plot, ['sic', '010_sic'])
+                    # Aplanar UNA sola vez y reutilizar para todas las extracciones
+                    # (antes se recorría el dict 6-7 veces por plot: hotspot del decode).
+                    flat = self._aplanar(plot, [])
+
+                    sac = self._match(flat, ['sac', '010_sac'])
+                    sic = self._match(flat, ['sic', '010_sic'])
 
                     if sac is None or sic is None:
-                        item_010 = self._buscar_clave_recursiva(plot, ['010'])
+                        item_010 = self._match(flat, ['010'])
                         if isinstance(item_010, (list, tuple)) and len(item_010) >= 2:
                             sac, sic = item_010[0], item_010[1]
                         elif isinstance(item_010, dict):
@@ -159,8 +185,8 @@ class AsterixRouter:
                         else f"UNK_CAT{cat}"
                     )
 
-                    lat = self._buscar_clave_recursiva(plot, ['lat', 'latitude'])
-                    lon = self._buscar_clave_recursiva(plot, ['lon', 'longitude'])
+                    lat = self._match(flat, ['lat', 'latitude'])
+                    lon = self._match(flat, ['lon', 'longitude'])
 
                     if lat is not None and lon is not None:
                         plot['lat'] = float(lat)
@@ -170,8 +196,8 @@ class AsterixRouter:
                     claves_rho = ['rho', 'dist', 'distance', '040_rho', 'i048/040_rho', 'raw_range']
                     claves_theta = ['theta', 'azimuth', 'azi', '040_theta', 'i048/040_theta', 'raw_azimuth']
 
-                    raw_rho = self._buscar_clave_recursiva(plot, claves_rho)
-                    raw_theta = self._buscar_clave_recursiva(plot, claves_theta)
+                    raw_rho = self._match(flat, claves_rho)
+                    raw_theta = self._match(flat, claves_theta)
 
                     # Forzador numérico:
                     rho = extraer_numero(raw_rho)
@@ -180,6 +206,12 @@ class AsterixRouter:
                     if rho is not None and theta is not None:
                         plot['rho_render'] = rho
                         plot['theta_render'] = theta
+                        # Canónicos para análisis (PASS/estadísticas): el decode
+                        # nativo sólo dejaba las polares en *_render, perdiéndolas
+                        # al construir el AsterixPlot. setdefault no pisa lo que ya
+                        # haya puesto un decoder Python (cat048/cat001).
+                        plot.setdefault('raw_range', rho)
+                        plot.setdefault('raw_azimuth', theta)
 
                     # Bytes crudos del bloque ASTERIX (CAT + LEN + registros) para el
                     # inspector de bajo nivel. Es el bloque completo: si trae varios

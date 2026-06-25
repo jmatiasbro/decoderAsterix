@@ -779,6 +779,9 @@ class MainWindow(QMainWindow):
         }
         
         self.worker: Optional[PlaybackWorker] = None
+        from player.centro_tecnico.system_events import SystemEventBus
+        self.system_bus = SystemEventBus(self)
+        self._health_alarmas_prev: dict = {}
         self.profile_manager = ProfileManager()
         self.techo_incumbencia = self.profile_manager.get_nivel_incumbencia()
         self.cache_dir = tempfile.mkdtemp(prefix="asterix_cache_")
@@ -818,6 +821,7 @@ class MainWindow(QMainWindow):
             sensores=self.sensores,
             declinacion_magnetica=self.profile_manager.get_declinacion_magnetica()
         )
+        self.radar.system_bus = self.system_bus
         self.radar.plot_filter_fn = self._plot_passes_filters
         self.radar.sensores_visibles = self.sensores_activos.copy()
         self.radar.setStyleSheet("background-color: #0B0E14;")
@@ -921,7 +925,7 @@ class MainWindow(QMainWindow):
         menu_ver.addAction(self.act_toggle_dock)
         
         self.act_toggle_tech_dock = self.dock_technical.toggleViewAction()
-        self.act_toggle_tech_dock.setText("Diagnóstico Técnico ATSEP")
+        self.act_toggle_tech_dock.setText("Analista CAT 34/23")
         menu_ver.addAction(self.act_toggle_tech_dock)
         
         self.act_toggle_reloj = menu_ver.addAction("Reloj UTC Flotante")
@@ -935,6 +939,8 @@ class MainWindow(QMainWindow):
             lambda v: self.panel_sensores.setVisible(v) or (self.panel_sensores.raise_() if v else None))
         menu_ver.addSeparator()
         self.act_analizador_paquetes = menu_ver.addAction("Analizador de Paquetes…", self._abrir_analizador_paquetes)
+        self.act_finder = menu_ver.addAction("Finder Táctico…", self._abrir_finder)
+        self.act_finder.setShortcut("Ctrl+F")
         menu_ver.addSeparator()
         self.act_toggle_incumbencia = menu_ver.addAction("Vista de Incumbencia (Jurisdicción)")
         self.act_toggle_incumbencia.setCheckable(True)
@@ -1042,6 +1048,22 @@ class MainWindow(QMainWindow):
         self.act_fir = menu_modo.addAction(_icon("fa5s.globe-americas"), "Vista FIR (satélite)")
         self.act_fir.setCheckable(True)
         self.act_fir.toggled.connect(self._toggle_vista_fir)
+
+        # Menú Ayuda — guía de funcionamiento (se abre en el navegador)
+        menu_ayuda = menu_bar.addMenu("Ayuda")
+        menu_ayuda.addAction(_icon("fa5s.book"), "Guía de la aplicación", self._abrir_ayuda)
+
+    def _abrir_ayuda(self):
+        """Abre la guía de funcionamiento (HTML) en el navegador por defecto."""
+        import os
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ruta = os.path.join(base_dir, "docs", "ayuda", "index.html")
+        if not os.path.exists(ruta):
+            QMessageBox.warning(self, "Ayuda", f"No se encontró la guía:\n{ruta}")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(ruta))
 
     def _toggle_vista_fir(self, on: bool):
         """Vista FIR satelital EMBEBIDA: cubre el PPI (hija del radar). Off -> oculta."""
@@ -1316,6 +1338,8 @@ class MainWindow(QMainWindow):
             "background-color: #121824; color: #39FF14; border: 1px solid #4B5263;"
             " border-radius: 4px; font-weight: bold;")
         self.sb_qnh.valueChanged.connect(self._on_qnh_changed)
+        self.sb_qnh.editingFinished.connect(self._on_qnh_committed)
+        self._qnh_logged = self.sb_qnh.value()
         lay_qnh.addWidget(t_qnh)
         lay_qnh.addWidget(self.sb_qnh)
         self.hud_bar.addWidget(cont_qnh)
@@ -1338,10 +1362,56 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.hud_bar.addWidget(spacer)
+
+        # Mensajes de Sistema — disponible para ambos roles (técnico y controlador).
+        self.btn_hud_msgs = QPushButton(" MSG")
+        self.btn_hud_msgs.setToolTip("Lista de mensajes de sistema (eventos sin reconocer)")
+        self.btn_hud_msgs.clicked.connect(self._abrir_mensajes_sistema)
+        self.hud_bar.addWidget(self.btn_hud_msgs)
+        self.system_bus.cola_cambiada.connect(self._actualizar_badge_msgs)
+        self._actualizar_badge_msgs()
+        self.hud_bar.addSeparator()
+
         cont_utc, self.lbl_hud_utc = _campo("UTC", "00:00:00", "#39FF14")
         self._act_hud_utc = self.hud_bar.addWidget(cont_utc)
 
         self._actualizar_hud(self.profile_manager.profile)
+
+    def _actualizar_badge_msgs(self):
+        """Refresca el contador/color del botón de Mensajes de Sistema."""
+        if not hasattr(self, 'btn_hud_msgs'):
+            return
+        n = self.system_bus.pendientes
+        self.btn_hud_msgs.setText(f" MSG ({n})" if n else " MSG")
+        if self.system_bus.hay_criticos:
+            borde, fondo, txt = "#FF3333", "#2A1414", "#FF6666"
+        elif n:
+            borde, fondo, txt = "#FFCC00", "#2A2614", "#FFD700"
+        else:
+            borde, fondo, txt = "#4B5263", "#121824", "#6B7A8D"
+        self.btn_hud_msgs.setStyleSheet(
+            f"QPushButton {{ background-color: {fondo}; color: {txt}; border: 1px solid {borde};"
+            f" border-radius: 4px; padding: 3px 10px; font-weight: bold; font-size: 9pt; }}"
+            f"QPushButton:hover {{ border: 1px solid #88C0D0; }}")
+
+    def _abrir_mensajes_sistema(self):
+        from player.centro_tecnico.system_events import SystemMessagesDialog
+        if getattr(self, "_msgs_dialog", None) is None:
+            self._msgs_dialog = SystemMessagesDialog(self.system_bus, self)
+        self._msgs_dialog.show()
+        self._msgs_dialog.raise_()
+        self._msgs_dialog.activateWindow()
+
+    def _abrir_finder(self):
+        from player.radar_finder_dialog import RadarFinderDialog
+        if getattr(self, "_finder_dialog", None) is None:
+            self._finder_dialog = RadarFinderDialog(self.radar, self)
+            self._finder_dialog.target_located.connect(self.radar.localizar_objetivo_finder)
+        self._finder_dialog.show()
+        self._finder_dialog.raise_()
+        self._finder_dialog.activateWindow()
+        self._finder_dialog.txt_search.setFocus()
+        self._finder_dialog.txt_search.selectAll()
 
     def _actualizar_hud(self, perfil_data: dict):
         """Refresca los campos del HUD desde el perfil operativo."""
@@ -1626,6 +1696,7 @@ class MainWindow(QMainWindow):
         self.chk_modo_crudo.toggled.connect(self._on_modo_crudo_toggled)
 
         self.chk_ocultar_parrot = self._make_toggle_button("Ocultar Parrot (Sqwk 0000)", "#FFA500")
+        self.chk_ocultar_parrot.toggled.connect(self._on_ocultar_parrot_toggled)
 
         l_hist.addWidget(self.chk_show_history)
         l_hist.addLayout(l_modo)
@@ -1745,7 +1816,7 @@ class MainWindow(QMainWindow):
 
     def _setup_technical_monitor_dock(self):
         from player.technical_monitor import TechnicalMonitorWidget
-        self.dock_technical = QDockWidget("Diagnóstico Técnico ATSEP (CAT 034 / 023)", self)
+        self.dock_technical = QDockWidget("Analista CAT 34/23", self)
         self.tech_monitor = TechnicalMonitorWidget(self)
         self.dock_technical.setWidget(self.tech_monitor)
         self.dock_technical.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea)
@@ -1895,6 +1966,20 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'radar') and self.radar is not None:
             self.radar.mtr_visible = checked
             self.radar.update()
+
+    def _on_ocultar_parrot_toggled(self, checked: bool):
+        """Al activar, purga al instante los tracks parrot (Sqwk 0000) ya vivos;
+        si no, esperarían a expirar por lifecycle y el botón parece no responder."""
+        if not (hasattr(self, 'radar') and self.radar is not None):
+            return
+        if checked:
+            for store in (getattr(self.radar, 'tracks', {}),
+                          getattr(self.radar, 'pending_tracks', {})):
+                muertos = [tid for tid, trk in store.items()
+                           if str(getattr(trk, 'mode3a', '') or '').strip() == "0000"]
+                for tid in muertos:
+                    store.pop(tid, None)
+        self.radar.update()
 
     def _clear_history(self):
         if hasattr(self.radar, 'history'):
@@ -2119,6 +2204,10 @@ class MainWindow(QMainWindow):
                 os.path.basename(file_paths[0]) if len(file_paths) == 1
                 else f"{len(file_paths)} archivos")
 
+        _desc_pcap = (os.path.basename(file_paths[0]) if len(file_paths) == 1
+                      else f"{len(file_paths)} archivos")
+        self.system_bus.inyectar("INFO", "APP", f"PCAP cargado: {_desc_pcap}")
+
         # Iniciar fase de decodificación/carga inmediatamente
         self.btn_play.setEnabled(False)
         self.btn_cargar.setEnabled(False)
@@ -2177,6 +2266,7 @@ class MainWindow(QMainWindow):
         self.worker.sensor_detected.connect(self._on_sensor_detected)
         self.worker.rotation_speed_detected.connect(self._on_rotation_speed_detected)
         self.worker.radar_health_changed.connect(self.tech_monitor.update_sensor_status)
+        self.worker.radar_health_changed.connect(self._on_health_evento)
         
         self.worker.start()
 
@@ -2353,6 +2443,37 @@ class MainWindow(QMainWindow):
         else:
             self.btn_play.setText("Error en PCAP")
             self._show_panel()
+
+    def _on_health_evento(self, key, data: dict):
+        """Publica al bus de mensajes de sistema solo las transiciones de alarma."""
+        flags_fault = {"sys_nogo": "NOGO"}
+        flags_warn = {"ovl_rdp": "OVL RDP", "ovl_xmt": "OVL XMT", "time_invalid": "TIME INVALID",
+                      "psr_ovl": "PSR OVL", "ssr_ovl": "SSR OVL", "mds_ovl": "MDS OVL",
+                      "monitor_disc": "MONITOR DISC"}
+        actuales = set()
+        for campo in (*flags_fault, *flags_warn):
+            if data.get(campo):
+                actuales.add(campo)
+        ss = data.get("system_state")
+        if ss == 3:
+            actuales.add("system_critical")
+        elif ss in (1, 2):
+            actuales.add("system_degraded")
+
+        previas = self._health_alarmas_prev.get(key, set())
+        nuevas = actuales - previas
+        self._health_alarmas_prev[key] = actuales
+        if not nuevas:
+            return
+        origen = f"SENSOR {key[0]}/{key[1]}"
+        for f in nuevas:
+            if f in flags_fault or f == "system_critical":
+                nivel, desc = "CRITICAL", flags_fault.get(f, "Falla crítica de la estación")
+            elif f == "system_degraded":
+                nivel, desc = "WARNING", "Estación degradada / sobrecarga"
+            else:
+                nivel, desc = "WARNING", flags_warn[f]
+            self.system_bus.inyectar(nivel, origen, desc)
 
     def _on_sensor_detected(self, sac: int, sic: int):
         sensor_id = f"{sac}/{sic}"
@@ -3249,6 +3370,16 @@ class MainWindow(QMainWindow):
         self._actualizar_tl_hud()
         self.radar.update()
 
+    def _on_qnh_committed(self):
+        """Registra el QNH solo cuando se confirma el valor final (Enter/foco)."""
+        value = self.sb_qnh.value()
+        if value == getattr(self, "_qnh_logged", None):
+            return
+        self._qnh_logged = value
+        tl = self.radar.altimetry.transition_level
+        tl_str = f"FL{tl}" if tl is not None else "—"
+        self.system_bus.inyectar("INFO", "APP", f"QNH ajustado a {value} hPa (TL {tl_str})")
+
     def _aplicar_rol(self, perfil_data: dict):
         """Aplica el rol operativo: vista limpia + bloqueo de playback para el controlador.
 
@@ -3372,6 +3503,9 @@ class MainWindow(QMainWindow):
 
         # Cargar áreas de usuario del store
         self._cargar_areas_usuario(nombre or "Default")
+
+        rol = str(perfil_data.get("rol", "tecnico")).strip().upper()
+        self.system_bus.inyectar("INFO", "APP", f"Perfil aplicado: {nombre or 'Default'} ({rol})")
 
         self.radar.update()
 
@@ -4252,6 +4386,7 @@ class MainWindow(QMainWindow):
             self.worker.error_occurred.connect(self._on_udp_error)
             self.worker.playback_finished.connect(self._on_udp_finished)
             self.worker.radar_health_changed.connect(self.tech_monitor.update_sensor_status)
+            self.worker.radar_health_changed.connect(self._on_health_evento)
 
             # 5. Deshabilitar controles históricos conflictivos
             self.btn_cargar.setEnabled(False)
@@ -4296,6 +4431,7 @@ class MainWindow(QMainWindow):
             self.btn_pass.setEnabled(True)
 
             _puertos_str = ",".join(str(p) for p in puertos_escucha)
+            self.system_bus.inyectar("INFO", "APP", f"Feed UDP conectado: {ip_escucha}:{_puertos_str}")
             print(f"[UDP Live] Conectado exitosamente. Escuchando en {ip_escucha}:{_puertos_str}")
             self.setWindowTitle(f"ASTERIX Radar Decoder - LIVE UDP ({ip_escucha}:{_puertos_str})")
         else:
@@ -4358,6 +4494,7 @@ class MainWindow(QMainWindow):
     def _on_udp_error(self, message: str):
         # Desconectar ante error de red/socket
         print(f"[UDP Live Error] {message}")
+        self.system_bus.inyectar("CRITICAL", "RED", f"Error de feed UDP: {message}")
         self._desconectar_udp_ui()
         from PyQt6.QtWidgets import QMessageBox
         QMessageBox.critical(self, "Error de Conexión UDP", message)
@@ -4614,6 +4751,16 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self._limpiar_worker()
         shutil.rmtree(self.cache_dir, ignore_errors=True)
+        # Cerrar las ventanas flotantes (Qt.Tool: paneles MSAW/APW, finder, reloj,
+        # panel de sensores, vista FIR…). Si no, quedan visibles y mantienen vivo el
+        # proceso al cerrar la principal (se ve sobre todo en Linux/X11).
+        from PyQt6.QtWidgets import QApplication
+        for w in QApplication.topLevelWidgets():
+            if w is not self:
+                try:
+                    w.close()
+                except Exception:
+                    pass
         event.accept()
 
 if __name__ == '__main__':

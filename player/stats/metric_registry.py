@@ -20,23 +20,26 @@ class Metric:
 ALL_DIMS = ("radar", "hour", "mode3a", "fl_band", "category", "callsign", "mode_s", "garbled")
 
 
+# Métricas agregables. Criterio: que la magnitud sea real y la columna esté
+# poblada con datos monoradar.
+#   - Se eliminó "Azimut medio": el azimut es CIRCULAR, su media aritmética no
+#     tiene sentido (promediar 350° y 10° da 180°). El azimut es coordenada, no
+#     magnitud — para verlo usar Rosa de azimut / PPI.
+#   - Se eliminó "Pd medio": el Pd no es un valor por-plot (ver pestaña PASS y el
+#     preset "Pd vs Azimut", que lo computan obs/esperado).
+#   - Vertical = flight_level (siempre poblado en CAT048/001 vía Mode C); se quitó
+#     altitude_ft, que sólo se llena con altitud geométrica y suele venir NULL.
+#   - No todo es promedio: count, máximos (alcance/techo/velocidad), p95 y tasa.
 METRICS = [
-    Metric("count",     "Nº detecciones",   "",          "count", ALL_DIMS),
-    Metric("avg_range", "Rango medio (NM)", "raw_range", "avg",   ALL_DIMS),
-    Metric("p95_range", "Rango p95 (NM)",   "raw_range", "p95",   ALL_DIMS),
-    Metric("raw_azimuth", "Azimut (°)", "raw_azimuth", "avg", ALL_DIMS),
-    Metric("raw_range", "Rango (NM)", "raw_range", "avg", ALL_DIMS),
-    Metric("timestamp", "Tiempo (s)", "timestamp", "avg", ALL_DIMS),
-    Metric("altitude_ft", "Modo C / Altitud (ft)", "altitude_ft", "avg", ALL_DIMS),
-    Metric("mode3a", "Modo A / SSR (Código)", "mode3a", "count", ALL_DIMS),
-    Metric("pd", "Probabilidad de Detección (Pd, %)", "pd", "avg", ALL_DIMS),
-    Metric("garbled", "Garbling", "garbled", "avg", ALL_DIMS),
-    Metric("sac_sic", "SIC/SAC", "sac_sic", "count", ALL_DIMS),
-    Metric("mode_s", "Aircraft Address (Mode S)", "mode_s", "count", ALL_DIMS),
-    Metric("callsign", "Callsign", "callsign", "count", ALL_DIMS),
-    Metric("lat", "Latitud (°)", "lat", "avg", ALL_DIMS),
-    Metric("lon", "Longitud (°)", "lon", "avg", ALL_DIMS),
-    Metric("frequency", "Frecuencia (MHz)", "frequency", "avg", ALL_DIMS),
+    Metric("count",         "Nº detecciones",        "",            "count", ALL_DIMS),
+    Metric("max_range",     "Alcance máx (NM)",      "raw_range",   "max",   ALL_DIMS),
+    Metric("avg_range",     "Rango medio (NM)",      "raw_range",   "avg",   ALL_DIMS),
+    Metric("p95_range",     "Rango p95 (NM)",        "raw_range",   "p95",   ALL_DIMS),
+    Metric("max_fl",        "Techo (FL)",            "flight_level","max",   ALL_DIMS),
+    Metric("avg_fl",        "Nivel medio (FL)",      "flight_level","avg",   ALL_DIMS),
+    Metric("max_gs",        "Velocidad máx (kt)",    "ground_speed","max",   ALL_DIMS),
+    Metric("avg_gs",        "Velocidad media (kt)",  "ground_speed","avg",   ALL_DIMS),
+    Metric("garbled_rate",  "Tasa de garbling (%)",  "garbled",     "rate",  ALL_DIMS),
 ]
 
 
@@ -83,13 +86,27 @@ def aggregate(rows, metric, dimension):
         if metric.agg == "count":
             v = float(len(group))
         else:
-            vals = [g.get(metric.column) for g in group if g.get(metric.column) is not None]
+            # Coerción numérica robusta: flight_level llega como str ("100"),
+            # garbled como bool. Se descartan los no convertibles.
+            vals = []
+            for g in group:
+                x = g.get(metric.column)
+                if x is None:
+                    continue
+                try:
+                    vals.append(float(x))
+                except (TypeError, ValueError):
+                    continue
             if not vals:
                 continue
             if metric.agg == "avg":
                 v = float(np.mean(vals))
+            elif metric.agg == "max":
+                v = float(np.max(vals))
             elif metric.agg == "p95":
                 v = float(np.percentile(vals, 95))
+            elif metric.agg == "rate":      # fracción de True → porcentaje
+                v = float(np.mean(vals)) * 100.0
             else:
                 raise ValueError(metric.agg)
         out.append((k, v))

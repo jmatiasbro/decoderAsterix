@@ -188,9 +188,12 @@ class DataEngine:
         
         self._running = True
  
-        # Inicializar repositorio analítico DuckDB
-        from storage.duckdb_repo import DuckDBRepository
-        self.repo_db = repo_db or DuckDBRepository()
+        # Repositorio analítico DuckDB: conexión PEREZOSA. Abrir el archivo en el
+        # constructor hace que cada scan/playback contienda el lock del .duckdb
+        # compartido (su hilo escritor + I/O compiten durante la decodificación),
+        # inflando la carga ~6× aunque scan_pcap corra en bulk y no persista nada.
+        # Se crea recién en el primer uso real (guardar_plot / query / PASS).
+        self._repo_db = repo_db
         self.bulk_import_mode = False
 
         # Arquitectura dual de ingestión
@@ -221,11 +224,24 @@ class DataEngine:
     def stop(self):
         self._running = False
 
+    @property
+    def repo_db(self):
+        """Repo DuckDB perezoso: se conecta recién al primer acceso real."""
+        if self._repo_db is None:
+            from storage.duckdb_repo import DuckDBRepository
+            self._repo_db = DuckDBRepository()
+        return self._repo_db
+
+    @repo_db.setter
+    def repo_db(self, value):
+        self._repo_db = value
+
     def close(self):
         """Cierra de forma limpia el repositorio analítico de DuckDB."""
-        if hasattr(self, 'repo_db') and self.repo_db:
+        # No usar la property: cerrar no debe forzar la creación de un repo no usado.
+        if getattr(self, '_repo_db', None) is not None:
             try:
-                self.repo_db.close()
+                self._repo_db.close()
             except Exception:
                 pass
 
@@ -393,7 +409,9 @@ class DataEngine:
         cache_filename = f"{hasher.hexdigest()}.cache.pkl"
         return os.path.join(self.cache_dir, cache_filename)
 
-    def _read_cache(self, pcap_file: str) -> Optional[List[AsterixPlot]]:
+    def _read_cache(self, pcap_file: str, incluir_raw_bytes: bool = False) -> Optional[List[AsterixPlot]]:
+        # Caché local generado por la propia app desde un PCAP local (no es entrada
+        # externa no confiable); el uso de pickle aquí es consistente con el resto.
         cache_path = self._get_cache_filepath(pcap_file)
         if not os.path.exists(cache_path):
             return None
@@ -406,8 +424,8 @@ class DataEngine:
 
             with open(cache_path, 'rb') as f:
                 cache_data = pickle.load(f)
-            
-            CACHE_VERSION = 19
+
+            CACHE_VERSION = 20
             metadata = cache_data.get('metadata', {})
             if (metadata.get('pcap_size') != pcap_size or
                 metadata.get('pcap_mtime') != pcap_mtime or
@@ -415,8 +433,23 @@ class DataEngine:
                 print("[DataEngine] Cache obsoleto o versión de estructura diferente. Re-decodificando.")
                 return None
 
+            plots = cache_data.get('plots', [])
+            # raw_bytes (solo lo usa el inspector de la suite) vive en un archivo
+            # lateral; el playback no lo necesita y así el caché principal es más
+            # liviano. Se reanexa solo si se pide explícitamente.
+            if incluir_raw_bytes:
+                side_path = cache_path + ".rawbytes"
+                if not os.path.exists(side_path):
+                    print("[DataEngine] Falta el lateral de raw_bytes; re-decodificando para la suite.")
+                    return None
+                with open(side_path, 'rb') as f:
+                    raws = pickle.load(f)
+                if len(raws) == len(plots):
+                    for p, rb in zip(plots, raws):
+                        p.raw_bytes = rb
+
             print("[DataEngine] Cache válido. Cargando plots desde el caché.")
-            return cache_data.get('plots', [])
+            return plots
         except Exception as e:
             print(f"[DataEngine] Error leyendo caché: {e}. Re-decodificando.")
             return None
@@ -428,18 +461,30 @@ class DataEngine:
             pcap_size = os.path.getsize(pcap_file)
             pcap_mtime = os.path.getmtime(pcap_file)
 
+            # raw_bytes va a un archivo lateral: el caché principal (que usa el
+            # playback) queda más liviano. Se extrae sin mutar los objetos vivos
+            # (se restauran tras picklear el principal).
+            raws = [getattr(p, 'raw_bytes', None) for p in plots]
+            for p in plots:
+                p.raw_bytes = None
             cache_data = {
                 'metadata': {
                     'pcap_path': os.path.abspath(pcap_file),
                     'pcap_size': pcap_size,
                     'pcap_mtime': pcap_mtime,
                     'cache_time': time.time(),
-                    'cache_version': 19
+                    'cache_version': 20
                 },
                 'plots': plots
             }
-            with open(cache_path, 'wb') as f:
-                pickle.dump(cache_data, f)
+            try:
+                with open(cache_path, 'wb') as f:
+                    pickle.dump(cache_data, f)
+            finally:
+                for p, rb in zip(plots, raws):
+                    p.raw_bytes = rb
+            with open(cache_path + ".rawbytes", 'wb') as f:
+                pickle.dump(raws, f)
         except Exception as e:
             print(f"[DataEngine] Error escribiendo al caché: {e}")
 
@@ -478,9 +523,14 @@ class DataEngine:
                     data_health = self.radar_health.get((sac, sic), {
                         "channel_ab": "UNKNOWN",
                         "antenna_azimuth": None,
-                        "com_fault": False,
-                        "ext_fault": False,
-                        "ant_fault": False,
+                        "sys_nogo": False,
+                        "ovl_rdp": False,
+                        "ovl_xmt": False,
+                        "monitor_disc": False,
+                        "time_invalid": False,
+                        "psr_ovl": False,
+                        "ssr_ovl": False,
+                        "mds_ovl": False,
                         "system_state": None,
                         "ups_active": False
                     }).copy()
@@ -494,12 +544,20 @@ class DataEngine:
                         if 'antenna_rpm' in extra and self.on_rotation_speed_detected:
                             self.on_rotation_speed_detected(sac, sic, extra['antenna_rpm'])
                             
-                        # Extraer telemetría de CAT 34
+                        # Extraer telemetría de CAT 34 (I034/050 subcampo COM)
                         data_health["channel_ab"] = rec.get("channel_ab", "UNKNOWN")
                         data_health["antenna_azimuth"] = rec.get("azimuth")
-                        data_health["com_fault"] = rec.get("com_fault", False)
-                        data_health["ext_fault"] = rec.get("ext_fault", False)
-                        data_health["ant_fault"] = rec.get("ant_fault", False)
+                        # Solo actualizar el estado COM cuando el mensaje lo trae
+                        # (mensajes de sector/norte no incluyen I034/050).
+                        if "sys_nogo" in rec:
+                            data_health["sys_nogo"] = rec.get("sys_nogo", False)
+                            data_health["ovl_rdp"] = rec.get("ovl_rdp", False)
+                            data_health["ovl_xmt"] = rec.get("ovl_xmt", False)
+                            data_health["monitor_disc"] = rec.get("monitor_disc", False)
+                            data_health["time_invalid"] = rec.get("time_invalid", False)
+                            data_health["psr_ovl"] = rec.get("psr_ovl", False)
+                            data_health["ssr_ovl"] = rec.get("ssr_ovl", False)
+                            data_health["mds_ovl"] = rec.get("mds_ovl", False)
                     
                     elif cat == 23:
                         # Extraer telemetría de CAT 23
@@ -715,10 +773,14 @@ class DataEngine:
                     
                     synthetic_time += 0.02
 
-    def scan_pcap(self, pcap_files) -> Tuple[List[AsterixPlot], float, Set[Tuple[int, int]]]:
+    def scan_pcap(self, pcap_files, incluir_raw_bytes: bool = False) -> Tuple[List[AsterixPlot], float, Set[Tuple[int, int]]]:
         """
         Escanea y decodifica uno o múltiples archivos PCAP, PCAPNG o ASTERIX Binarios Crudos.
         Retorna (plots, duración total, sensores_detectados).
+
+        `incluir_raw_bytes`: solo la suite técnica (inspector) lo necesita. Por
+        defecto False -> el playback no carga ni retiene los bloques crudos
+        (menos RAM y caché más liviano).
         """
         self.set_playback_mode(True)
         self.bulk_import_mode = True
@@ -734,7 +796,7 @@ class DataEngine:
                 print(f"[DataEngine] Archivo no encontrado: {pcap_file}")
                 continue
 
-            cached_plots = self._read_cache(pcap_file)
+            cached_plots = self._read_cache(pcap_file, incluir_raw_bytes)
             if cached_plots is not None:
                 print(f"[DataEngine] Usando caché para {pcap_file} ({len(cached_plots)} plots)")
                 all_plots.extend(cached_plots)
@@ -984,6 +1046,12 @@ class DataEngine:
         self.duration = last_tod - first_tod
         if self.duration < 0: 
             self.duration += SECONDS_PER_DAY
+
+        # Si no se pidieron, liberar los bloques crudos: en cold ya se persistieron
+        # al lateral del caché; el playback no los usa y así no ocupan RAM.
+        if not incluir_raw_bytes:
+            for p in all_plots:
+                p.raw_bytes = None
 
         self.plots = all_plots
         return all_plots, self.duration, sensores_vistos

@@ -1,13 +1,13 @@
 {
     "nombre_usuario": "ROBERTO",
-    "rol": "controlador",
+    "rol": "tecnico",
     "aeropuerto_trabajo": "SACO",
     "coordenadas_centro": {
         "lat": -31.31,
         "lon": -64.20833
     },
     "nivel_incumbencia": 95,
-    "radio_incumbencia": 200,
+    "radio_incumbencia": 55,
     "transition_altitude": 10000,
     "frecuencias_sector": [
         "",

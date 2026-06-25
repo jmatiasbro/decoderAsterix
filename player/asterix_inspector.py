@@ -33,7 +33,10 @@ def generar_hex_dump(data: bytes) -> str:
         chunk = data[i:i + 16]
         hex_vals = " ".join(f"{b:02X}" for b in chunk).ljust(47)
         ascii_vals = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
-        lines.append(f"{i:04X}  {hex_vals}  |{ascii_vals}|")
+        # Formato del visor de referencia: dirección + hex (ancho fijo) + ASCII en
+        # columna propia, sin delimitadores. La separación fija mantiene el ASCII
+        # alineado bajo la misma columna en todas las líneas (incluida la parcial).
+        lines.append(f"{i:04X}  {hex_vals}    {ascii_vals}")
     return "\n".join(lines)
 
 
@@ -756,7 +759,7 @@ class AsterixInspectorDialog(QDialog):
         self.raw_bytes, self.info = self.paquetes[0]
         self.setWindowTitle("Inspector de Paquete ASTERIX — Bajo Nivel")
         from player.ui_scaling import escalar_ventana
-        escalar_ventana(self, 980, 600)
+        escalar_ventana(self, 1180, 600)
         self.setModal(False)
         self._init_ui()
         self._cargar()
@@ -822,9 +825,21 @@ class AsterixInspectorDialog(QDialog):
         der.addWidget(cont_det)
 
         splitter.addWidget(der)
-        splitter.setSizes([180, 440, 500])
+        splitter.setSizes([150, 360, 670])
         der.setSizes([200, 400])
         layout.addWidget(splitter)
+
+        # El hex+ASCII necesita ancho fijo para no solapar columnas en el panel.
+        from PyQt6.QtGui import QFontMetrics
+        ancho_hex = QFontMetrics(self.hex_viewer.font()).horizontalAdvance("0" * 76)
+        self.hex_viewer.setMinimumWidth(ancho_hex)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Abrir maximizado para una mejor visión del hex/ASCII y el árbol.
+        if not getattr(self, "_maximizado_inicial", False):
+            self._maximizado_inicial = True
+            self.showMaximized()
 
     def _etiqueta_item(self, code: str) -> str:
         nombre = _item_name(code)
@@ -992,19 +1007,33 @@ class AsterixInspectorDialog(QDialog):
         fmt.setForeground(QColor("white"))
         doc = self.hex_viewer.document()
         sels = []
+        # Layout de cada línea (ver generar_hex_dump):
+        #   "AAAA"(4) + "  "(2) + hex(47) + "    "(4) => ASCII arranca en col 57.
+        ASCII_OFF = 57
         for i in range(start, end):
             line, col = divmod(i, 16)
             block = doc.findBlockByNumber(line)
             if not block.isValid():
                 continue
-            pos = block.position() + 6 + col * 3  # "AAAA  " = 6 chars; cada par = 3
+            base = block.position()
+            # Par hexadecimal (2 chars)
+            hpos = base + 6 + col * 3
             cur = QTextCursor(doc)
-            cur.setPosition(pos)
-            cur.setPosition(pos + 2, QTextCursor.MoveMode.KeepAnchor)
+            cur.setPosition(hpos)
+            cur.setPosition(hpos + 2, QTextCursor.MoveMode.KeepAnchor)
             sel = QTextEdit.ExtraSelection()
             sel.cursor = cur
             sel.format = fmt
             sels.append(sel)
+            # Carácter ASCII correspondiente (1 char)
+            apos = base + ASCII_OFF + col
+            cur_a = QTextCursor(doc)
+            cur_a.setPosition(apos)
+            cur_a.setPosition(apos + 1, QTextCursor.MoveMode.KeepAnchor)
+            sel_a = QTextEdit.ExtraSelection()
+            sel_a.cursor = cur_a
+            sel_a.format = fmt
+            sels.append(sel_a)
         self.hex_viewer.setExtraSelections(sels)
         if sels:
             self.hex_viewer.setTextCursor(sels[0].cursor)
