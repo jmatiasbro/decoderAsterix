@@ -980,6 +980,9 @@ class MainWindow(QMainWindow):
         self.act_centro_tecnico = menu_config.addAction(
             "Centro Técnico ATSEP…", self._abrir_centro_tecnico)
         self.act_centro_tecnico.setEnabled(self.profile_manager.get_rol() == "tecnico")
+        self.act_auditoria_safety = menu_config.addAction(
+            "Auditoría Safety Nets…", self._abrir_auditoria_safety)
+        self.act_auditoria_safety.setEnabled(self.profile_manager.get_rol() == "tecnico")
 
         # Menú Mapas — capas generadas dinámicamente desde la base ATM (atm.duckdb)
         from player import atm_db, atm_maps
@@ -3290,6 +3293,8 @@ class MainWindow(QMainWindow):
         # El Centro Técnico (incluye calibración) es exclusivo del rol técnico
         if hasattr(self, 'act_centro_tecnico'):
             self.act_centro_tecnico.setEnabled(rol == "tecnico")
+        if hasattr(self, 'act_auditoria_safety'):
+            self.act_auditoria_safety.setEnabled(rol == "tecnico")
         self.radar.update()
         print(f"[ROL] Cambiado en caliente a: {rol}")
 
@@ -3323,6 +3328,23 @@ class MainWindow(QMainWindow):
             repo_db=repo_db, worker=worker, session_records=records,
             profile_config=profile_config, sensor_rpms=sensor_rpms, parent=self)
         self._centro_tecnico_win.show()
+
+    def _abrir_auditoria_safety(self):
+        """Abre el visor histórico de alertas STCA/APW/MSAW (solo rol técnico)."""
+        from player.safety_audit_dialog import SafetyAuditDialog
+        repo = getattr(getattr(self, 'worker', None), 'engine', None)
+        repo = getattr(repo, 'repo_db', None) if repo else None
+        if repo is None:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "Auditoría Safety Nets",
+                                    "No hay sesión activa. Cargá un PCAP o conectate a UDP primero.")
+            return
+        if not hasattr(self, '_auditoria_win') or self._auditoria_win is None:
+            self._auditoria_win = SafetyAuditDialog(repo, parent=self)
+            self._auditoria_win.seek_to_ts.connect(self._analizador_seek)
+            self._auditoria_win.destroyed.connect(lambda: setattr(self, '_auditoria_win', None))
+        self._auditoria_win.show()
+        self._auditoria_win.raise_()
 
     def _recargar_sensores_calib(self):
         """Recarga sensores con los offsets recién guardados por el calibrador."""
