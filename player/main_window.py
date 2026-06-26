@@ -899,6 +899,10 @@ class MainWindow(QMainWindow):
         self.act_exp_cobertura = menu_exportar.addAction("Mapa de Cobertura Real a Google Earth (KMZ)...", self.exportar_cobertura_kmz)
         self.act_exp_csv = menu_exportar.addAction("Heatmap a QGIS (CSV)", self.exportar_csv)
         self.act_exp_parquet = menu_exportar.addAction("Datos a Power BI (Parquet)", self.exportar_parquet)
+        menu_exportar.addSeparator()
+        self.act_exp_safety_csv = menu_exportar.addAction(
+            "Eventos de Seguridad — Auditoría OACI (CSV)…", self.exportar_safety_csv)
+        self.act_exp_safety_csv.setEnabled(False)
         self.act_exp_kmz.setEnabled(False)
         self.act_exp_playback.setEnabled(False)
         self.act_exp_cobertura.setEnabled(False)
@@ -2242,6 +2246,7 @@ class MainWindow(QMainWindow):
         self.act_exp_cobertura.setEnabled(False)
         self.act_exp_csv.setEnabled(False)
         self.act_exp_parquet.setEnabled(False)
+        self.act_exp_safety_csv.setEnabled(False)
         self.chk_modo_integrado.setEnabled(False)
         self._modo_manual = False  # permitir default automático por nº de sensores
         self._auto_modo_estado = None
@@ -2461,6 +2466,7 @@ class MainWindow(QMainWindow):
             self.act_exp_cobertura.setEnabled(True)
             self.act_exp_csv.setEnabled(True)
             self.act_exp_parquet.setEnabled(True)
+            self.act_exp_safety_csv.setEnabled(self.profile_manager.get_rol() == "tecnico")
 
             # Default por nº de sensores: multisensor -> Integrado, un solo sensor -> Crudo.
             # Ambos botones quedan habilitados (modos mutuamente excluyentes).
@@ -4722,6 +4728,26 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, "Exportación Completada", f"Datos Parquet exportados exitosamente a:\n{output_file}")
             else:
                 QMessageBox.critical(self, "Error de Exportación", "Hubo un error al generar el archivo Parquet.")
+
+    def exportar_safety_csv(self):
+        """Exporta safety_events a CSV para informe de auditoría OACI (solo rol técnico)."""
+        repo_db = None
+        if self.worker and hasattr(self.worker, 'engine') and hasattr(self.worker.engine, 'repo_db'):
+            repo_db = self.worker.engine.repo_db
+        output_file, _ = QFileDialog.getSaveFileName(
+            self, "Exportar Eventos de Seguridad — Auditoría OACI",
+            "safety_events_audit.csv", "CSV (*.csv)")
+        if not output_file:
+            return
+        exporter = PassExporter(repo_db=repo_db)
+        sesion = getattr(self.radar, '_sesion_id', None)
+        success = exporter.export_safety_events_csv(output_file, sesion_id=sesion)
+        if success:
+            QMessageBox.information(self, "Exportación completada",
+                                    f"Eventos de seguridad exportados a:\n{output_file}")
+        else:
+            QMessageBox.warning(self, "Sin datos",
+                                "No hay eventos de seguridad registrados en esta sesión.")
 
     def exportar_playback_kmz(self):
         """Permite seleccionar de forma interactiva un vuelo y exportar su reproducción animada KMZ."""
