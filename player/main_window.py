@@ -783,6 +783,8 @@ class MainWindow(QMainWindow):
         self.system_bus = SystemEventBus(self)
         self._health_alarmas_prev: dict = {}
         self.profile_manager = ProfileManager()
+        from player.style_manager import StyleManager
+        StyleManager.set_modo(self.profile_manager.profile.get("modo_ambiente", "DUSK"))
         self.techo_incumbencia = self.profile_manager.get_nivel_incumbencia()
         self.cache_dir = tempfile.mkdtemp(prefix="asterix_cache_")
         
@@ -866,36 +868,21 @@ class MainWindow(QMainWindow):
         # Reubicar el reloj cuando cambia el ancho del radar (ej. al ensanchar el
         # dock lateral, que no dispara el resizeEvent de la ventana).
         self.radar.installEventFilter(self)
+        self._aplicar_estilos_ambiente()
+
+    def _aplicar_estilos_ambiente(self) -> None:
+        from player.style_manager import StyleManager
+        self.setStyleSheet("")
+        self.toolbar.setStyleSheet("")
+        self.hud_bar.setStyleSheet("")
+        self._dock_scroll.setStyleSheet("")
+        self._dock_container.setStyleSheet("")
+        self.menuBar().setStyleSheet(StyleManager.get_estilo_menubar())
 
     def _setup_menu_bar(self):
+        from player.style_manager import StyleManager
         menu_bar = self.menuBar()
-        menu_bar.setStyleSheet("""
-            QMenuBar {
-                background-color: #121824;
-                color: #E0E6ED;
-                border-bottom: 1px solid rgba(0, 229, 255, 50);
-            }
-            QMenuBar::item {
-                background-color: transparent;
-                padding: 5px 10px;
-            }
-            QMenuBar::item:selected {
-                background-color: rgba(0, 229, 255, 30);
-                color: #39FF14;
-            }
-            QMenu {
-                background-color: #0E131F;
-                color: #E0E6ED;
-                border: 1px solid #00E5FF;
-            }
-            QMenu::item {
-                padding: 6px 20px;
-            }
-            QMenu::item:selected {
-                background-color: rgba(0, 229, 255, 30);
-                color: #39FF14;
-            }
-        """)
+        menu_bar.setStyleSheet(StyleManager.get_estilo_menubar())
 
         # Menú Archivo
         menu_archivo = menu_bar.addMenu("Archivo")
@@ -1051,9 +1038,29 @@ class MainWindow(QMainWindow):
         self.act_fir.setCheckable(True)
         self.act_fir.toggled.connect(self._toggle_vista_fir)
 
+        # Menú Ambiente — cambio de paleta de colores DAY / DUSK / NIGHT
+        from PyQt6.QtGui import QActionGroup
+        menu_ambiente = menu_bar.addMenu("Ambiente")
+        grupo_ambiente = QActionGroup(self)
+        grupo_ambiente.setExclusive(True)
+        modo_actual = StyleManager.get_modo()
+        for modo, label in (("DAY", "Día"), ("DUSK", "Crepúsculo"), ("NIGHT", "Noche")):
+            act = menu_ambiente.addAction(label, lambda m=modo: self._cambiar_ambiente(m))
+            act.setCheckable(True)
+            act.setChecked(modo == modo_actual)
+            grupo_ambiente.addAction(act)
+        self._acts_ambiente = {a.text(): a for a in grupo_ambiente.actions()}
+
         # Menú Ayuda — guía de funcionamiento (se abre en el navegador)
         menu_ayuda = menu_bar.addMenu("Ayuda")
         menu_ayuda.addAction(_icon("fa5s.book"), "Guía de la aplicación", self._abrir_ayuda)
+
+    def _cambiar_ambiente(self, modo: str) -> None:
+        from player.style_manager import StyleManager
+        StyleManager.set_modo(modo)
+        self._aplicar_estilos_ambiente()
+        self.profile_manager.profile["modo_ambiente"] = modo
+        self.profile_manager.save_profile()
 
     def _abrir_ayuda(self):
         """Abre la guía de funcionamiento (HTML) en el navegador por defecto."""
@@ -1816,6 +1823,8 @@ class MainWindow(QMainWindow):
         grupo_analisis.setLayout(l_analisis)
         v_layout.addWidget(grupo_analisis)
 
+        self._dock_scroll = scroll
+        self._dock_container = container
         scroll.setWidget(container)
         self.dock_lateral.setWidget(scroll)
         self.dock_lateral.setMinimumWidth(260)
@@ -2397,6 +2406,13 @@ class MainWindow(QMainWindow):
             self.panel_sensores.agregar_sensor(text_label, color,
                                                presentacion=present, historico=histo)
 
+    def _inyectar_repo_en_radar(self, sesion_id: str):
+        """Inyecta el DuckDBRepository activo en el radar para que _publicar_eventos_safety persista alertas."""
+        repo = getattr(getattr(self, 'worker', None), 'engine', None)
+        repo = getattr(repo, 'repo_db', None) if repo else None
+        self.radar._repo_db  = repo
+        self.radar._sesion_id = sesion_id
+
     def _on_scan_complete(self, success: bool):
         self.btn_cargar.setEnabled(True)
         self.btn_cargar.setText(" Modo Playback")
@@ -2451,6 +2467,8 @@ class MainWindow(QMainWindow):
                 multis = len(self.sensores_conocidos) > 1
                 self._auto_modo_estado = multis
                 self._set_modo(multis)
+            from pathlib import Path
+            self._inyectar_repo_en_radar(Path(self.pcap_path if isinstance(self.pcap_path, str) else self.pcap_path[0]).name)
         else:
             self.btn_play.setText("Error en PCAP")
             self._show_panel()
@@ -2488,7 +2506,7 @@ class MainWindow(QMainWindow):
 
     def _on_sensor_detected(self, sac: int, sic: int):
         sensor_id = f"{sac}/{sic}"
-        
+
         info = self.sensores.get((sac, sic))
         nombre = info.get('name', f"Radar {sac}/{sic}") if info else f"Radar {sac}/{sic}"
         text_label = f"[{sac}/{sic}] {nombre}"
@@ -4436,6 +4454,7 @@ class MainWindow(QMainWindow):
 
             # 7. Arrancar hilo y barrido radar
             self.worker.start()
+            self._inyectar_repo_en_radar(f"LIVE_{','.join(str(p) for p in puertos_escucha)}")
             self.playing = True
             self.udp_active = True
             self.radar.play()

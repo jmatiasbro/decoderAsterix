@@ -522,58 +522,8 @@ class TargetInspectionDialog(QDialog):
         self.setWindowTitle(f"Detalle de Blanco ASTERIX - {callsign}")
         from player.ui_scaling import escalar_ventana
         escalar_ventana(self, 680, 520, centrar=False)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #0E131F;
-                border: 2px solid #00E5FF;
-                border-radius: 8px;
-            }
-            QLabel {
-                color: #FFFFFF;
-                font-family: 'Segoe UI', sans-serif;
-                font-size: 11pt;
-                font-weight: bold;
-            }
-            QTableWidget {
-                background-color: #121824;
-                color: #E0E6ED;
-                gridline-color: #2D3548;
-                border: 1px solid #2D3548;
-                border-radius: 6px;
-                font-family: 'Monospace';
-                font-size: 9pt;
-            }
-            QTableWidget::item {
-                padding: 6px;
-                border-bottom: 1px solid #1B2232;
-                color: #E0E6ED;
-            }
-            QTableWidget::item:selected {
-                background-color: rgba(0, 229, 255, 30);
-                color: #00E5FF;
-            }
-            QHeaderView::section {
-                background-color: #1A2233;
-                color: #00E5FF;
-                padding: 6px;
-                border: 1px solid #2D3548;
-                font-weight: bold;
-                font-size: 9pt;
-            }
-            QPushButton {
-                background-color: rgba(45, 49, 60, 200);
-                border: 1px solid #4B5263;
-                border-radius: 4px;
-                padding: 6px 12px;
-                color: #FFFFFF;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #3E4451;
-                border: 1px solid #00E5FF;
-                color: #00E5FF;
-            }
-        """)
+        from player.style_manager import StyleManager
+        StyleManager.aplicar(self)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
@@ -735,6 +685,9 @@ class RadarWidget(_RadarBase):
     def __init__(self, parent=None, sensores: Dict = None, declinacion_magnetica: float = 0.0):
         super().__init__(parent)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # El widget se pinta completamente solo; evitar que Qt interfiera con el fondo vía stylesheet
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.setAutoFillBackground(False)
 
         self.sensor_info = sensores or {}
         self.declinacion_magnetica = declinacion_magnetica
@@ -848,6 +801,7 @@ class RadarWidget(_RadarBase):
         self.active_sensors: Set[Tuple[int, int]] = set()
         self.squawk_filter = ""
         self.filter_enabled = False
+        self.max_rango_sensor_nm: float = 200.0  # descarta plots CAT48/01 fuera de este rango
         
         # Configuración de Filtro de Etiquetas (Fase 9)
         self.label_filter_config = {
@@ -1628,6 +1582,13 @@ class RadarWidget(_RadarBase):
             sensor_id = data.get('sac_sic', 'UNK')
             if hasattr(self, 'sensores_visibles') and self.sensores_visibles is not None and sensor_id not in self.sensores_visibles:
                 return None
+
+            # Filtro de rango máximo por sensor (solo CAT48/01 con coordenadas polares)
+            cat = data.get('category', 0)
+            if cat in (1, 48):
+                _rho = data.get('raw_range') or data.get('rho_render')
+                if _rho is not None and _rho > self.max_rango_sensor_nm:
+                    return None
 
             if not self.projection_set:
                 return None
@@ -2545,15 +2506,40 @@ class RadarWidget(_RadarBase):
         """Publica al bus de mensajes de sistema solo las claves nuevas.
 
         eventos: {clave_estable: (nivel, origen, desc)}.
+        También persiste transiciones ONSET/CLEAR en DuckDB para auditoría.
         """
-        bus = getattr(self, 'system_bus', None)
-        if bus is None:
-            return
-        prev = self._safety_eventos_prev.get(subsistema, set())
-        actuales = set(eventos)
+        import time as _time_mod
+        bus  = getattr(self, 'system_bus', None)
+        repo = getattr(self, '_repo_db', None)
+
+        prev         = self._safety_eventos_prev.get(subsistema, set())
+        prev_data    = getattr(self, '_safety_eventos_prev_data', {}).get(subsistema, {})
+        actuales     = set(eventos)
+        ts_sim       = SimulationTime.time()
+        ts_wall      = _time_mod.time()
+        sesion       = getattr(self, '_sesion_id', 'LIVE')
+
+        # ONSET: claves que aparecen ahora
         for clave in actuales - prev:
             nivel, origen, desc = eventos[clave]
-            bus.inyectar(nivel, origen, desc)
+            if bus:
+                bus.inyectar(nivel, origen, desc)
+            if repo:
+                repo.guardar_evento_safety(
+                    ts_sim, ts_wall, subsistema, 'ONSET',
+                    str(clave), nivel, origen, desc, sesion)
+
+        # CLEAR: claves que desaparecen
+        if repo:
+            for clave in prev - actuales:
+                nivel, origen, desc = prev_data.get(clave, ('INFO', subsistema, ''))
+                repo.guardar_evento_safety(
+                    ts_sim, ts_wall, subsistema, 'CLEAR',
+                    str(clave), nivel, origen, desc, sesion)
+
+        if not hasattr(self, '_safety_eventos_prev_data'):
+            self._safety_eventos_prev_data = {}
+        self._safety_eventos_prev_data[subsistema] = {k: v for k, v in eventos.items()}
         self._safety_eventos_prev[subsistema] = actuales
 
     def evaluar_msaw(self):
@@ -2816,6 +2802,13 @@ class RadarWidget(_RadarBase):
         self.active_sensors = active_sensors
         self.squawk_filter = squawk_filter
         self.filter_enabled = bool(active_sensors) or bool(squawk_filter)
+        self.update()
+
+    def set_max_rango_sensor(self, nm: float):
+        """Descarta plots CAT48/01 con rango > nm. 0 = sin límite."""
+        self.max_rango_sensor_nm = float(nm) if nm > 0 else float('inf')
+        self.tracks.clear()
+        self.pending_tracks.clear()
         self.update()
 
     def _plot_passes_filter(self, data: dict) -> bool:
@@ -3831,61 +3824,9 @@ class RadarWidget(_RadarBase):
                 else:
                     alertas_dict[tid] = (a.tipo, a.eta_s, 'MSAW')
 
+            self._alertas_dict_render = alertas_dict
+
             all_active_plots = list(self.tracks.items()) + list(self.pending_tracks.items())
-
-            # --- FASE 3: ALGORITMO ANTI-SOLAPAMIENTO VISUAL DE ETIQUETAS ---
-            label_shifts = {} # { track_id: [shift_x, shift_y] }
-            for track_id, plot in all_active_plots:
-                label_shifts[track_id] = [0.0, 0.0]
-                
-            if len(all_active_plots) > 1:
-                default_centers = {}
-                for track_id, plot in all_active_plots:
-                    if not plot.is_alive():
-                        continue
-                    
-                    # Comprobar filtros de visualización para ver si realmente se dibujará la etiqueta
-                    if self.plot_filter_fn and not self.plot_filter_fn(plot):
-                        continue
-                    sensor_id = getattr(plot, 'sac_sic', f"UNK_CAT{plot.category}")
-                    visibles = getattr(self, 'sensores_visibles', None)
-                    if visibles is not None and sensor_id not in visibles and plot.category != 62:
-                        continue
-                        
-                    sx_sy = self._world_to_screen(plot.x, plot.y)
-                    if sx_sy is None:
-                        continue
-                    
-                    lines = self._build_plot_label_lines(plot)
-                    if not lines:
-                        continue
-                        
-                    # Estimación rápida del ancho máximo de texto (aprox. 6.5px por carácter)
-                    max_w = max(len(str(line)) * 6.5 for line in lines)
-                    
-                    cfg_or = self.label_filter_config.get("orientacion", "NE")
-                    if cfg_or == "NE":
-                        dx, dy = 15.0, -15.0
-                    elif cfg_or == "NO":
-                        dx, dy = -15.0 - max_w/2.0, -15.0
-                    elif cfg_or == "SE":
-                        dx, dy = 15.0, 15.0
-                    elif cfg_or == "SO":
-                        dx, dy = -15.0 - max_w/2.0, 15.0
-                    else:
-                        dx, dy = 15.0, -15.0
-                        
-                    default_centers[track_id] = (sx_sy.x() + dx, sx_sy.y() + dy, max_w)
-                
-                # Relajación de colisiones (función pura testeada en player.ods.declutter)
-                from player.ods.declutter import resolve_shifts
-                _res = resolve_shifts(default_centers, min_dist=50.0, passes=2)
-                for _tid, (_dx, _dy) in _res.items():
-                    label_shifts[_tid][0] += _dx
-                    label_shifts[_tid][1] += _dy
-
-            # Store label shifts in cache for use in drawing methods
-            self._label_shifts_cache = label_shifts
 
             for track_id, plot in all_active_plots:
                 try:
@@ -4777,7 +4718,11 @@ class RadarWidget(_RadarBase):
                 fl_for_label = plot.altitude_ft / 100.0
             if fl_for_label is not None and getattr(self, 'altimetry', None) is not None:
                 level_str = self.altimetry.formatear_altitud(fl_for_label) + _fdb.trend_arrow(vr)
-            return _fdb.build_lines(plot, full=True, vrate=vr, fields=cfg, level_str=level_str)
+            ods_lines = _fdb.build_lines(plot, full=True, vrate=vr, fields=cfg, level_str=level_str)
+            alerta_ods = getattr(self, '_alertas_dict_render', {}).get(plot.id)
+            if alerta_ods and ods_lines:
+                ods_lines = [f"[{alerta_ods[2]}] {ods_lines[0]}"] + list(ods_lines[1:])
+            return ods_lines
 
         # 1. Line 1: Identity
         show_id = True if es_ctrl else cfg.get("identific_aeronave", True)
@@ -5006,6 +4951,9 @@ class RadarWidget(_RadarBase):
             elif cfg.get("rho_theta", False) and plot.raw_range is not None and plot.raw_azimuth is not None:
                 lines.append(f"R:{plot.raw_range:.1f}NM A:{plot.raw_azimuth:.1f}°")
 
+        alerta = getattr(self, '_alertas_dict_render', {}).get(plot.id)
+        if alerta and lines:
+            lines[0] = f"[{alerta[2]}] {lines[0]}"
         return lines
 
     def _get_label_rect(self, plot: 'RadarPlot', z: float, inv_z: float,
