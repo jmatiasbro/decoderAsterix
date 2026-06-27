@@ -941,6 +941,8 @@ class MainWindow(QMainWindow):
         self.act_analizador_paquetes = menu_ver.addAction("Analizador de Paquetes…", self._abrir_analizador_paquetes)
         self.act_finder = menu_ver.addAction("Finder Táctico…", self._abrir_finder)
         self.act_finder.setShortcut("Ctrl+F")
+        self.act_inspector_sensor = menu_ver.addAction("Inspector Multi-sensor…", self._abrir_inspector_sensor)
+        self.act_inspector_sensor.setShortcut("Ctrl+I")
         menu_ver.addSeparator()
         self.act_toggle_incumbencia = menu_ver.addAction("Vista de Incumbencia (Jurisdicción)")
         self.act_toggle_incumbencia.setCheckable(True)
@@ -1412,6 +1414,15 @@ class MainWindow(QMainWindow):
         self._finder_dialog.activateWindow()
         self._finder_dialog.txt_search.setFocus()
         self._finder_dialog.txt_search.selectAll()
+
+    def _abrir_inspector_sensor(self):
+        from player.sensor_inspector_dialog import SensorInspectorDialog
+        if getattr(self, "_sensor_inspector_dlg", None) is None:
+            self._sensor_inspector_dlg = SensorInspectorDialog(self.radar, self)
+        self._sensor_inspector_dlg.show()
+        self._sensor_inspector_dlg.raise_()
+        self._sensor_inspector_dlg.activateWindow()
+        self._sensor_inspector_dlg.txt_query.setFocus()
 
     def _actualizar_hud(self, perfil_data: dict):
         """Refresca los campos del HUD desde el perfil operativo."""
