@@ -21,8 +21,8 @@
 |----------------|-------------|-----------------|--------------|-----------|
 | REQ-DEC-1 | Decodificar CAT 048 (target reports monoradar) | `decoder/`, `decoders/`, `native_asterix.py` | (scripts raíz `test_*` ad-hoc) | ⚠️ Ad-hoc |
 | REQ-DEC-2 | Decodificar CAT 062 (system tracks) | `decoder/`, `new_cat062.py` | scripts `test_cat062_*` (raíz) | ⚠️ Ad-hoc |
-| REQ-DEC-3 | Decodificar CAT 021 (ADS-B) | `decoder/decoders/` | ❌ | ❌ Ausente |
-| REQ-DEC-4 | Decodificar CAT 001/002/010/020/034 | `decoder/decoders/` | ❌ | ❌ Ausente |
+| REQ-DEC-3 | Decodificar CAT 021 (ADS-B) v2.4 y v0.26 | `decoder/decoders/cat021.py` | `tests/decoders/test_decoders_asterix.py` (14 casos) | ✅ |
+| REQ-DEC-4 | Decodificar CAT 001/002/034 | `decoder/decoders/cat001.py`, `cat002.py`, `cat034.py` | `tests/decoders/test_decoders_asterix.py` (32 casos) | ✅ |
 | REQ-DEC-5 | Gestión SAC/SIC de sensores | `decoder/sensor_registry.py` | ❌ (scripts `test_sac_sic.py` raíz) | ⚠️ Ad-hoc |
 | REQ-GEO-1 | Proyección polar→WGS-84 | `projection.py`, `geo_utils.py` | `tests/geo/` | ⚠️ Indirecta |
 | REQ-GEO-2 | Declinación magnética offline | `player/` (capa isogónica) | `tests/geo/test_isogonic*.py`, `test_magnetic_cascade.py` | ✅ |
@@ -50,8 +50,8 @@
 
 | Hueco | Riesgo | Acción |
 |-------|--------|--------|
-| ~~STCA sin test automatizado (REQ-SN-1)~~ | ✅ **Cerrado** | Banco `tests/stca/` (27 casos). Pendiente: escenarios PCAP end-to-end y hallazgo STCA-1 (doble marco de coordenadas, ver gap analysis §7) |
-| **Decodificadores CAT 001/002/010/020/021/034 sin tests** (REQ-DEC-3/4) | Alta — núcleo SWAL 2 sin verificación | Vectores de prueba por categoría con tramas de referencia |
+| ~~STCA sin test automatizado (REQ-SN-1)~~ | ✅ **Cerrado** | Banco `tests/stca/` (27 casos). Pendiente: escenarios PCAP end-to-end y hallazgo STCA-1 |
+| ~~Decodificadores CAT 001/002/021/034 sin tests (REQ-DEC-3/4)~~ | ✅ **Cerrado** | `tests/decoders/` (46 casos). Pendiente: CAT 048/062 (ad-hoc → suite formal) |
 | **Matching/reconciliación sin test** (REQ-TRK-2) | Media-alta | Casos deterministas sobre `radar_widget` extraíble |
 | **Fusión sin test** (REQ-FUS-1/2) | Media (solo técnico) | Tests de correlación con pares de sensores |
 | **Scripts ad-hoc en raíz** | Media — no son la suite | Migrar lo válido a `tests/`, descartar el resto |
