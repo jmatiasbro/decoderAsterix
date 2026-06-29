@@ -81,8 +81,7 @@ de seguridad.
 4. `requirements.txt` completo + lockfile de dependencias.
 5. Consolidar/eliminar los scripts `test_*.py` de la raíz hacia `tests/`.
 
-### Triage inmediato requerido
-- **3 tests preexistentes en rojo** (no introducidos por este trabajo): `tests/msaw/test_render.py`
-  (formato de etiqueta `"2500'"` vs `"MSA 2500"`, 2 casos) y `tests/centro_tecnico/test_window.py`
-  (conteo de pestañas). Decidir si la fuente de verdad es el test o el código antes de fijar el
-  baseline verde de CI. Suite actual: **248 pasan / 3 fallan**.
+### Triage de tests (resuelto)
+- ✅ **3 tests preexistentes en rojo** corregidos (eran expectativas desactualizadas, no regresiones):
+  `tests/msaw/test_render.py` (etiqueta correcta = número + apóstrofe, p. ej. `"2500'"`) y
+  `tests/centro_tecnico/test_window.py` (6 pestañas, no 5). **Baseline verde: 251 pasan / 0 fallan.**

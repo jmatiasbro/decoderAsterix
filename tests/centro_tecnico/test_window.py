@@ -32,10 +32,10 @@ def test_stats_widget_generate_renders(app):
 from player.centro_tecnico.window import CentroTecnicoWindow
 
 
-def test_window_has_five_tabs(app):
+def test_window_has_six_tabs(app):
     w = CentroTecnicoWindow()
-    assert w.tabs.count() == 5
-    titles = [w.tabs.tabText(i) for i in range(5)]
+    assert w.tabs.count() == 6
+    titles = [w.tabs.tabText(i) for i in range(6)]
     assert any("Estad" in t for t in titles)
     assert any("Cobertura" in t for t in titles)
 

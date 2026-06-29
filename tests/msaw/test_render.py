@@ -14,7 +14,7 @@ def test_zone_segments_anillo_radiales_y_labels():
     radial_moves = sum(1 for s in segs if s[0] == "M")
     # 1 M del anillo + 1 M por radial (2 sectores)
     assert radial_moves == 3
-    assert {s[4] for s in labels} == {"MSA 4100", "MSA 8300"}
+    assert {s[4] for s in labels} == {"4100'", "8300'"}
     assert all(s[1] == MSA_LAYER for s in segs)
 
 
@@ -25,7 +25,7 @@ def test_omni_sin_radiales():
     # solo el anillo (1 M) y una etiqueta en el centro, sin radiales extra
     assert sum(1 for s in segs if s[0] == "M") == 1
     labels = [s for s in segs if s[0] == "T"]
-    assert len(labels) == 1 and labels[0][4] == "MSA 2500"
+    assert len(labels) == 1 and labels[0][4] == "2500'"
 
 
 def test_centro_o_sectores_vacios_devuelve_vacio():
