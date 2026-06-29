@@ -90,6 +90,23 @@ evidencia de proceso (planes, trazabilidad, SCM/SQA, análisis de seguridad) est
 | S-2 | PSSA / SSA | ❌ | No existe |
 | S-3 | Safety case / argumento de seguridad | ❌ | `safety_audit_dialog` audita tráfico, no es safety case de SW |
 
+### Hallazgos de verificación abiertos
+
+**STCA-1 — Doble marco de coordenadas en el motor STCA** (severidad: BAJA; estado: abierto).
+`STCA_Engine.evaluar_conflictos` resuelve la **separación actual** con haversine sobre
+`lat_render/lon_render` (posición cruda reportada) y la **predicción de CPA** con `x/y`. El caller
+`radar_widget.evaluar_stca` alimenta `x/y` con la posición proyectada **suavizada alpha-beta**
+([radar_widget.py:1827](../../player/radar_widget.py)), de un linaje distinto a `lat_render`. Además
+hay un mismatch de prioridad de campo (`lat or lat_render` en la reproyección vs `lat_render or lat`
+en el builder STCA).
+- *Riesgo acotado:* la fase VIOLATION (crítica) usa la posición cruda → un conflicto real cercano
+  (<10 NM) **siempre** dispara, sin depender de `x/y`. El efecto es una discontinuidad de precisión
+  en el borde de los 10 NM (predicción adelantada/atrasada, posible falso positivo transitorio), no
+  un conflicto omitido.
+- *Acción de certificación:* el SRS debe incluir un requisito de que el caller suministre un **único
+  marco de posición consistente** a ambas fases, o que el motor reproyecte `x/y` desde `lat_render`.
+  Contrato actual fijado por tests en `tests/stca/test_stca_engine.py` (`test_contrato_*`).
+
 ## 8. Prioridades de cierre (top 5)
 
 1. **FHA + confirmación de SWAL** (desbloquea todo el rigor aplicable).

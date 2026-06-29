@@ -315,3 +315,43 @@ def test_multiples_conflictos_independientes(eng):
     }
     c = eng.evaluar_conflictos(tracks)
     assert ids(c) == {frozenset(("A", "B")), frozenset(("C", "D"))}
+
+
+# --------------------------------------------------------------------------- #
+# Contrato de marco de coordenadas (hallazgo de certificación REQ-SN-1)
+# --------------------------------------------------------------------------- #
+# El motor evalúa la separación ACTUAL con haversine sobre lat_render/lon_render
+# (posición cruda reportada) y la PREDICCIÓN de CPA con x/y (que el caller, en
+# radar_widget.evaluar_stca, alimenta con la posición proyectada SUAVIZADA
+# alpha-beta). Son dos marcos/posiciones distintos: el contrato del motor exige
+# que el caller los mantenga consistentes. Estos tests FIJAN ese contrato para
+# que un refactor futuro no lo cambie en silencio. Ver:
+# documentacion/certificacion/03_gap_analysis_DO-278A.md (S-finding STCA-1).
+
+def test_contrato_violacion_se_decide_por_latlon_no_por_xy(eng):
+    # lat_render dice <10 NM (VIOLATION) aunque x/y indiquen >10 NM:
+    # la fase actual se resuelve SOLO por lat_render. Documenta que x/y no
+    # interviene en la separación actual.
+    tracks = {
+        "A": mk(lat_render=0.0, lon_render=0.0, x=0.0, y=0.0, vx=1.0, vy=0.0,
+                mode3a="1111", mode_s="AAAAAA"),
+        "B": mk(lat_render=0.0, lon_render=0.05, x=999999.0, y=999999.0, vx=1.0, vy=0.0,
+                mode3a="2222", mode_s="BBBBBB"),
+    }
+    c = eng.evaluar_conflictos(tracks)
+    assert len(c) == 1 and c[0][2] == "VIOLATION"
+
+
+def test_contrato_prediccion_se_decide_por_xy_no_por_latlon(eng):
+    # lat_render dice >10 NM (sin VIOLATION) pero x/y convergen → PREDICTION.
+    # Documenta que la predicción ignora lat_render y usa exclusivamente x/y:
+    # si el caller suaviza x/y, la predicción se evalúa sobre esa posición y no
+    # sobre la cruda usada por la separación actual.
+    tracks = {
+        "A": mk(lat_render=0.0, lon_render=0.0, x=0.0, y=0.0, vx=100.0, vy=0.0,
+                mode3a="1111", mode_s="AAAAAA"),
+        "B": mk(lat_render=0.0, lon_render=0.2, x=20000.0, y=5000.0, vx=-100.0, vy=0.0,
+                mode3a="2222", mode_s="BBBBBB"),
+    }
+    c = eng.evaluar_conflictos(tracks)
+    assert len(c) == 1 and c[0][2] == "PREDICTION"

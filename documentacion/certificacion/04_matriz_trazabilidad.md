@@ -28,7 +28,7 @@
 | REQ-GEO-2 | Declinación magnética offline | `player/` (capa isogónica) | `tests/geo/test_isogonic*.py`, `test_magnetic_cascade.py` | ✅ |
 | REQ-TRK-1 | Ciclo de vida monoradar determinista (ToD) | `player/tracking/lifecycle.py` | `tests/tracking/test_lifecycle.py` | ✅ |
 | REQ-TRK-2 | Matching/reconciliación de tracks | `radar_widget.py` | ❌ | ❌ Ausente |
-| REQ-SN-1 | STCA — alerta de conflicto a corto plazo | cadena safety en `radar_widget` | ❌ (logs `stca_conflicts.log`, plan `PLAN_STCA_AUDIT.md`) | ❌ Ausente |
+| REQ-SN-1 | STCA — alerta de conflicto a corto plazo | `analysis/stca_analyzer.py` (`STCA_Engine`), cadena safety en `radar_widget` | `tests/stca/test_stca_engine.py` (27 casos) | ✅ |
 | REQ-SN-2 | APW — alerta de penetración de área | `player/areas/` | `tests/areas/test_apw.py`, `test_integration.py` | ✅ |
 | REQ-SN-3 | MSAW — alerta de altitud mínima de seguridad | `player/msaw/` | `tests/msaw/test_engine.py`, `test_suppression.py`, etc. | ✅ |
 | REQ-SN-4 | Supresión MSAW en aproximación | `player/msaw/` | `tests/msaw/test_suppression.py` | ✅ |
@@ -50,7 +50,7 @@
 
 | Hueco | Riesgo | Acción |
 |-------|--------|--------|
-| **STCA sin test automatizado** (REQ-SN-1) | Alta — función de seguridad sin verificación reproducible | Construir banco de pruebas STCA con escenarios PCAP y oráculos esperados |
+| ~~STCA sin test automatizado (REQ-SN-1)~~ | ✅ **Cerrado** | Banco `tests/stca/` (27 casos). Pendiente: escenarios PCAP end-to-end y hallazgo STCA-1 (doble marco de coordenadas, ver gap analysis §7) |
 | **Decodificadores CAT 001/002/010/020/021/034 sin tests** (REQ-DEC-3/4) | Alta — núcleo SWAL 2 sin verificación | Vectores de prueba por categoría con tramas de referencia |
 | **Matching/reconciliación sin test** (REQ-TRK-2) | Media-alta | Casos deterministas sobre `radar_widget` extraíble |
 | **Fusión sin test** (REQ-FUS-1/2) | Media (solo técnico) | Tests de correlación con pares de sensores |
@@ -58,8 +58,8 @@
 
 ## 4. Cobertura agregada (estimación cualitativa)
 
-- **Bien cubierto:** MSAW, APW, ODS/HMI, firmap, geo-declinación, ATM-DB, FDP/ADEXP, stats, centro técnico, ciclo de vida.
-- **Mal cubierto / sin cubrir:** STCA, decodificadores ASTERIX por categoría, matching de tracks, fusión, auditoría safety.
+- **Bien cubierto:** STCA, MSAW, APW, ODS/HMI, firmap, geo-declinación, ATM-DB, FDP/ADEXP, stats, centro técnico, ciclo de vida.
+- **Mal cubierto / sin cubrir:** decodificadores ASTERIX por categoría, matching de tracks, fusión, auditoría safety.
 
-> La paradoja: los subsistemas *periféricos* están mejor testeados que algunas funciones *centrales de
-> seguridad* (STCA, decodificación). Es la prioridad #1 de verificación para un objetivo SWAL 2.
+> Tras cerrar STCA, la prioridad #1 de verificación restante son los **decodificadores ASTERIX por
+> categoría** (núcleo SWAL 2 sin tests) y el **matching/reconciliación de tracks**.
