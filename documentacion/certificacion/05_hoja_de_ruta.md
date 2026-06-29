@@ -73,8 +73,16 @@ de seguridad.
 
 ## Quick wins (ejecutables ya, alto valor / bajo costo)
 
-1. CI con `pytest tests/` + cobertura (visibilidad inmediata del estado real).
-2. Limpieza del árbol de fuentes y `.gitignore` (integridad de configuración, C-3).
-3. `requirements.txt` completo + lockfile de dependencias.
-4. Banco de pruebas STCA con escenarios PCAP de referencia (cierra el hueco de mayor riesgo).
+1. ✅ **Banco de pruebas STCA** (`tests/stca/`, 27 casos) — cierra el hueco de mayor riesgo (REQ-SN-1).
+   Pendiente: escenarios PCAP end-to-end y resolución del hallazgo STCA-1.
+2. ✅ **CI con `pytest tests/` + cobertura** (`.github/workflows/tests.yml`) — V-5/V-6.
+3. ⚠️ **`.gitignore` endurecido** (`.pcap`, `.S4RD`, `.kmz`, `.sqlite`, cachés, crashes) — C-3.
+   Pendiente: purgar del histórico los binarios ya versionados.
+4. `requirements.txt` completo + lockfile de dependencias.
 5. Consolidar/eliminar los scripts `test_*.py` de la raíz hacia `tests/`.
+
+### Triage inmediato requerido
+- **3 tests preexistentes en rojo** (no introducidos por este trabajo): `tests/msaw/test_render.py`
+  (formato de etiqueta `"2500'"` vs `"MSA 2500"`, 2 casos) y `tests/centro_tecnico/test_window.py`
+  (conteo de pestañas). Decidir si la fuente de verdad es el test o el código antes de fijar el
+  baseline verde de CI. Suite actual: **248 pasan / 3 fallan**.

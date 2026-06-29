@@ -14,11 +14,11 @@
 |---------|-----------|----|----|----|--------------------|
 | Planificación | 5 | 0 | 1 | 4 | 10% |
 | Desarrollo (requisitos/diseño/código) | 6 | 1 | 3 | 2 | 35% |
-| Verificación | 7 | 0 | 3 | 4 | 25% |
-| Gestión de configuración (SCM) | 4 | 1 | 2 | 1 | 45% |
+| Verificación | 7 | 0 | 4 | 3 | 35% |
+| Gestión de configuración (SCM) | 4 | 1 | 3 | 0 | 55% |
 | Aseguramiento de calidad (SQA) | 3 | 0 | 0 | 3 | 0% |
 | Enlace con autoridad | 2 | 0 | 1 | 1 | 15% |
-| **Total** | **27** | **2** | **10** | **15** | **~25%** |
+| **Total** | **27** | **2** | **12** | **13** | **~30%** |
 
 Conclusión: **no apto para auditoría de certificación hoy.** Base técnica sólida, pero la capa de
 evidencia de proceso (planes, trazabilidad, SCM/SQA, análisis de seguridad) está mayormente ausente.
@@ -53,9 +53,9 @@ evidencia de proceso (planes, trazabilidad, SCM/SQA, análisis de seguridad) est
 | V-1 | Revisión de requisitos | ❌ | Sin requisitos formales que revisar |
 | V-2 | Revisión de diseño | ❌ | No registrada |
 | V-3 | Revisión/análisis de código | ⚠️ | Revisiones ad-hoc; sin registro formal |
-| V-4 | Pruebas basadas en requisitos | ⚠️ | `tests/` por subsistema; no trazadas a requisitos |
-| V-5 | Cobertura estructural acorde a SWAL | ❌ | No medida (sin coverage en CI) |
-| V-6 | Pruebas de integración del sistema | ⚠️ | PCAP de referencia; sin procedimiento formal ni resultados archivados |
+| V-4 | Pruebas basadas en requisitos | ⚠️ | `tests/` por subsistema; trazabilidad parcial iniciada ([04](04_matriz_trazabilidad.md)) |
+| V-5 | Cobertura estructural acorde a SWAL | ⚠️ | CI con `pytest-cov` añadido (`.github/workflows/tests.yml`); falta fijar criterio/umbral por SWAL |
+| V-6 | Pruebas de integración del sistema | ⚠️ | PCAP de referencia; CI ejecuta la suite; falta procedimiento formal y archivado de resultados |
 | V-7 | Independencia de la verificación | ❌ | No establecida |
 
 ## 4. Gestión de Configuración (SCM)
@@ -64,7 +64,7 @@ evidencia de proceso (planes, trazabilidad, SCM/SQA, análisis de seguridad) est
 |-----|-------------|--------|--------------------|
 | C-1 | Identificación de la configuración | ⚠️ | Git presente; sin baseline ni versionado de release |
 | C-2 | Control de cambios / problem reporting | ⚠️ | Commits convencionales; sin registro de problemas formal |
-| C-3 | Integridad del árbol de fuentes | ❌ | `.venv`, `.pcap`, `.duckdb`, logs versionados en la raíz |
+| C-3 | Integridad del árbol de fuentes | ⚠️ | `.gitignore` endurecido (binarios/cachés/crashes); falta purgar histórico ya versionado |
 | C-4 | Control de entornos de build | ✅ | Runtime documentado (CLAUDE.md, run_linux.sh) |
 
 ## 5. Aseguramiento de Calidad (SQA)
