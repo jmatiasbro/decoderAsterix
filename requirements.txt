@@ -1,6 +1,10 @@
+PyQt6>=6.6.0
+duckdb>=1.1.0
+scapy>=2.5.0
 dpkt>=1.9.7
-numpy
-matplotlib
-pyproj
-fpdf2
-pygeomag
+numpy>=1.26.0
+matplotlib>=3.8.0
+pyproj>=3.6.0
+fpdf2>=2.7.0
+pygeomag>=1.0.0
+Pillow>=10.0.0

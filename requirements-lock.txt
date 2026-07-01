@@ -1,0 +1,17 @@
+# Lockfile generado con: pip list --format=freeze (Python 3.12, Windows nativo)
+# Fecha: 2026-07-01
+# Este archivo fija las versiones exactas probadas en CI.
+PyQt6==6.11.0
+PyQt6-Qt6==6.11.0
+PyQt6_sip==13.11.1
+duckdb==1.5.3
+scapy==2.7.0
+dpkt==1.9.8
+numpy==2.4.4
+matplotlib==3.10.9
+pyproj==3.7.2
+fpdf2==2.8.7
+pygeomag==1.1.0
+Pillow==12.2.0
+# --- dependencias transitivas relevantes ---
+packaging==26.2

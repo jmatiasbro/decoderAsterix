@@ -75,11 +75,13 @@ de seguridad.
 
 1. ✅ **Banco de pruebas STCA** (`tests/stca/`, 27 casos) — cierra el hueco de mayor riesgo (REQ-SN-1).
    Pendiente: escenarios PCAP end-to-end y resolución del hallazgo STCA-1.
-2. ✅ **CI con `pytest tests/` + cobertura** (`.github/workflows/tests.yml`) — V-5/V-6.
-3. ⚠️ **`.gitignore` endurecido** (`.pcap`, `.S4RD`, `.kmz`, `.sqlite`, cachés, crashes) — C-3.
+2. ✅ **Banco de pruebas decodificadores ASTERIX** (`tests/decoders/`, 91 casos: CAT001/002/021/034/048/062) — REQ-DEC-1 a REQ-DEC-4 cerrados.
+3. ✅ **CI con `pytest tests/` + cobertura** (`.github/workflows/tests.yml`) — V-5/V-6.
+4. ⚠️ **`.gitignore` endurecido** (`.pcap`, `.S4RD`, `.kmz`, `.sqlite`, cachés, crashes) — C-3.
    Pendiente: purgar del histórico los binarios ya versionados.
-4. `requirements.txt` completo + lockfile de dependencias.
-5. Consolidar/eliminar los scripts `test_*.py` de la raíz hacia `tests/`.
+5. ✅ **`requirements.txt` completo + `requirements-lock.txt`** (PyQt6, duckdb, scapy, dpkt, numpy, matplotlib, pyproj, fpdf2, pygeomag, Pillow — versiones exactas fijadas).
+6. ⚠️ **Consolidar/eliminar scripts `test_*.py` de la raíz** — `test_profile.py` migrado a `tests/profiles/` (8 casos, REQ-ROL-1 ✅). Los 22 restantes son legacy; pendiente confirmación de borrado.
+7. ✅ **Matching de tracks** (`tests/tracking/test_matching.py`, 31 casos, pasos A–E + CAT62) — REQ-TRK-2 cerrado.
 
 ### Triage de tests (resuelto)
 - ✅ **3 tests preexistentes en rojo** corregidos (eran expectativas desactualizadas, no regresiones):
