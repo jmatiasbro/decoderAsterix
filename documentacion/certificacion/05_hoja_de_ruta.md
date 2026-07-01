@@ -82,6 +82,10 @@ de seguridad.
 5. ✅ **`requirements.txt` completo + `requirements-lock.txt`** (PyQt6, duckdb, scapy, dpkt, numpy, matplotlib, pyproj, fpdf2, pygeomag, Pillow — versiones exactas fijadas).
 6. ⚠️ **Consolidar/eliminar scripts `test_*.py` de la raíz** — `test_profile.py` migrado a `tests/profiles/` (8 casos, REQ-ROL-1 ✅). Los 22 restantes son legacy; pendiente confirmación de borrado.
 7. ✅ **Matching de tracks** (`tests/tracking/test_matching.py`, 31 casos, pasos A–E + CAT62) — REQ-TRK-2 cerrado.
+8. ✅ **Sensor registry** (`tests/decoders/test_sensor_registry.py`, 11 casos) — REQ-DEC-5 cerrado.
+9. ✅ **Proyección estereográfica** (`tests/geo/test_stereographic.py`, 11 casos) — REQ-GEO-1 cerrado.
+10. ✅ **Correlación multi-radar** (`tests/fusion_tests/test_correlator.py`, 26 casos) — REQ-FUS-1/2 cerrados.
+11. ✅ **Auditoría safety** (`tests/storage_tests/test_safety_audit.py`, 17 casos: 9 persistencia + 8 CSV) — REQ-AUD-1/2 cerrados. **Suite total: 447 tests / 0 fallos.**
 
 ### Triage de tests (resuelto)
 - ✅ **3 tests preexistentes en rojo** corregidos (eran expectativas desactualizadas, no regresiones):
