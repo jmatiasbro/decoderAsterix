@@ -23,10 +23,11 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | # | Documento | Rol normativo | Estado |
 |---|-----------|---------------|--------|
 | 01 | [PSAC](01_PSAC.md) — Plan for Software Aspects of Certification | Documento de entrada DO-278A | Borrador |
-| 02 | [Clasificación SWAL](02_clasificacion_SWAL.md) | Asignación de nivel de aseguramiento (1–4) | Borrador |
+| 02 | [Clasificación SWAL](02_clasificacion_SWAL.md) | Asignación de nivel de aseguramiento (1–4) | Borrador (pendiente revisión post-FHA) |
 | 03 | [Gap Analysis DO-278A](03_gap_analysis_DO-278A.md) | Estado objetivo-por-objetivo | Borrador |
 | 04 | [Matriz de Trazabilidad](04_matriz_trazabilidad.md) | Requisitos ↔ diseño ↔ código ↔ test | Inicial/parcial |
 | 05 | [Hoja de Ruta de Certificación](05_hoja_de_ruta.md) | Planificación de cierre de brecha | Borrador |
+| 06 | [FHA — Functional Hazard Assessment](06_FHA.md) | Análisis de peligros; confirma SWAL; deriva SSR | Borrador v0.1 |
 
 ## 3. Cómo leer el paquete
 

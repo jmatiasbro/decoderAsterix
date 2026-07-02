@@ -1,7 +1,7 @@
 # Clasificación SWAL — Software Assurance Level
 
-**Norma:** EUROCAE ED-109A / RTCA DO-278A. **Versión:** 0.1 (borrador). **Fecha:** 2026-06-28.
-**Estado:** PROVISIONAL — sujeto a confirmación por análisis funcional de peligros (FHA) y PSSA.
+**Norma:** EUROCAE ED-109A / RTCA DO-278A. **Versión:** 0.2 (borrador). **Fecha:** 2026-07-01.
+**Estado:** PROVISIONAL — el FHA ([06_FHA.md](06_FHA.md) v0.1) escala matching/lifecycle a SWAL 2. Requiere validación con EANA y confirmación por PSSA.
 
 > El SWAL (1 = más crítico … 4 = menos) se asigna según la **severidad del efecto de un fallo del
 > software** en la seguridad operacional ATM, derivada del análisis de peligros del sistema. Sin FHA
@@ -35,7 +35,8 @@
 | STCA (conflicto a corto plazo) | cadena safety | Falla en alertar conflicto real, o alerta falsa que distrae | STCA es *red de respaldo*, no separación primaria | Mayor | **3** |
 | APW (penetración de área) | `player/areas` | No alertar penetración de área restringida | Procedimientos; coordinación | Mayor | **3** |
 | MSAW (alerta de altitud mínima) | `player/msaw` | No alertar proximidad al terreno | Red de respaldo; reglas de vuelo | Mayor | **3** |
-| Ciclo de vida de tracks | `player/tracking/lifecycle.py` | Track fantasma / caído prematuramente | Determinista; testeado | Mayor | **3** |
+| Ciclo de vida de tracks | `player/tracking/lifecycle.py` | Track fantasma / **caído prematuramente** (FC-LIF-02) | Determinista; testeado | **Peligroso** (caída silenciosa) | **2** ⬆️ |
+| Matching/reconciliación de tracks | `player/radar_widget.py` | Fusión errónea de dos aeronaves (FC-TRK-01) | H-AS-3, TCAS | **Peligroso** (aeronave desaparece) | **2** ⬆️ |
 | Fusión multi-radar / calibración | `fusion/` | Correlación errónea → doble track o salto | Solo rol técnico; no operacional en vivo | Mayor | **3** |
 | Análisis / exportación post-operación | `analysis/`, `exporters.py` | Informe incorrecto (no afecta tiempo real) | Revisión humana del informe | Menor | **4** |
 | Auditoría de eventos safety | `storage/`, `safety_audit_dialog` | Registro incompleto para informe OACI | No afecta separación en vivo | Menor | **4** |
@@ -72,3 +73,4 @@ explícito que son de respaldo. Si el CONOPS las posiciona como medio primario, 
 | Ver | Fecha | Cambio |
 |-----|-------|--------|
 | 0.1 | 2026-06-28 | Clasificación provisional inicial basada en juicio de ingeniería. |
+| 0.2 | 2026-07-01 | Revisión post-FHA: matching/reconciliación y ciclo de vida (caída prematura) escalados a SWAL 2. |
