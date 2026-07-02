@@ -1,3 +1,4 @@
+import os
 from datetime import time
 
 from player.areas.model import Area, Vigencia
@@ -36,6 +37,46 @@ def test_roundtrip_circulo_permanente(tmp_path, monkeypatch):
     assert got.shape == "circle"
     assert got.center == (-34.0, -58.0) and got.radius_nm == 5.0
     assert got.vigencia.permanente is True
+
+
+# ── HLR-APW-02: área inválida rechazada en carga ────────────────────────────
+
+def test_area_from_dict_invalida_lanza_valueerror():
+    """area_from_dict con lat fuera de rango lanza ValueError (HLR-APW-02)."""
+    import json
+    d = {
+        "name": "MALA", "kind": "R", "shape": "poly",
+        "lower_fl": 0, "upper_fl": 999,
+        "vertices": [[91.0, -64.0], [-31.0, -63.5], [-30.5, -63.7]],
+        "vigencia": {"permanente": True, "habilitada": True, "dias": [], "desde": None, "hasta": None},
+    }
+    import pytest
+    with pytest.raises(ValueError, match="inválida"):
+        store.area_from_dict(d)
+
+
+def test_cargar_todas_omite_area_invalida(tmp_path, monkeypatch):
+    """cargar_todas omite áreas inválidas sin lanzar excepción (HLR-APW-02)."""
+    import json
+    u = _user(tmp_path, monkeypatch)
+    # Área válida
+    a_ok = Area("BUENA", "R", "poly",
+                vertices=[(-31.0, -64.0), (-31.0, -63.5), (-30.5, -63.7)],
+                origen="usuario")
+    store.guardar(a_ok, u)
+    # Área con vértice lat > 90 → inválida
+    d_mala = {
+        "name": "MALA", "kind": "R", "shape": "poly",
+        "lower_fl": 0, "upper_fl": 999,
+        "vertices": [[91.0, -64.0], [-31.0, -63.5], [-30.5, -63.7]],
+        "vigencia": {"permanente": True, "habilitada": True, "dias": [], "desde": None, "hasta": None},
+    }
+    mala_path = os.path.join(store.areas_dir(u), "MALA.json")
+    with open(mala_path, "w") as f:
+        json.dump(d_mala, f)
+    cargadas = store.cargar_todas(u)
+    assert len(cargadas) == 1
+    assert cargadas[0].name == "BUENA"
 
 
 def test_borrar(tmp_path, monkeypatch):

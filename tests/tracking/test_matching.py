@@ -342,3 +342,106 @@ class TestMatchingRobustez:
         proc(w, plot(mode_s='111111', mode3a=0o1234, x=0, y=0))
         proc(w, plot(mode_s='222222', mode3a=0o1234, x=35 * NM, y=0))
         assert len(w.tracks) == 2
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# HLR-TRK-08: modo_integrado=False — sin fusión cross-sensor
+# ────────────────────────────────────────────────────────────────────────────
+
+class TestModoNoIntegrado:
+    """Con modo_integrado=False, tracks de sensores distintos nunca se fusionan
+    aunque compartan squawk, Mode S o número de track."""
+
+    @pytest.fixture
+    def w_no_int(self, app):
+        from player.radar_widget import RadarWidget
+        widget = RadarWidget()
+        widget.projection_set = True
+        widget.sensores_visibles = None
+        widget.modo_integrado = False  # <--- no integrado
+        widget.limpiar_pantalla()
+        return widget
+
+    def test_mismo_modes_sensor_diferente_comparte_track(self, w_no_int):
+        """Mode S es globalmente único: incluso en modo no-integrado, el mismo
+        Mode S de sensores distintos va al mismo track (diseño intencional)."""
+        t1 = proc(w_no_int, plot(sac_sic='226/210', mode_s='ABCDEF', x=0, y=0))
+        t2 = proc(w_no_int, plot(sac_sic='226/211', mode_s='ABCDEF', x=0, y=0))
+        assert t1 == t2  # Mode S global → mismo track
+
+    def test_mismo_squawk_sensor_diferente_no_fusiona(self, w_no_int):
+        """Paso B ignorado para sensores distintos en modo no-integrado."""
+        t1 = proc(w_no_int, plot(sac_sic='226/210', mode3a=0o3333, x=0, y=0))
+        t2 = proc(w_no_int, plot(sac_sic='226/211', mode3a=0o3333, x=100, y=0))
+        assert t1 != t2
+
+    def test_mismo_track_num_sensor_diferente_no_fusiona(self, w_no_int):
+        """Paso C ignorado para sensores distintos en modo no-integrado."""
+        t1 = proc(w_no_int, plot(sac_sic='226/210', track_num=55, x=0, y=0))
+        t2 = proc(w_no_int, plot(sac_sic='226/211', track_num=55, x=100, y=0))
+        assert t1 != t2
+
+    def test_proximidad_sensor_diferente_no_fusiona(self, w_no_int):
+        """Paso E (proximidad) no se ejecuta en modo no-integrado.
+
+        Los plots sin identidad SSR necesitan rho/theta para obtener un
+        target_id estable (FIX_…); con modo_integrado=False el paso E no
+        corre y los sensores distintos generan tracks separados.
+        """
+        d1 = plot(sac_sic='226/210', x=0, y=0)
+        d1['raw_range'] = 10.0
+        d1['raw_azimuth'] = 90.0
+        d2 = plot(sac_sic='226/211', x=0, y=0)
+        d2['raw_range'] = 10.0
+        d2['raw_azimuth'] = 90.0
+        t1 = proc(w_no_int, d1)
+        t2 = proc(w_no_int, d2)
+        assert t1 is not None and t2 is not None
+        assert t1 != t2
+
+    def test_mismo_sensor_mismo_modes_fusiona(self, w_no_int):
+        """Mismo sensor con mismo Mode S SIEMPRE fusiona, incluso sin modo integrado."""
+        t1 = proc(w_no_int, plot(sac_sic='226/210', mode_s='FEDCBA', x=0, y=0))
+        t2 = proc(w_no_int, plot(sac_sic='226/210', mode_s='FEDCBA', x=100, y=0))
+        assert t1 == t2
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# HLR-DEC-06: filtro de rango máximo por sensor (CAT48/01)
+# ────────────────────────────────────────────────────────────────────────────
+
+class TestFiltroRangoMaximo:
+    """max_rango_sensor_nm descarta plots CAT48/01 con rho > límite."""
+
+    def test_cat48_dentro_del_rango_aceptado(self, w):
+        w.max_rango_sensor_nm = 100.0
+        d = plot(cat=48, mode_s='A1B2C3', x=0, y=0)
+        d['raw_range'] = 50.0   # 50 NM < 100 NM → aceptado
+        assert proc(w, d) is not None
+
+    def test_cat48_fuera_del_rango_descartado(self, w):
+        w.max_rango_sensor_nm = 100.0
+        d = plot(cat=48, x=0, y=0)
+        d['raw_range'] = 150.0  # 150 NM > 100 NM → descartado
+        assert proc(w, d) is None
+
+    def test_cat48_exactamente_en_limite_descartado(self, w):
+        """Rho == max (no estrictamente menor) → descartado."""
+        w.max_rango_sensor_nm = 100.0
+        d = plot(cat=48, x=0, y=0)
+        d['raw_range'] = 100.0
+        assert proc(w, d) is None
+
+    def test_cat21_no_filtrado_por_rango(self, w):
+        """CAT21 (ADS-B) no está sujeto al filtro de rango."""
+        w.max_rango_sensor_nm = 10.0
+        d = plot(cat=21, mode_s='AA1111', x=0, y=0)
+        d['raw_range'] = 500.0  # > 10 NM pero cat=21 → no filtra
+        assert proc(w, d) is not None
+
+    def test_sin_raw_range_no_filtra(self, w):
+        """Plot sin raw_range no es filtrado (coordenadas cartesianas directas)."""
+        w.max_rango_sensor_nm = 10.0
+        d = plot(cat=48, mode_s='D4E5F6', x=0, y=0)
+        # sin 'raw_range' en el dict
+        assert proc(w, d) is not None

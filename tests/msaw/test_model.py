@@ -48,6 +48,50 @@ def test_omnidireccional():
     assert z.msa_en(0.05, 0.0) == 2500
 
 
+# ── HLR-MSAW-02: validación de altitudes en carga ───────────────────────────
+
+class TestMsaZoneValidar:
+
+    def test_zona_valida_sin_errores(self):
+        z = MsaZone(icao="X", center=(0.0, 0.0), radius_nm=25.0,
+                    sectors=[MsaSector(0, 360, 4100)])
+        assert z.validar() == []
+
+    def test_msa_ft_encima_de_60000_es_error(self):
+        z = MsaZone(icao="X", center=(0.0, 0.0), radius_nm=25.0,
+                    sectors=[MsaSector(0, 360, 65000)])
+        errores = z.validar()
+        assert any("65000" in e for e in errores)
+
+    def test_msa_ft_bajo_menos_2000_es_error(self):
+        z = MsaZone(icao="X", center=(0.0, 0.0), radius_nm=25.0,
+                    sectors=[MsaSector(0, 360, -3000)])
+        errores = z.validar()
+        assert any("-3000" in e for e in errores)
+
+    def test_multiples_sectores_un_invalido(self):
+        z = MsaZone(icao="X", center=(0.0, 0.0), radius_nm=25.0,
+                    sectors=[MsaSector(0, 180, 4100), MsaSector(180, 360, 99999)])
+        errores = z.validar()
+        assert len(errores) == 1
+        assert "99999" in errores[0]
+
+    def test_center_lat_invalido(self):
+        z = MsaZone(icao="X", center=(95.0, 0.0), radius_nm=25.0, sectors=[])
+        errores = z.validar()
+        assert any("lat=95.0" in e for e in errores)
+
+    def test_radius_cero_es_error(self):
+        z = MsaZone(icao="X", center=(0.0, 0.0), radius_nm=0.0, sectors=[])
+        errores = z.validar()
+        assert any("radius_nm" in e for e in errores)
+
+    def test_sin_center_es_error(self):
+        z = MsaZone(icao="X", center=None, radius_nm=25.0, sectors=[])
+        errores = z.validar()
+        assert any("center" in e for e in errores)
+
+
 def test_declinacion_rota_el_limite():
     # Con declinación oeste, el rumbo magnético = verdadero + decl_w.
     z = MsaZone(icao="X", center=(0.0, 0.0), radius_nm=25.0, mag_decl_w=10.0,

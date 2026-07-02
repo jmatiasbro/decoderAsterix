@@ -107,6 +107,31 @@ class Area:
         lons = [v[1] for v in self.vertices]
         return (min(lats), min(lons), max(lats), max(lons))
 
+    def validar(self) -> list:
+        """Retorna lista de errores de geometría. Lista vacía = área válida (HLR-APW-02)."""
+        errores = []
+        if self.shape == "poly":
+            if len(self.vertices) < 3:
+                errores.append(f"poly requiere ≥ 3 vértices; tiene {len(self.vertices)}")
+            for i, v in enumerate(self.vertices):
+                lat, lon = float(v[0]), float(v[1])
+                if not (-90.0 <= lat <= 90.0):
+                    errores.append(f"vértice {i}: lat={lat} fuera de [-90, 90]")
+                if not (-180.0 <= lon <= 180.0):
+                    errores.append(f"vértice {i}: lon={lon} fuera de [-180, 180]")
+        elif self.shape == "circle":
+            if self.center is None:
+                errores.append("circle requiere center")
+            else:
+                clat, clon = float(self.center[0]), float(self.center[1])
+                if not (-90.0 <= clat <= 90.0):
+                    errores.append(f"center: lat={clat} fuera de [-90, 90]")
+                if not (-180.0 <= clon <= 180.0):
+                    errores.append(f"center: lon={clon} fuera de [-180, 180]")
+            if self.radius_nm is None or float(self.radius_nm) <= 0:
+                errores.append(f"circle: radius_nm={self.radius_nm} debe ser > 0")
+        return errores
+
     def polilinea(self, n=64):
         """Contorno cerrado [(lat,lon)] para render (círculo -> n segmentos)."""
         if self.shape == "circle" and self.center and self.radius_nm:

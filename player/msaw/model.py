@@ -73,6 +73,24 @@ class MsaZone:
     mag_decl_w: float = 0.0       # declinación magnética OESTE en grados (Córdoba 6.0)
     sectors: list = field(default_factory=list)
 
+    def validar(self) -> list:
+        """Retorna lista de errores. Lista vacía = zona válida (HLR-MSAW-02)."""
+        errores = []
+        if self.center is None:
+            errores.append("MsaZone sin center")
+        else:
+            clat, clon = float(self.center[0]), float(self.center[1])
+            if not (-90.0 <= clat <= 90.0):
+                errores.append(f"center lat={clat} fuera de [-90, 90]")
+            if not (-180.0 <= clon <= 180.0):
+                errores.append(f"center lon={clon} fuera de [-180, 180]")
+        if self.radius_nm is not None and float(self.radius_nm) <= 0:
+            errores.append(f"radius_nm={self.radius_nm} debe ser > 0")
+        for i, s in enumerate(self.sectors):
+            if not (-2000 <= s.msa_ft <= 60000):
+                errores.append(f"sector {i}: msa_ft={s.msa_ft} fuera de [-2000, 60000]")
+        return errores
+
     def contiene(self, lat, lon) -> bool:
         if not self.center:
             return False
