@@ -249,19 +249,19 @@ class SafetyAuditDialog(QDialog):
 
     def _calcular_duraciones(self, rows) -> dict:
         """Devuelve {idx_onset: duracion_s} pareando ONSETs con el primer CLEAR posterior."""
-        # rows ordenadas por ts ASC (garantizado por query_safety_events)
+        # rows ordenadas por ts_wall ASC (garantizado por query_safety_events)
         # Índices: 0=ts,1=ts_wall,2=sub,3=trans,4=clave,5=nivel,6=origen,7=desc,8=sesion
         pending: dict[tuple, tuple] = {}  # (sub, clave) → (idx, ts)
         duraciones: dict[int, float] = {}
 
         for idx, r in enumerate(rows):
-            ts, _, sub, trans, clave = r[0], r[1], r[2], r[3], r[4]
+            _, ts_wall, sub, trans, clave = r[0], r[1], r[2], r[3], r[4]
             key = (sub, clave)
             if trans == "ONSET":
-                pending[key] = (idx, ts)
+                pending[key] = (idx, ts_wall)
             elif trans == "CLEAR" and key in pending:
-                onset_idx, onset_ts = pending.pop(key)
-                duraciones[onset_idx] = round(ts - onset_ts, 1)
+                onset_idx, onset_ts_wall = pending.pop(key)
+                duraciones[onset_idx] = round(ts_wall - onset_ts_wall, 1)
 
         return duraciones
 

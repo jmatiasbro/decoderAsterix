@@ -4455,6 +4455,10 @@ class RadarWidget(_RadarBase):
                 self.selected_history_point = None  # Limpiar selección al hacer pan
                 self.update()
             elif event.button() == Qt.MouseButton.RightButton:
+                # Click derecho sobre la etiqueta de un track → menú contextual FDP.
+                # Si no cae sobre ningún track, comportamiento normal (selección).
+                if self._menu_contextual_track(event):
+                    return
                 self.is_selecting = True
                 self.selection_start_point = event.position()
                 self.selection_rect = QRectF(self.selection_start_point, self.selection_start_point)
@@ -4993,6 +4997,53 @@ class RadarWidget(_RadarBase):
         label_x = sx + 10
         label_y = sy - 10  # yo = -10 for first line
         return QRectF(label_x, label_y, max_width + 4, total_height + 4)
+
+    def _menu_contextual_track(self, event) -> bool:
+        """Muestra el menú contextual FDP si el clic derecho cae sobre un track.
+
+        Devuelve True si se mostró el menú (hubo hit sobre una etiqueta), False
+        en caso contrario (para que el llamador siga con la selección normal).
+        """
+        try:
+            if not getattr(self, 'label_hitboxes', None):
+                return False
+            click_pos = event.position()
+            for pid, hitbox in self.label_hitboxes.items():
+                plot = self.tracks.get(pid) or self.pending_tracks.get(pid)
+                if not plot or not plot.is_alive():
+                    continue
+                if not hitbox.contains(click_pos):
+                    continue
+
+                from PyQt6.QtWidgets import QMenu
+                callsign = (getattr(plot, 'callsign', None) or "").strip()
+                menu = QMenu(self)
+                act_fdp = menu.addAction("Ver Plan de Vuelo…")
+                act_fdp.setEnabled(bool(callsign))
+                elegido = menu.exec(event.globalPosition().toPoint())
+                if elegido is act_fdp:
+                    self._abrir_plan_fdp(callsign)
+                return True
+            return False
+        except Exception:
+            return False
+
+    def _abrir_plan_fdp(self, callsign: str):
+        """Busca el plan FDP por callsign y abre el diálogo, o avisa si no hay."""
+        from PyQt6.QtWidgets import QMessageBox
+        try:
+            from player.fdp.lookup import buscar_plan
+            plan = buscar_plan(callsign)
+        except Exception:
+            plan = None
+        if not plan:
+            QMessageBox.information(
+                self.window(), "Plan de Vuelo FDP",
+                f"No hay plan de vuelo FDP para «{callsign}».")
+            return
+        from player.fdp.flight_plan_dialog import FlightPlanDialog
+        dlg = FlightPlanDialog(callsign, plan, parent=self.window())
+        dlg.exec()
 
     def mouseDoubleClickEvent(self, event):
         """

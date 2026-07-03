@@ -118,10 +118,10 @@ class DuckDBRepository:
             filtros.append("sesion_id = ?")
             params.append(sesion_id)
         if ts_desde is not None:
-            filtros.append("ts >= ?")
+            filtros.append("ts_wall >= ?")
             params.append(ts_desde)
         if ts_hasta is not None:
-            filtros.append("ts <= ?")
+            filtros.append("ts_wall <= ?")
             params.append(ts_hasta)
         where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
         sql = f"""
@@ -129,7 +129,7 @@ class DuckDBRepository:
                    nivel, origen, descripcion, sesion_id
             FROM safety_events
             {where}
-            ORDER BY ts ASC
+            ORDER BY ts_wall ASC
         """
         return self.query(sql, params) if params else self.query(sql)
 
@@ -226,24 +226,18 @@ class DuckDBRepository:
         finally:
             self._start_worker()
 
-    def guardar_plots_bulk(self, plots_list: List[Dict[str, Any]]):
-        self.log_repo(f"guardar_plots_bulk() starting with {len(plots_list)} plots")
-        if not plots_list:
-            return
-        
+    def guardar_plots_bulk(self, plots_iter):
         self.flush()  # Asegurar que no hay escrituras concurrentes pendientes
-        self.log_repo("guardar_plots_bulk() flushed")
-        
         self._stop_worker()
-        
-        # Generar un archivo CSV temporal
+
         fd, temp_csv_path = tempfile.mkstemp(suffix=".csv")
         os.close(fd)
-        
+
         try:
+            row_count = 0
             with open(temp_csv_path, 'w', newline='', encoding='utf-8') as f:
                 w = csv.writer(f, lineterminator='\r\n')
-                for plot in plots_list:
+                for plot in plots_iter:
                     time_val = plot.get('time') or plot.get('timestamp') or 0.0
                     rx_val = plot.get('pcap_time') or 0.0
                     cat_val = plot.get('category') or 0
@@ -325,6 +319,12 @@ class DuckDBRepository:
                         freq_val,
                         pd_val,
                     ])
+                    row_count += 1
+                    if row_count % 10000 == 0:
+                        time.sleep(0)  # cede el GIL para que el hilo UI procese eventos
+
+            if row_count == 0:
+                return
 
             try:
                 cursor = self.thread_conn.cursor()

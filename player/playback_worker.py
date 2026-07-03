@@ -246,7 +246,7 @@ class PlaybackWorker(QThread):
                 self.pcap_file, incluir_raw_bytes=True)
 
             try:
-                self.engine.repo_db.guardar_plots_bulk([p.to_dict() for p in plots])
+                self.engine.repo_db.guardar_plots_bulk(p.to_dict() for p in plots)
             except Exception as e:
                 print(f"[PlaybackWorker] No se pudo poblar el analizador: {e}")
             finally:
