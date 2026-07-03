@@ -473,6 +473,13 @@ class RadarPlot:
         return self.age < max_age
 
     @property
+    def is_coasting(self) -> bool:
+        """True cuando el track está en coasting: vivo pero sin plot reciente
+        (age > MAX_AGE/2). La UI debe diferenciarlo visualmente (HLR-HMI-04)."""
+        max_age = MAX_AGE_TRACK if self.is_track else MAX_AGE_PLOT
+        return self.age > max_age / 2
+
+    @property
     def lat(self) -> Optional[float]:
         if self.raw_dict:
             return self.raw_dict.get('lat') or self.raw_dict.get('lat_render')
@@ -863,6 +870,16 @@ class RadarWidget(_RadarBase):
         self._safety_pending = False
         # Estado previo por subsistema para publicar al bus solo transiciones.
         self._safety_eventos_prev: dict = {}
+
+        # Watchdog HLR-HMI-06: detecta bloqueo de la cadena safety-nets.
+        # _safety_wall_last: wall-clock de la última vez que la cadena completó.
+        # Se alerta si > 5 s sin output MIENTRAS hay tracks activos.
+        import time as _wt
+        self._safety_wall_last: float = _wt.time()
+        self._safety_watchdog_alerted: bool = False
+        self._watchdog_timer = QTimer(self)
+        self._watchdog_timer.timeout.connect(self._check_safety_watchdog)
+        self._watchdog_timer.start(2000)  # verifica cada 2 s
 
         # Enable mouse tracking for tooltip on history points
         self.setMouseTracking(True)
@@ -2600,6 +2617,27 @@ class RadarWidget(_RadarBase):
                 for a in self.msaw_activos})
         except Exception as e:
             print(f"[MSAW ERROR] {e}")
+        finally:
+            # Watchdog: cadena completó (éxito o error) — registrar wall-clock.
+            import time as _wt
+            self._safety_wall_last = _wt.time()
+            if self._safety_watchdog_alerted:
+                self._safety_watchdog_alerted = False
+
+    def _check_safety_watchdog(self):
+        """Verifica que la cadena safety completó en los últimos 5 s (HLR-HMI-06)."""
+        import time as _wt
+        if not getattr(self, 'tracks', None):
+            return  # sin tracks activos no hay cadena que supervisar
+        elapsed = _wt.time() - getattr(self, '_safety_wall_last', _wt.time())
+        if elapsed > 5.0 and not self._safety_watchdog_alerted:
+            self._safety_watchdog_alerted = True
+            bus = getattr(self, 'system_bus', None)
+            if bus:
+                bus.inyectar(
+                    "CRITICAL", "WATCHDOG",
+                    f"Cadena safety-nets sin respuesta > {elapsed:.0f} s "
+                    "— función de alerta DEGRADADA")
 
     def evaluar_stca(self):
         """
