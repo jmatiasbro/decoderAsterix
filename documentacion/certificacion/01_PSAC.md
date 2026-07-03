@@ -68,10 +68,10 @@ aseguramiento de la calidad (SQA) y enlace con la autoridad.
 ### 4.2 Planes asociados (estado)
 | Plan | Documento | Estado |
 |------|-----------|--------|
-| SDP — Plan de Desarrollo de Software | (por elaborar) | ❌ Ausente |
-| SVP — Plan de Verificación de Software | (por elaborar) | ❌ Ausente |
-| SCMP — Plan de Gestión de Configuración | (por elaborar) | ❌ Ausente |
-| SQAP — Plan de Aseguramiento de Calidad | (por elaborar) | ❌ Ausente |
+| SDP — Plan de Desarrollo de Software | [08_SDP.md](08_SDP.md) | Borrador v0.1 |
+| SVP — Plan de Verificación de Software | [09_SVP.md](09_SVP.md) | Borrador v0.1 |
+| SCMP — Plan de Gestión de Configuración | [10_SCMP.md](10_SCMP.md) | Borrador v0.1 |
+| SQAP — Plan de Aseguramiento de Calidad | [11_SQAP.md](11_SQAP.md) | Borrador v0.1 |
 | Estándares (requisitos/diseño/código) | (por elaborar) | ❌ Ausente |
 
 ### 4.3 Transición de datos del ciclo de vida
