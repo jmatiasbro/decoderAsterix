@@ -987,6 +987,11 @@ class MainWindow(QMainWindow):
         self.act_auditoria_safety = menu_config.addAction(
             "Auditoría Safety Nets…", self._abrir_auditoria_safety)
         self.act_auditoria_safety.setEnabled(self.profile_manager.get_rol() == "tecnico")
+        # FDP (Flight Data Processing): feed ADEXP por TCP. Solo rol técnico.
+        self.act_fdp = menu_config.addAction("Conectar FDP (ADEXP)")
+        self.act_fdp.setCheckable(True)
+        self.act_fdp.toggled.connect(self._toggle_fdp)
+        self.act_fdp.setEnabled(self.profile_manager.get_rol() == "tecnico")
 
         # Menú Mapas — capas generadas dinámicamente desde la base ATM (atm.duckdb)
         from player import atm_db, atm_maps
@@ -1100,6 +1105,7 @@ class MainWindow(QMainWindow):
                 # Arrancar al mayor zoom disponible que no supere ~nivel TMA.
                 v.set_zoom(min(v.max_zoom, 8))
                 v.track_selected.connect(self._fir_select_track)
+                v.track_context_requested.connect(self._fir_context_menu)
                 self._fir_view = v
                 self._fir_timer = QTimer(self)
                 self._fir_timer.timeout.connect(self._refresh_fir)
@@ -1134,6 +1140,18 @@ class MainWindow(QMainWindow):
         if hasattr(self.radar, 'focused_target_id'):
             self.radar.focused_target_id = track_id
             self.radar.update()
+
+    def _fir_context_menu(self, track_id, global_pos):
+        """Clic derecho sobre un avión en la vista FIR satelital -> menú FDP."""
+        plot = (self.radar.tracks.get(track_id)
+                or self.radar.pending_tracks.get(track_id))
+        callsign = (getattr(plot, 'callsign', None) or "").strip() if plot else ""
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+        act_fdp = menu.addAction("Ver Plan de Vuelo…")
+        act_fdp.setEnabled(bool(callsign))
+        if menu.exec(global_pos) is act_fdp:
+            self.radar._abrir_plan_fdp(callsign)
 
     def _toggle_ods(self, on: bool):
         if hasattr(self.radar, 'ods_enabled'):
@@ -1378,6 +1396,15 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.hud_bar.addWidget(spacer)
+
+        # Semáforo FDP — visible solo cuando el feed TCP está activo
+        self.lbl_hud_fdp = QLabel("● FDP")
+        self.lbl_hud_fdp.setStyleSheet(
+            "color: #FF9900; font-size: 9pt; font-weight: bold; padding: 2px 6px;")
+        self.lbl_hud_fdp.setToolTip("Estado de conexión FDP/ADEXP")
+        self._act_hud_fdp = self.hud_bar.addWidget(self.lbl_hud_fdp)
+        self._act_hud_fdp.setVisible(False)
+        self.hud_bar.addSeparator()
 
         # Mensajes de Sistema — disponible para ambos roles (técnico y controlador).
         self.btn_hud_msgs = QPushButton(" MSG")
@@ -3352,6 +3379,104 @@ class MainWindow(QMainWindow):
         self._auditoria_win.show()
         self._auditoria_win.raise_()
 
+    # ------------------------------------------------------------------
+    # FDP — feed ADEXP por TCP (solo rol técnico)
+    # ------------------------------------------------------------------
+    def _fdp_config(self) -> dict:
+        """Lee la sección 'fdp' del perfil con defaults seguros."""
+        cfg = self.profile_manager.profile.get("fdp", {}) or {}
+        return {
+            "host": cfg.get("host", "127.0.0.1"),
+            "port": int(cfg.get("port", 4000)),
+        }
+
+    def _toggle_fdp(self, activar: bool):
+        if activar:
+            self._iniciar_fdp()
+        else:
+            self._detener_fdp()
+
+    def _iniciar_fdp(self):
+        if getattr(self, '_fdp_worker', None) is not None:
+            return
+        from pathlib import Path
+        from player.fdp.worker import FdpWorker
+        from player.fdp.flight_panel import FlightPanel
+
+        cfg = self._fdp_config()
+        db_path = str(Path(__file__).resolve().parent.parent
+                      / "data" / "fdp" / "fdp.duckdb")
+
+        # Panel de vuelos activos (dock derecho)
+        if getattr(self, '_fdp_panel', None) is None:
+            self._fdp_panel = FlightPanel(db_path, parent=self)
+            self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._fdp_panel)
+        self._fdp_panel.show()
+        self._fdp_panel.refrescar()
+
+        worker = FdpWorker(cfg["host"], cfg["port"], db_path, parent=self)
+        worker.conectado.connect(self._on_fdp_conectado)
+        worker.mensaje_procesado.connect(self._on_fdp_mensaje)
+        worker.error_conexion.connect(self._on_fdp_error)
+        worker.start()
+        self._fdp_worker = worker
+
+        # Semáforo: naranja = conectando
+        self._fdp_set_semaforo("conectando")
+        self.system_bus.inyectar(
+            "INFO", "FDP", f"Conectando a FDP {cfg['host']}:{cfg['port']}")
+
+    def _detener_fdp(self):
+        worker = getattr(self, '_fdp_worker', None)
+        if worker is None:
+            return
+        worker.stop()
+        worker.wait(3000)
+        self._fdp_worker = None
+        self._fdp_set_semaforo(None)
+        self.system_bus.inyectar("INFO", "FDP", "Feed FDP desconectado")
+
+    def _fdp_set_semaforo(self, estado):
+        """Actualiza el semáforo HUD del feed FDP.
+
+        estado: 'conectado' | 'reconectando' | 'conectando' | None (oculto)
+        """
+        if not hasattr(self, '_act_hud_fdp'):
+            return
+        if estado is None:
+            self._act_hud_fdp.setVisible(False)
+            return
+        self._act_hud_fdp.setVisible(True)
+        colores = {
+            "conectado":    "#39FF14",
+            "conectando":   "#FF9900",
+            "reconectando": "#FF9900",
+        }
+        color = colores.get(estado, "#FF3333")
+        self.lbl_hud_fdp.setStyleSheet(
+            f"color: {color}; font-size: 9pt; font-weight: bold; padding: 2px 6px;")
+        tooltips = {
+            "conectado":    "FDP conectado",
+            "conectando":   "FDP conectando…",
+            "reconectando": "FDP reconectando…",
+        }
+        self.lbl_hud_fdp.setToolTip(tooltips.get(estado, "FDP"))
+
+    def _on_fdp_conectado(self, ok: bool):
+        if ok:
+            self._fdp_set_semaforo("conectado")
+            self.system_bus.inyectar("INFO", "FDP", "Feed FDP conectado")
+        else:
+            self._fdp_set_semaforo("reconectando")
+            self.system_bus.inyectar("WARNING", "FDP", "Conexión FDP caída — reintentando")
+
+    def _on_fdp_mensaje(self, tipo: str, arcid: str):
+        if getattr(self, '_fdp_panel', None) is not None:
+            self._fdp_panel.refrescar()
+
+    def _on_fdp_error(self, message: str):
+        self.system_bus.inyectar("WARNING", "FDP", message)
+
     def _recargar_sensores_calib(self):
         """Recarga sensores con los offsets recién guardados por el calibrador."""
         import os
@@ -4828,6 +4953,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._limpiar_worker()
+        self._detener_fdp()
         shutil.rmtree(self.cache_dir, ignore_errors=True)
         # Cerrar las ventanas flotantes (Qt.Tool: paneles MSAW/APW, finder, reloj,
         # panel de sensores, vista FIR…). Si no, quedan visibles y mantienen vivo el
