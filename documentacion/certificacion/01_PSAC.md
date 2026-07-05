@@ -72,8 +72,8 @@ aseguramiento de la calidad (SQA) y enlace con la autoridad.
 | SVP — Plan de Verificación de Software | [09_SVP.md](09_SVP.md) | Borrador v0.1 |
 | SCMP — Plan de Gestión de Configuración | [10_SCMP.md](10_SCMP.md) | Borrador v0.1 |
 | SQAP — Plan de Aseguramiento de Calidad | [11_SQAP.md](11_SQAP.md) | Borrador v0.1 |
-| Estándares (diseño/código) | [13_estandar_codificacion.md](13_estandar_codificacion.md) | Borrador v0.1 |
-| Estándares de requisitos | (por elaborar) | ❌ Ausente |
+| Estándares (diseño/código) | [13_estandar_codificacion.md](13_estandar_codificacion.md) | Borrador v0.2 (linter en CI) |
+| Estándares de requisitos | [14_estandar_requisitos.md](14_estandar_requisitos.md) | Borrador v0.1 |
 
 ### 4.3 Transición de datos del ciclo de vida
 Se definirán los entregables (SRS, SDD, casos/resultados de prueba, registros de revisión) y sus

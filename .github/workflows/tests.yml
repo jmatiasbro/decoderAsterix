@@ -33,6 +33,12 @@ jobs:
           pip install -r requirements-linux.txt || pip install -r requirements.txt
           pip install PyQt6 pyproj duckdb pytest pytest-cov
 
+      - name: Linter del estándar SWAL 2 (doc 13 §7)
+        # Control mecánico de regresión de las prohibiciones duras (EC-5/6/7) sobre
+        # los módulos de seguridad. Falla el pipeline si se introduce time.time(),
+        # import de PyQt6 o import * en el núcleo SWAL 2. Cierra D-4 (linter en CI).
+        run: python tools/lint_swal2.py
+
       - name: Ejecutar suite con cobertura
         # El scope y el gate (fail_under=80) de la cobertura de DECISIONES sobre los
         # módulos SWAL 2 los fija .coveragerc ([report] include). La medición amplia

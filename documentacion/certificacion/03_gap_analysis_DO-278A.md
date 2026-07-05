@@ -1,6 +1,6 @@
 # Gap Analysis — DO-278A / ED-109A
 
-**Versión:** 0.2. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
+**Versión:** 0.3. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
 
 > Estado por objetivo: ✅ Cumplido · ⚠️ Parcial · ❌ Ausente. La columna *Evidencia* apunta a lo que
 > existe hoy en el repositorio. Los objetivos se agrupan por proceso DO-278A. La numeración es
@@ -12,21 +12,22 @@
 
 | Proceso | Objetivos | ✅ | ⚠️ | ❌ | % cobertura aprox. |
 |---------|-----------|----|----|----|--------------------|
-| Planificación | 5 | 3 | 2 | 0 | 80% |
-| Desarrollo (requisitos/diseño/código) | 6 | 3 | 2 | 1 | 65% |
+| Planificación | 5 | 4 | 1 | 0 | 90% |
+| Desarrollo (requisitos/diseño/código) | 6 | 4 | 1 | 1 | 75% |
 | Verificación | 7 | 4 | 2 | 1 | 70% |
 | Gestión de configuración (SCM) | 4 | 2 | 2 | 0 | 75% |
 | Aseguramiento de calidad (SQA) | 3 | 0 | 3 | 0 | 50% |
 | Enlace con autoridad | 2 | 0 | 1 | 1 | 15% |
 | Análisis de seguridad | 3 | 1 | 0 | 2 | 33% |
-| **Total** | **30** | **13** | **12** | **5** | **~63%** |
+| **Total** | **30** | **15** | **10** | **5** | **~67%** |
 
 Conclusión: **la capa de evidencia de proceso está sustancialmente construida** (planes, FHA, SRS con
-56 HLR, matriz de trazabilidad, CI con cobertura de decisiones al 88.5 % sobre módulos SWAL 2, y
-registros de revisión de código). Las brechas restantes se concentran en: **estándares formales** de
-codificación/diseño, **requisitos de bajo nivel (LLR)**, **independencia de verificación** (equipo
-unipersonal) y **análisis de seguridad avanzado** (PSSA/SSA/safety case). El sistema no está aún
-aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia SOI-2.
+56 HLR, matriz de trazabilidad, CI con cobertura de decisiones al 88.5 % sobre módulos SWAL 2,
+estándares formales de código/diseño (con linter en CI) y de requisitos, y registros de revisión de
+código). Las brechas restantes se concentran en: **requisitos de bajo nivel (LLR) y SDD formal**,
+**independencia de verificación** (equipo unipersonal) y **análisis de seguridad avanzado**
+(PSSA/SSA/safety case). El sistema no está aún aprobado, pero el paquete es coherente para presentar
+SOI-1 y avanzar hacia SOI-2.
 
 > **Nota de trazabilidad de este documento:** la v0.1 (2026-06-28) precedía a la creación de los planes
 > y la FHA/SRS; esta v0.2 actualiza el estado a lo efectivamente producido.
@@ -41,7 +42,7 @@ aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia SOI-
 | P-2 | SDP (plan de desarrollo) | ✅ | [08_SDP.md](08_SDP.md) |
 | P-3 | SVP (plan de verificación) | ✅ | [09_SVP.md](09_SVP.md) |
 | P-4 | SCMP + SQAP | ✅ | [10_SCMP.md](10_SCMP.md), [11_SQAP.md](11_SQAP.md) |
-| P-5 | Estándares de requisitos/diseño/código | ⚠️ | Estándar de código/diseño en [13_estandar_codificacion.md](13_estandar_codificacion.md) (EC/ED); falta el estándar de **requisitos** |
+| P-5 | Estándares de requisitos/diseño/código | ✅ | Código/diseño en [13](13_estandar_codificacion.md) (EC/ED, linter en CI) y requisitos en [14](14_estandar_requisitos.md) (ER/RR/CJ/VF/LR + checklist QR) |
 
 ## 2. Proceso de Desarrollo
 
@@ -50,7 +51,7 @@ aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia SOI-
 | D-1 | Requisitos de alto nivel (HLR) | ✅ | [07_SRS.md](07_SRS.md) — 56 HLR trazados a FHA/specs |
 | D-2 | Requisitos de bajo nivel (LLR) | ❌ | No documentados formalmente |
 | D-3 | Arquitectura de software | ⚠️ | CLAUDE.md, TECHNICAL.md y SRS §2; falta SDD formal |
-| D-4 | Código fuente conforme a estándares | ⚠️ | Estándar formal en [13](13_estandar_codificacion.md); módulos SWAL 2 revisados contra él (RR-01..05); falta automatizar el linter en CI |
+| D-4 | Código fuente conforme a estándares | ✅ | Estándar formal en [13](13_estandar_codificacion.md); módulos SWAL 2 revisados (RR-01..05) y **linter automatizado en CI** (`tools/lint_swal2.py`, prohibiciones EC-5/6/7) |
 | D-5 | Trazabilidad requisitos↔diseño↔test | ✅ | [04_matriz_trazabilidad.md](04_matriz_trazabilidad.md) — sin huecos de test |
 | D-6 | Determinismo / reproducibilidad | ✅ | Ciclo de vida por ToD; `time.time()` vedado (`lifecycle.py`) |
 
@@ -135,13 +136,13 @@ campos bien tipados: `flight_level` es `float`/`None`, nunca string), sino una b
 
 ## 8. Prioridades de cierre (top 5)
 
-Reordenadas al estado actual (los ítems de v0.1 sobre planes/FHA/SRS/CI ya están cerrados):
+Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5 y D-4 en v0.3):
 
-1. **Requisitos de bajo nivel (LLR)** y **SDD formal** (D-2, D-3); **estándar de requisitos** (resto de P-5). El estándar de código/diseño ya existe (doc 13) y falta automatizar su linter en CI (D-4).
-2. **Automatizar el linter** del estándar (doc 13 §7) en el workflow de CI, acotado a los módulos SWAL 2.
-3. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC.
-4. **Análisis de seguridad avanzado**: PSSA/SSA y safety case (S-2, S-3); cerrar STCA-1 vía requisito SRS.
-5. **Higiene de configuración**: purgar binarios del histórico git (C-3) y ejecutar/registrar auditorías SQA por baseline (Q-1..Q-3).
+1. **Requisitos de bajo nivel (LLR)** y **SDD formal** (D-2, D-3), aplicando el estándar de requisitos (doc 14, reglas LR) y de diseño (doc 13 §4).
+2. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC.
+3. **Análisis de seguridad avanzado**: PSSA/SSA y safety case (S-2, S-3); cerrar STCA-1 vía requisito SRS.
+4. **Higiene de configuración**: purgar binarios del histórico git (C-3) y ejecutar/registrar auditorías SQA por baseline (Q-1..Q-3).
+5. **Enlace con la autoridad** (A-1): coordinar SOI-1 con ANAC sobre el paquete ya construido.
 
 ## 9. Registro de cambios
 
@@ -149,3 +150,4 @@ Reordenadas al estado actual (los ítems de v0.1 sobre planes/FHA/SRS/CI ya est�
 |-----|-------|--------|
 | 0.1 | 2026-06-28 | Creación inicial (previo a planes/FHA/SRS). |
 | 0.2 | 2026-07-05 | Actualización al estado real: cierre de P-2/3/4, D-1/5, V-3/4/5/6, C-1/4, S-1; reclasificación de SQA y prioridades. Cobertura de proceso ~30 % → ~62 %. |
+| 0.3 | 2026-07-05 | Cierre de **P-5** (estándar de requisitos, doc 14) y **D-4** (linter SWAL 2 en CI). Cobertura ~63 % → ~67 %; prioridades reordenadas (LLR/SDD #1). |

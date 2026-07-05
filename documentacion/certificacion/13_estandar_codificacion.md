@@ -4,8 +4,9 @@
 **Norma:** EUROCAE ED-109A / RTCA DO-278A — objetivo de estándares (P-5) y código conforme (D-4).
 **Versión:** 0.1. **Fecha:** 2026-07-05. **Estado:** PROPUESTO — no aprobado por ANAC.
 
-> Formaliza las reglas contra las cuales se verifica el código (cierra la brecha P-5 «Estándares»
-> del [gap analysis](03_gap_analysis_DO-278A.md)). Cada regla es **verificable**: por herramienta
+> Formaliza las reglas contra las cuales se verifica el código (parte código/diseño de la brecha P-5
+> «Estándares» del [gap analysis](03_gap_analysis_DO-278A.md); la parte de **requisitos** está en el
+> [doc 14](14_estandar_requisitos.md)). Cada regla es **verificable**: por herramienta
 > (linter) o por el checklist de [revisión de código](12_registros_revision_codigo.md) (CR-1..8).
 > Expande el resumen del [SDP §3](08_SDP.md).
 
@@ -74,11 +75,9 @@ las demás son recomendadas en todo el árbol.
 | Mecanismo | Alcance |
 |-----------|---------|
 | **Revisión de código** ([doc 12](12_registros_revision_codigo.md)) | Checklist CR-1..8 mapea a EC/ED; obligatoria por baseline en módulos SWAL 2. |
-| **Linter** (`ruff`/`flake8`) | EC-3/4/5 y comprobaciones de prohibición (grep de `time.time(` / `PyQt6` en paths SWAL 2). Automatizable en CI. |
+| **Linter del estándar** (`tools/lint_swal2.py`) | Prohibiciones duras EC-5/EC-6/EC-7 sobre los paths SWAL 2 (§1); ignora strings/comentarios. **Automatizado en CI** (`.github/workflows/tests.yml`, step «Linter del estándar SWAL 2»): falla el pipeline ante `time.time(`, `import PyQt6` o `import *` en el núcleo. Auto-verificado por `tests/tools/test_lint_swal2.py`. |
+| **Linter de estilo** (`ruff`/`flake8`) | EC-3/EC-4 (nomenclatura, longitud de línea). Recomendado; no bloqueante aún. |
 | **Suite de tests** | EC-7/8/9 quedan además cubiertas por tests (`test_lifecycle`, `test_plot_descarte`, escenarios STCA). |
-
-> **Automatización pendiente:** integrar el linter al workflow de CI acotado a los módulos SWAL 2
-> (que ya son conformes), como control mecánico de regresión del estándar.
 
 ## 8. Registro de desviaciones
 
@@ -93,3 +92,4 @@ Las desviaciones aprobadas se listan aquí con justificación y fecha. Ninguna a
 | Ver | Fecha | Cambio |
 |-----|-------|--------|
 | 0.1 | 2026-07-05 | Emisión inicial: reglas EC-1..15, ED-1..5, verificación y prohibiciones. |
+| 0.2 | 2026-07-05 | Linter del estándar (`tools/lint_swal2.py`) automatizado en CI (EC-5/6/7); §7 actualizada. Cierra D-4. |
