@@ -1,6 +1,6 @@
 # Gap Analysis — DO-278A / ED-109A
 
-**Versión:** 0.5. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
+**Versión:** 0.6. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
 
 > Estado por objetivo: ✅ Cumplido · ⚠️ Parcial · ❌ Ausente. La columna *Evidencia* apunta a lo que
 > existe hoy en el repositorio. Los objetivos se agrupan por proceso DO-278A. La numeración es
@@ -13,21 +13,21 @@
 | Proceso | Objetivos | ✅ | ⚠️ | ❌ | % cobertura aprox. |
 |---------|-----------|----|----|----|--------------------|
 | Planificación | 5 | 4 | 1 | 0 | 90% |
-| Desarrollo (requisitos/diseño/código) | 6 | 4 | 2 | 0 | 83% |
+| Desarrollo (requisitos/diseño/código) | 6 | 5 | 1 | 0 | 92% |
 | Verificación | 7 | 4 | 2 | 1 | 70% |
 | Gestión de configuración (SCM) | 4 | 2 | 2 | 0 | 75% |
 | Aseguramiento de calidad (SQA) | 3 | 0 | 3 | 0 | 50% |
 | Enlace con autoridad | 2 | 0 | 1 | 1 | 15% |
 | Análisis de seguridad | 3 | 1 | 0 | 2 | 33% |
-| **Total** | **30** | **15** | **11** | **4** | **~68%** |
+| **Total** | **30** | **16** | **10** | **4** | **~70%** |
 
 Conclusión: **la capa de evidencia de proceso está sustancialmente construida** (planes, FHA, SRS con
 56 HLR, matriz de trazabilidad, CI con cobertura de decisiones al 88.5 % sobre módulos SWAL 2,
 estándares formales de código/diseño (con linter en CI) y de requisitos, y registros de revisión de
-código, y SDD con LLR de los motores núcleo SWAL 2). Las brechas restantes se concentran en:
-**completar LLR/SDD** de las capas HMI/decodificación/persistencia, **independencia de verificación**
-(equipo unipersonal) y **análisis de seguridad avanzado** (PSSA/SSA/safety case). El sistema no está
-aún aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia SOI-2.
+código, y SDD con LLR para **todas** las capas trazados a test). Las brechas restantes se concentran en:
+**independencia de verificación** (equipo unipersonal), **análisis de seguridad avanzado**
+(PSSA/SSA/safety case) e **higiene de configuración** (histórico git, auditorías SQA). El sistema no
+está aún aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia SOI-2.
 
 > **Nota de trazabilidad de este documento:** la v0.1 (2026-06-28) precedía a la creación de los planes
 > y la FHA/SRS; esta v0.2 actualiza el estado a lo efectivamente producido.
@@ -49,7 +49,7 @@ aún aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia
 | Obj | Descripción | Estado | Evidencia / Brecha |
 |-----|-------------|--------|--------------------|
 | D-1 | Requisitos de alto nivel (HLR) | ✅ | [07_SRS.md](07_SRS.md) — 56 HLR trazados a FHA/specs |
-| D-2 | Requisitos de bajo nivel (LLR) | ⚠️ | [SDD §3-9](15_SDD.md): LLR de los 4 motores núcleo SWAL 2 (LIF/COR/STC/APW/MSA) **y** de HMI/decodificación/proyección/persistencia/roles (HMI/DEC/GEO/AUD/ROL), trazados a HLR y test; restan robustez DEC-07/08, PERF y HMI secundaria ([SDD §12](15_SDD.md)) |
+| D-2 | Requisitos de bajo nivel (LLR) | ✅ | [SDD §3-10](15_SDD.md): **todo HLR del SRS tiene ≥1 LLR** (LIF/COR/STC/APW/MSA, HMI, DEC/GEO, AUD/ROL, PRF), trazado a HLR y test; refinamientos por categoría/diagramas de estados pendientes ([SDD §13](15_SDD.md)) |
 | D-3 | Arquitectura de software | ⚠️ | [SDD (doc 15)](15_SDD.md) formaliza capas, flujo, **diagramas de secuencia** y decisiones DD-1..5; faltan diagramas de estados/despliegue |
 | D-4 | Código fuente conforme a estándares | ✅ | Estándar formal en [13](13_estandar_codificacion.md); módulos SWAL 2 revisados (RR-01..05) y **linter automatizado en CI** (`tools/lint_swal2.py`, prohibiciones EC-5/6/7) |
 | D-5 | Trazabilidad requisitos↔diseño↔test | ✅ | [04_matriz_trazabilidad.md](04_matriz_trazabilidad.md) — sin huecos de test |
@@ -136,13 +136,13 @@ campos bien tipados: `flight_level` es `float`/`None`, nunca string), sino una b
 
 ## 8. Prioridades de cierre (top 5)
 
-Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0.3; SDD+LLR núcleo en v0.4):
+Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0.3; SDD+LLR completos y D-2 en v0.4-0.6):
 
-1. **Completar LLR/SDD** (D-2, D-3): capas HMI, decodificación/proyección, persistencia y roles ([SDD §9](15_SDD.md)); diagramas de secuencia.
-2. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC.
-3. **Análisis de seguridad avanzado**: PSSA/SSA y safety case (S-2, S-3); cerrar STCA-1 vía requisito SRS.
-4. **Higiene de configuración**: purgar binarios del histórico git (C-3) y ejecutar/registrar auditorías SQA por baseline (Q-1..Q-3).
-5. **Enlace con la autoridad** (A-1): coordinar SOI-1 con ANAC sobre el paquete ya construido.
+1. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC.
+2. **Análisis de seguridad avanzado**: PSSA/SSA y safety case (S-2, S-3); cerrar STCA-1 vía requisito SRS.
+3. **Higiene de configuración**: purgar binarios del histórico git (C-3) y ejecutar/registrar auditorías SQA por baseline (Q-1..Q-3).
+4. **Enlace con la autoridad** (A-1): coordinar SOI-1 con ANAC sobre el paquete ya construido.
+5. **Refinamiento de diseño** (D-3): diagramas de estados/despliegue del SDD ([SDD §13](15_SDD.md)).
 
 ## 9. Registro de cambios
 
@@ -153,3 +153,4 @@ Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0
 | 0.3 | 2026-07-05 | Cierre de **P-5** (estándar de requisitos, doc 14) y **D-4** (linter SWAL 2 en CI). Cobertura ~63 % → ~67 %; prioridades reordenadas (LLR/SDD #1). |
 | 0.4 | 2026-07-05 | **SDD (doc 15)** con arquitectura y LLR de los 4 motores núcleo SWAL 2: **D-2** ❌→⚠️, **D-3** mejorado. Cobertura ~67 % → ~68 %. |
 | 0.5 | 2026-07-05 | SDD v0.2: LLR de HMI/DEC/GEO/AUD/ROL + diagramas de secuencia (profundiza D-2/D-3, sin cambio de estado). |
+| 0.6 | 2026-07-05 | SDD v0.3: LLR de robustez/altimetría/prestaciones/HMI secundaria — **todo HLR con LLR**. **D-2** ⚠️→✅. Cobertura ~68 % → ~70 %. |

@@ -36,7 +36,7 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | 12 | [Registros de Revisión de Código](12_registros_revision_codigo.md) | Revisión por inspección de los 5 módulos SWAL 2 (RR-01..05) | Borrador v0.1 |
 | 13 | [Estándar de Codificación y Diseño](13_estandar_codificacion.md) | Reglas EC/ED verificables + linter en CI (cierra D-4); base de la revisión de código | Borrador v0.2 |
 | 14 | [Estándar de Requisitos](14_estandar_requisitos.md) | Reglas ER/RR/CJ/VF/LR + checklist QR (cierra P-5) | Borrador v0.1 |
-| 15 | [SDD — Software Design Description](15_SDD.md) | Arquitectura (capas/flujo/secuencia/decisiones) + LLR de motores núcleo, HMI, decodificación, persistencia y roles (avanza D-2/D-3) | Borrador v0.2 |
+| 15 | [SDD — Software Design Description](15_SDD.md) | Arquitectura (capas/flujo/secuencia/decisiones) + LLR de todas las capas — todo HLR con LLR (cierra D-2) | Borrador v0.3 |
 
 ## 3. Cómo leer el paquete
 

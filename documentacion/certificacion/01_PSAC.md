@@ -85,7 +85,7 @@ criterios de transición. Hoy **inexistentes en forma controlada**.
 |------|-----------|--------|
 | Plan de aseguramiento (este PSAC) | Borrador | Aprobación ANAC |
 | SRS — Especificación de Requisitos | ❌ | Redactar requisitos de alto y bajo nivel |
-| SDD — Descripción de Diseño | [15_SDD.md](15_SDD.md) v0.2 (arquitectura + LLR núcleo, HMI, DEC/GEO, AUD, ROL) | Completar LLR de robustez/PERF/HMI secundaria |
+| SDD — Descripción de Diseño | [15_SDD.md](15_SDD.md) v0.3 (arquitectura + LLR de todas las capas; todo HLR con LLR) | Diagramas de estados/despliegue; LLR por categoría |
 | Código fuente | ✅ | Bajo SCM con baseline |
 | Casos y procedimientos de verificación | Parcial (`tests/`) | Cobertura y trazabilidad |
 | Resultados de verificación | Parcial (ejecución local) | Reproducible en CI, archivado |
