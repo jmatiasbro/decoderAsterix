@@ -3827,12 +3827,16 @@ class MainWindow(QMainWindow):
 
     def _on_rotation_speed_detected(self, sac: int, sic: int, rpm: float):
         sensor_key = (sac, sic)
+        prev = self._sensor_rpms.get(sensor_key)
         self._sensor_rpms[sensor_key] = rpm
         if hasattr(self.radar, 'sensor_rpms'):
             self.radar.sensor_rpms[sensor_key] = rpm
         if self.radar.center_key == sensor_key:
             self.radar.set_sweep_speed(rpm)
-        print(f"[REPROYECTOR] Velocidad de rotación detectada para {sac}/{sic} -> {rpm:.2f} RPM")
+        # Solo loguear al cambiar el RPM: este handler corre en el hilo de UI y el
+        # print síncrono a la terminal inundaba y frenaba el render bajo carga.
+        if prev is None or abs(prev - rpm) >= 0.1:
+            print(f"[REPROYECTOR] Velocidad de rotación detectada para {sac}/{sic} -> {rpm:.2f} RPM")
 
 
     def _load_custom_map(self, file_path: str):
