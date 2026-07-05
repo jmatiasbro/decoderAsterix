@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **Norma:** EUROCAE ED-109A / RTCA DO-278A — diseño de software (D-3) y requisitos de bajo nivel (D-2).
-**Versión:** 0.1 (borrador). **Fecha:** 2026-07-05. **Estado:** PROPUESTO — no aprobado por ANAC.
+**Versión:** 0.2 (borrador). **Fecha:** 2026-07-05. **Estado:** PROPUESTO — no aprobado por ANAC.
 
 > Formaliza la **arquitectura** y los **Requisitos de Bajo Nivel (LLR)** del software. Los LLR derivan
 > de los HLR del [SRS (doc 07)](07_SRS.md) y de la arquitectura, redactados conforme al
@@ -10,9 +10,10 @@
 > ([doc 13 §4](13_estandar_codificacion.md)). Cierra la parte de diseño/LLR de las brechas **D-2/D-3**
 > del [gap analysis](03_gap_analysis_DO-278A.md).
 >
-> **Alcance de esta edición:** LLR completos para los **cuatro motores núcleo SWAL 2** (ciclo de vida,
-> correlación, STCA, APW/MSAW), que concentran el riesgo de seguridad. Los LLR de HMI, decodificación
-> y persistencia se incorporarán en ediciones sucesivas (ver §7).
+> **Alcance de esta edición (v0.2):** LLR de los **cuatro motores núcleo SWAL 2** (ciclo de vida,
+> correlación, STCA, APW/MSAW) más las capas **HMI/PPI, decodificación/proyección, persistencia/auditoría
+> y roles** (§7-9), con diagramas de secuencia (§2.3). Restan los ítems de robustez, prestaciones y HMI
+> secundaria listados en §12.
 
 ---
 
@@ -57,7 +58,34 @@ UDP/PCAP → DataEngine (decode+proyección) → batches de plots
 
 La cadena de seguridad se coalesce a ~1 Hz independientemente del repintado ([ED-2], HLR-PERF-02).
 
-### 2.3 Decisiones de diseño con justificación (rationale)
+### 2.3 Diagramas de secuencia
+
+**Ingreso y matching de un batch de plots:**
+
+```
+PlaybackWorker            radar_widget                Correlator      MonoradarLifecycle
+     │  new_plot_batch          │                          │                 │
+     │─────────────────────────►│ _procesar_plots()        │                 │
+     │                          │ por cada plot:           │                 │
+     │                          │  claves_identidad()─────►│                 │
+     │                          │  son_misma_aeronave()───►│ (extrapola+gate)│
+     │                          │  ◄──── track asociado ───│                 │
+     │                          │  procesar(plot)─────────────────────────►  │ (M-de-N por ToD)
+     │                          │  calcular_velocidades()  │                 │
+     │                          │ _schedule_safety()       │                 │
+```
+
+**Cadena de seguridad coalescida (~1 Hz):**
+
+```
+_schedule_safety()  →  (gate por *_habilitado)  →  evaluar_stca()  → STCA_Engine.evaluar_conflictos
+                                                 →  evaluar_apw()   → evaluar_apw()
+                                                 →  evaluar_msaw()  → evaluar_msaw()
+                                                 →  finally: _safety_wall_last = wall-clock
+_watchdog_timer (2 s)  →  _check_safety_watchdog()  →  si elapsed > 5 s: system_bus CRITICAL
+```
+
+### 2.4 Decisiones de diseño con justificación (rationale)
 
 | Id | Decisión | Justificación | Traza |
 |----|----------|---------------|-------|
@@ -130,7 +158,50 @@ La cadena de seguridad se coalesce a ~1 Hz independientemente del repintado ([ED
 | LLR-MSA-03 | Si `suppression.suprime(lat,lon,alt)` es verdadero, la alerta **DEBE** suprimirse tanto en la violación inmediata como en cada paso de la predicción. | HLR-MSAW-03 |
 | LLR-MSA-04 | `VIOLATION` **DEBE** emitirse si `alt < MSA`. La predicción **DEBE** evaluarse solo con `vertical_rate < 0` (descenso), proyectando altitud y posición hasta `time_to_prediction` y emitiendo `PREDICTED` en el primer paso que cruce por debajo de la MSA del sector proyectado. | HLR-MSAW-01 |
 
-## 7. Trazabilidad y cobertura de verificación (núcleo SWAL 2)
+## 7. LLR — Presentación HMI / PPI (`player/radar_widget.py`)
+
+> Implementa HLR-HMI-01..06. Capa Qt; los LLR describen el **contrato observable** de render y
+> supervisión, no el detalle de pintado. El watchdog es la única función de seguridad que usa reloj de
+> pared (`time.time()`), admitido por [EC-7] al ser un watchdog de UI, no lógica de decisión.
+
+| LLR | Enunciado | HLR |
+|-----|-----------|-----|
+| LLR-HMI-01 | Todo track vivo (dentro de timeout, no ocultado por el operador) **DEBE** renderizarse con símbolo visible; un track no **DEBE** omitirse silenciosamente del PPI. | HLR-HMI-01, [SSR-04] |
+| LLR-HMI-02 | La etiqueta **DEBE** mostrar callsign, Modo 3/A y FL tal como fueron decodificados y asociados; el render **NO DEBE** alterar esos campos. | HLR-HMI-02, [SSR-01] |
+| LLR-HMI-03 | Un track `degradada` (DQF) o `is_reflection` **DEBE** excluirse de la evaluación de las redes de seguridad (STCA/APW/MSAW), pero **DEBE** seguir siendo visible en el PPI con simbología diferenciada. | HLR-HMI-04, DD-2 |
+| LLR-HMI-04 | La cadena de seguridad **DEBE** registrar su instante de finalización (éxito o error) en `_safety_wall_last` dentro de un bloque `finally`. | HLR-HMI-06, [SSR-05] |
+| LLR-HMI-05 | Un temporizador de 2 s **DEBE** comprobar que la cadena completó en los últimos **5 s** habiendo tracks activos; si `elapsed > 5 s`, **DEBE** inyectarse un evento `CRITICAL/WATCHDOG` en el bus del sistema (una sola vez hasta la recuperación). | HLR-HMI-06, [SSR-05] |
+| LLR-HMI-06 | El estado habilitado/inhibido de cada red de seguridad **DEBE** estar reflejado en la HMI en todo momento sin acción del operador. | HLR-HMI-05, [SSR-10] |
+
+## 8. LLR — Decodificación y proyección (`decoder/`)
+
+> Implementa HLR-DEC-05/06 y HLR-GEO-01/03/05. `SensorRegistry` (parámetros de sensor) y
+> `TargetProcessor` (proyección polar→WGS-84→cartesiano).
+
+| LLR | Enunciado | HLR |
+|-----|-----------|-----|
+| LLR-DEC-01 | Los parámetros de sensor **DEBEN** cargarse de `<config_dir>/*.json` indexados por clave `"{sac}_{sic}"`; ante `sac/sic` no convertibles a entero, `get_sensor_coordinates` **DEBE** devolver `(None, None)`. | HLR-DEC-05, HLR-INTF-04 |
+| LLR-DEC-02 | Un sensor sin posición configurada **DEBE** advertirse una sola vez (`_warned_sensors`) y **NO DEBE** producir proyección; el plot se marca `valid_position=False`. | HLR-DEC-06, [SSR-02] |
+| LLR-GEO-01 | El primer sensor con posición **DEBE** fijar el centro de proyección (`set_radar_center`) solo si aún no hay centro (`center_lat is None`); las categorías CAT062 **NO DEBEN** requerir sensor local (inmunidad). | HLR-GEO-01/05 |
+| LLR-GEO-02 | Para plots polares (rho/theta), la posición WGS-84 **DEBE** derivarse con `Geod(WGS84).fwd(lon,lat,azimuth,rho·1852)` (Vincenty) y luego proyectarse a cartesiano; la fidelidad **NO DEBE** degradar más allá del error de cuantización de la categoría. | HLR-GEO-01, HLR-DEC-02, [SSR-01] |
+| LLR-GEO-03 | Sin centro de proyección o sin coordenadas de sensor, el plot **NO DEBE** presentarse con `x/y` por defecto silenciosos: `valid_position` permanece `False`. | HLR-GEO-03, [SSR-03] |
+| LLR-DEC-03 | Los flags de calidad `invalid_a`/`invalid_c` **DEBEN** derivarse de la ausencia de `mode_3a`/`flight_level` respectivamente. | HLR-DEC-01 |
+
+## 9. LLR — Persistencia/auditoría (`storage/`) y roles (`player/profile_manager.py`)
+
+> Persistencia implementa HLR-AUD-01..04; roles implementan HLR-ROL-01..03.
+
+| LLR | Enunciado | HLR |
+|-----|-----------|-----|
+| LLR-AUD-01 | `guardar_evento_safety` **DEBE** encolar el evento en `cola_insercion` (no bloqueante) solo si el worker está activo; la escritura ocurre en el hilo worker, **NO DEBE** bloquear el hilo principal. | HLR-AUD-01, [SSR-11] |
+| LLR-AUD-02 | `flush()` **DEBE** encolar el centinela `"FLUSH"` y bloquear con `join()` hasta que el worker vacíe la cola; el cierre normal **DEBE** invocar `flush` antes de terminar. | HLR-AUD-02, [SSR-11] |
+| LLR-AUD-03 | `query_safety_events` **DEBE** soportar filtros por subsistema, sesión y rango `ts_wall`, devolviendo filas **ordenadas por `ts_wall` ascendente**. | HLR-AUD-04 |
+| LLR-AUD-04 | La exportación CSV **DEBE** emitir las columnas `fecha_hora_utc, ts_epoch, subsistema, transicion, nivel, aeronave_1, aeronave_2, descripcion, duracion_s, sesion_id`; `duracion_s` **DEBE** calcularse pareando cada `ONSET` con su primer `CLEAR` posterior de la misma `(subsistema, clave)`; un ONSET sin CLEAR queda con duración vacía. | HLR-AUD-03 |
+| LLR-ROL-01 | Todo perfil cargado **DEBE** normalizarse por `to_strict_schema`: `rol` fuera de `{tecnico, controlador}` **DEBE** coercionarse a `tecnico`; un perfil ilegible **DEBE** caer al perfil por defecto, no cargarse parcialmente. | HLR-ROL-03 |
+| LLR-ROL-02 | `get_rol()` **DEBE** devolver el rol activo normalizado (minúsculas, sin espacios); las funciones restringidas (playback, fusión, exportación, Centro Técnico) **DEBEN** gatearse por este valor. | HLR-ROL-01/02 |
+| LLR-ROL-03 | Los perfiles **DEBEN** persistir en JSON `profiles/*.json` en formato estricto; un nombre vacío al guardar **DEBE** rechazarse con `ValueError`. | HLR-ROL-03 |
+
+## 10. Trazabilidad y cobertura de verificación (núcleo SWAL 2)
 
 | Módulo | LLR | Test de verificación |
 |--------|-----|----------------------|
@@ -139,11 +210,15 @@ La cadena de seguridad se coalesce a ~1 Hz independientemente del repintado ([ED
 | `analysis/stca_analyzer.py` | LLR-STC-01..07 | `tests/stca/test_stca_engine.py`, `test_stca_scenarios.py` |
 | `areas/apw.py` | LLR-APW-01..04 | `tests/areas/test_apw.py` |
 | `msaw/engine.py` | LLR-MSA-01..04 | `tests/msaw/test_engine.py`, `test_suppression.py` |
+| `player/radar_widget.py` | LLR-HMI-01..06 | `tests/tracking/test_hmi.py`, `tests/msaw/test_render.py` |
+| `decoder/sensor_registry.py` | LLR-DEC-01..03, LLR-GEO-01..03 | `tests/decoders/test_sensor_registry.py`, `tests/geo/test_stereographic.py` |
+| `storage/duckdb_repo.py` + `analysis/exporters.py` | LLR-AUD-01..04 | `tests/**/test_safety_audit.py` |
+| `player/profile_manager.py` | LLR-ROL-01..03 | `tests/**/test_profile_manager.py` |
 
-Además, el [linter SWAL 2](../../tools/lint_swal2.py) verifica mecánicamente [EC-6/EC-7] sobre estos
-módulos (headless, sin `time.time()`), reforzando LLR-LIF-07 en CI.
+Además, el [linter SWAL 2](../../tools/lint_swal2.py) verifica mecánicamente [EC-6/EC-7] sobre los
+módulos del núcleo (headless, sin `time.time()`), reforzando LLR-LIF-07 en CI.
 
-## 8. Requisitos derivados (realimentar a seguridad)
+## 11. Requisitos derivados (realimentar a seguridad)
 
 Conforme a [doc 14 §2](14_estandar_requisitos.md), estos LLR nacen de decisiones de diseño (no de un
 HLR operacional externo) y **deben** revisarse en el análisis de seguridad:
@@ -154,15 +229,18 @@ HLR operacional externo) y **deben** revisarse en el análisis de seguridad:
 | LLR-LIF-04 | Colapso de duplicados de la misma vuelta | `pair_nm`=1.0 NM; debe cubrirse por test de no-fusión errónea |
 | LLR-COR-06 | Asociación aprendida con TTL | Extiende el gate a 5 NM; el TTL de 300 s acota el riesgo de arrastre |
 
-## 9. Pendiente de esta edición
+## 12. Pendiente de esta edición
 
-- LLR de **HMI/PPI** (HLR-HMI-01..08): render, etiquetas, watchdog de la cadena (FC-HMI).
-- LLR de **decodificación** (HLR-DEC-01..08) y **proyección** (HLR-GEO-01..05).
-- LLR de **persistencia/auditoría** (HLR-AUD-01..04) y **roles** (HLR-ROL-01..03).
-- Diagramas de secuencia de la cadena de seguridad y del matching.
+- LLR de **robustez de decodificación** (HLR-DEC-07/08: tramas malformadas, FDP/ADEXP) y del resto de
+  categorías CAT001/002/010/020/034/048.
+- LLR de **declinación magnética / altimetría** (HLR-GEO-04, nivel de transición y toggle A/F).
+- LLR de **prestaciones** (HLR-PERF-01..05) con contrato de medición.
+- LLR de **HMI secundaria** (HLR-HMI-07/08: declutter, vista FIR).
+- Diagramas de estados del ciclo de vida y de despliegue.
 
-## 10. Registro de cambios
+## 13. Registro de cambios
 
 | Ver | Fecha | Cambio |
 |-----|-------|--------|
 | 0.1 | 2026-07-05 | Emisión inicial: arquitectura (capas, flujo, decisiones DD-1..5) y LLR de los 4 motores núcleo SWAL 2 (LLR-LIF/COR/STC/APW/MSA), trazados a HLR y test. |
+| 0.2 | 2026-07-05 | Añadidos LLR de **HMI/PPI** (LLR-HMI-01..06), **decodificación/proyección** (LLR-DEC/GEO), **persistencia/auditoría** (LLR-AUD) y **roles** (LLR-ROL); diagramas de secuencia (§2.3). Cobertura de LLR extendida a las capas restantes. |

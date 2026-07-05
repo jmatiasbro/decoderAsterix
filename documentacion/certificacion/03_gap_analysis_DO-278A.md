@@ -1,6 +1,6 @@
 # Gap Analysis — DO-278A / ED-109A
 
-**Versión:** 0.4. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
+**Versión:** 0.5. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
 
 > Estado por objetivo: ✅ Cumplido · ⚠️ Parcial · ❌ Ausente. La columna *Evidencia* apunta a lo que
 > existe hoy en el repositorio. Los objetivos se agrupan por proceso DO-278A. La numeración es
@@ -49,8 +49,8 @@ aún aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia
 | Obj | Descripción | Estado | Evidencia / Brecha |
 |-----|-------------|--------|--------------------|
 | D-1 | Requisitos de alto nivel (HLR) | ✅ | [07_SRS.md](07_SRS.md) — 56 HLR trazados a FHA/specs |
-| D-2 | Requisitos de bajo nivel (LLR) | ⚠️ | [SDD §3-6](15_SDD.md): LLR completos de los 4 motores núcleo SWAL 2 (LIF/COR/STC/APW/MSA) trazados a HLR y test; falta HMI/DEC/GEO/AUD/ROL |
-| D-3 | Arquitectura de software | ⚠️ | [SDD (doc 15)](15_SDD.md) formaliza capas, flujo y decisiones DD-1..5; faltan diagramas de secuencia |
+| D-2 | Requisitos de bajo nivel (LLR) | ⚠️ | [SDD §3-9](15_SDD.md): LLR de los 4 motores núcleo SWAL 2 (LIF/COR/STC/APW/MSA) **y** de HMI/decodificación/proyección/persistencia/roles (HMI/DEC/GEO/AUD/ROL), trazados a HLR y test; restan robustez DEC-07/08, PERF y HMI secundaria ([SDD §12](15_SDD.md)) |
+| D-3 | Arquitectura de software | ⚠️ | [SDD (doc 15)](15_SDD.md) formaliza capas, flujo, **diagramas de secuencia** y decisiones DD-1..5; faltan diagramas de estados/despliegue |
 | D-4 | Código fuente conforme a estándares | ✅ | Estándar formal en [13](13_estandar_codificacion.md); módulos SWAL 2 revisados (RR-01..05) y **linter automatizado en CI** (`tools/lint_swal2.py`, prohibiciones EC-5/6/7) |
 | D-5 | Trazabilidad requisitos↔diseño↔test | ✅ | [04_matriz_trazabilidad.md](04_matriz_trazabilidad.md) — sin huecos de test |
 | D-6 | Determinismo / reproducibilidad | ✅ | Ciclo de vida por ToD; `time.time()` vedado (`lifecycle.py`) |
@@ -152,3 +152,4 @@ Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0
 | 0.2 | 2026-07-05 | Actualización al estado real: cierre de P-2/3/4, D-1/5, V-3/4/5/6, C-1/4, S-1; reclasificación de SQA y prioridades. Cobertura de proceso ~30 % → ~62 %. |
 | 0.3 | 2026-07-05 | Cierre de **P-5** (estándar de requisitos, doc 14) y **D-4** (linter SWAL 2 en CI). Cobertura ~63 % → ~67 %; prioridades reordenadas (LLR/SDD #1). |
 | 0.4 | 2026-07-05 | **SDD (doc 15)** con arquitectura y LLR de los 4 motores núcleo SWAL 2: **D-2** ❌→⚠️, **D-3** mejorado. Cobertura ~67 % → ~68 %. |
+| 0.5 | 2026-07-05 | SDD v0.2: LLR de HMI/DEC/GEO/AUD/ROL + diagramas de secuencia (profundiza D-2/D-3, sin cambio de estado). |
