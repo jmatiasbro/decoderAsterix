@@ -98,7 +98,7 @@ referencia al artefacto de evidencia.
 | SRS aprobada internamente | Parcial |
 | 100 % de HLR con test asociado | ✅ HLR-HMI-01..06 y HLR-PERF-01..03 con test; HLR-PERF-04/05 verificados manualmente (SVP §5.4) |
 | Cobertura de decisiones ≥ objetivo en módulos SWAL 2 | ✅ 88.5 % (branch) ≥ 80 %; medida y en CI |
-| Registros de revisión de código para SWAL 2 | ❌ No existen |
+| Registros de revisión de código para SWAL 2 | ✅ RR-01..05 (doc 12); independencia pendiente (RNC-006) |
 | Resultados de verificación archivados en baseline | ✅ `resultados_soi1.html` (regenerar por baseline en CI) |
 | No conformidades abiertas: ninguna Clase A | ✅ Ninguna Clase A abierta; seguimiento en §5.3 |
 
@@ -137,7 +137,7 @@ referencia al artefacto de evidencia.
 | RNC-005 | C | Artefacto binario `baires.pcap` en el árbol sin hash verificable | **CERRADA** — `tests/data/checksums.txt` (commit `d74eb85`) |
 | RNC-006 | B | Sin independencia de verificación para módulos SWAL 2 | Abierta (acuerdo con ANAC) |
 | RNC-007 | C | Cobertura de decisiones no medida en módulos SWAL 2 | **CERRADA** — medida con `pytest-cov` (branch), línea base **88.5 %** ≥ objetivo 80 %; automatizada en CI (`.github/workflows/ci.yml`). Ver SVP §4.4 |
-| RNC-008 | B | Sin registros de revisión de código para módulos SWAL 2 | Abierta |
+| RNC-008 | B | Sin registros de revisión de código para módulos SWAL 2 | **CERRADA** — [12_registros_revision_codigo.md](12_registros_revision_codigo.md) (RR-01..05, 5 módulos). Independencia sigue como RNC-006 |
 | RNC-009 | C | Descarte silencioso de plots en `_process_plot_data` (brecha de observabilidad, ver gap analysis ROB-1) | **CERRADA** — contador + logging con throttle; `tests/tracking/test_plot_descarte.py` (3 casos) |
 
 > **Nota de estado (2026-07-05):** de las seis RNC iniciales, cuatro (001/002/003/005) quedaron cerradas
@@ -155,7 +155,7 @@ El SQA monitorea las siguientes métricas como indicadores del estado del proces
 | Tests pasando / total | 526/526 (100 %) | 100 % |
 | HLR con test asociado | ~56/56 (100 %) — HLR-PERF-04/05 por verificación manual | 100 % |
 | RNCs Clase A abiertas | 0 | 0 |
-| RNCs Clase B abiertas | 2 (RNC-006, RNC-008) | 0 |
+| RNCs Clase B abiertas | 1 (RNC-006, independencia — acuerdo ANAC) | 0 |
 | Cobertura de decisiones (SWAL 2) | 88.5 % (medida) | ≥ 80 % (objetivo propuesto) |
 | Commits con referencia a HLR (mensajes) | ~65 % | ≥ 90 % |
 
@@ -202,3 +202,4 @@ objetivos de independencia:
 |-----|-------|--------|
 | 0.1 | 2026-07-03 | Creación del borrador inicial. |
 | 0.2 | 2026-07-05 | Cierre de RNC-001/002/003/005 con evidencia versionada; alta de RNC-007/008 (cobertura y revisiones de código); actualización de criterios SOI-1/2, métricas (526 tests, 100 % HLR con test) y baselines etiquetados. |
+| 0.3 | 2026-07-05 | Cierre de RNC-004 (requirements), RNC-007 (cobertura 88.5 % + CI), RNC-008 (registros de revisión de código, doc 12) y RNC-009 (observabilidad de descartes). Única RNC de producto/proceso abierta: RNC-006 (independencia, acuerdo ANAC). |

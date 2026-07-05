@@ -32,7 +32,8 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | 08 | [SDP — Software Development Plan](08_SDP.md) | Entorno, estándares de codificación, proceso de desarrollo, SOUP | Borrador v0.1 |
 | 09 | [SVP — Software Verification Plan](09_SVP.md) | Métodos, niveles de prueba, cobertura, trazabilidad HLR↔test | Borrador v0.1 |
 | 10 | [SCMP — Software Configuration Management Plan](10_SCMP.md) | Git como SCM, SCI, baseline, lockfile, archivo de resultados | Borrador v0.1 |
-| 11 | [SQAP — Software Quality Assurance Plan](11_SQAP.md) | Auditorías, no conformidades, métricas, coordinación ANAC/SOI | Borrador v0.1 |
+| 11 | [SQAP — Software Quality Assurance Plan](11_SQAP.md) | Auditorías, no conformidades, métricas, coordinación ANAC/SOI | Borrador v0.2 |
+| 12 | [Registros de Revisión de Código](12_registros_revision_codigo.md) | Revisión por inspección de los 5 módulos SWAL 2 (RR-01..05) | Borrador v0.1 |
 
 ## 3. Cómo leer el paquete
 
