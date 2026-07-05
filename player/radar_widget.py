@@ -44,7 +44,7 @@ from PyQt6.QtCore import Qt, QTimer, QPointF, QRectF, pyqtSlot, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath, QFont, QFontMetrics, QPalette, QPixmap
 from PyQt6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QDialogButtonBox, QHBoxLayout, QLabel, QToolTip
+    QHeaderView, QDialogButtonBox, QHBoxLayout, QLabel, QToolTip, QPushButton
 )
 
 from utils.geo import METERS_PER_NM, StereographicLocal, WGS84_GEOD
@@ -695,6 +695,8 @@ class RadarWidget(_RadarBase):
         # El widget se pinta completamente solo; evitar que Qt interfiera con el fondo vía stylesheet
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.setAutoFillBackground(False)
+
+        self._crear_botones_zoom()
 
         self.sensor_info = sensores or {}
         self.declinacion_magnetica = declinacion_magnetica
@@ -4351,15 +4353,103 @@ class RadarWidget(_RadarBase):
     # WHEEL — ZOOM
     # ================================================================
 
+    def _crear_botones_zoom(self):
+        """Botones flotantes + / − superpuestos sobre el PPI (esquina inf. derecha)."""
+        estilo = (
+            "QPushButton {"
+            "  background-color: rgba(20, 26, 36, 210);"
+            "  color: #E0F7FF; border: 1px solid rgba(0,229,255,120);"
+            "  border-radius: 5px; font-size: 20px; font-weight: bold;"
+            "}"
+            "QPushButton:hover { background-color: rgba(0,229,255,60); }"
+            "QPushButton:pressed { background-color: rgba(0,229,255,110); }"
+        )
+        self._btn_zoom_in = QPushButton("+", self)
+        self._btn_zoom_out = QPushButton("−", self)
+        for b, cb, tip in ((self._btn_zoom_in, self.zoom_in, "Acercar (tecla +)"),
+                           (self._btn_zoom_out, self.zoom_out, "Alejar (tecla −)")):
+            b.setFixedSize(34, 34)
+            b.setStyleSheet(estilo)
+            b.setToolTip(tip)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            # No robar el foco de teclado del PPI (para que + / − sigan andando).
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            b.clicked.connect(cb)
+        self._posicionar_botones_zoom()
+
+    def _posicionar_botones_zoom(self):
+        if not hasattr(self, '_btn_zoom_in'):
+            return
+        m = 12          # margen al borde
+        s = 34          # lado del botón
+        gap = 6
+        x = self.width() - s - m
+        y = self.height() - 2 * s - gap - m
+        self._btn_zoom_in.move(x, y)
+        self._btn_zoom_out.move(x, y + s + gap)
+        self._btn_zoom_in.raise_()
+        self._btn_zoom_out.raise_()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._posicionar_botones_zoom()
+
+    def zoom_por_factor(self, factor: float, anchor_screen: Optional[QPointF] = None):
+        """Aplica zoom multiplicando el factor, manteniendo fijo un punto ancla en
+        pantalla (ajustando el pan) para no "perder el foco".
+
+        Ancla, en orden de prioridad:
+          1. `anchor_screen` explícito (p. ej. la posición del cursor en la rueda).
+          2. El track enfocado (dorado), si existe y está vivo.
+          3. El centro de la vista.
+        """
+        try:
+            z_old = self.zoom_factor
+            if z_old < MIN_ZOOM:
+                z_old = MIN_ZOOM
+            # Determinar el ancla en coordenadas de mundo (metros).
+            ax = ay = None
+            if anchor_screen is not None:
+                w2 = self._screen_to_world(anchor_screen.x(), anchor_screen.y())
+                if w2 is not None:
+                    ax, ay = w2
+            if ax is None:
+                fid = getattr(self, 'focused_target_id', None)
+                trk = self.tracks.get(fid) or self.pending_tracks.get(fid) if fid else None
+                if trk is not None and trk.is_alive() and is_valid_coord(trk.x, trk.y):
+                    ax, ay = trk.x, trk.y
+            if ax is None:
+                # Centro de la vista en mundo: x=-pan_x/z, y=pan_y/z
+                ax = -self.pan_x / z_old
+                ay = self.pan_y / z_old
+
+            self.zoom_factor *= factor
+            self._clamp_zoom()
+            z_new = self.zoom_factor
+            # Recolocar el pan para que (ax, ay) quede en el mismo píxel de pantalla.
+            self.pan_x += ax * (z_old - z_new)
+            self.pan_y -= ay * (z_old - z_new)
+            self.update()
+        except Exception:
+            self._clamp_zoom()
+            self.update()
+
+    def zoom_in(self):
+        """Acerca un paso, anclado al foco/centro (para botón +/tecla)."""
+        self.zoom_por_factor(1.2)
+
+    def zoom_out(self):
+        """Aleja un paso, anclado al foco/centro (para botón −/tecla)."""
+        self.zoom_por_factor(1.0 / 1.2)
+
     def wheelEvent(self, event):
         try:
             delta = event.angleDelta().y()
-            if delta > 0:
-                self.zoom_factor *= 1.2
-            elif delta < 0:
-                self.zoom_factor /= 1.2
-            self._clamp_zoom()
-            self.update()
+            if delta == 0:
+                return
+            factor = 1.2 if delta > 0 else 1.0 / 1.2
+            # La rueda ancla en el cursor (comportamiento estándar de mapa).
+            self.zoom_por_factor(factor, anchor_screen=event.position())
         except Exception:
             pass
 
@@ -4770,6 +4860,11 @@ class RadarWidget(_RadarBase):
             elif key == Qt.Key.Key_Down:
                 self.pan_y -= step
                 self.update()
+            elif key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
+                # '+' y '=' (misma tecla sin Shift) acercan, anclado al foco/centro.
+                self.zoom_in()
+            elif key in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore):
+                self.zoom_out()
             else:
                 super().keyPressEvent(event)
         except Exception:
