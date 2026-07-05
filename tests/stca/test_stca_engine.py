@@ -355,3 +355,56 @@ def test_contrato_prediccion_se_decide_por_xy_no_por_latlon(eng):
     }
     c = eng.evaluar_conflictos(tracks)
     assert len(c) == 1 and c[0][2] == "PREDICTION"
+
+
+def _proj_local(lat, lon, lat0=0.0, lon0=0.0):
+    """Proyección equirectangular local a metros (x=Este, y=Norte), CONSISTENTE
+    con la haversine de la fase de violación. Es la relación que HLR-STCA-06 exige
+    que el caller respete entre x/y y lat_render/lon_render."""
+    y = (lat - lat0) * 111120.0
+    x = (lon - lon0) * 111120.0 * math.cos(math.radians((lat + lat0) / 2.0))
+    return x, y
+
+
+def test_contrato_marco_unico_prediccion_coherente(eng):
+    """HLR-STCA-06: cuando el caller suministra x/y como la proyección local de
+    lat_render/lon_render (marco ÚNICO y consistente), la fase de PREDICTION es
+    geométricamente coherente con la posición cruda de la fase de VIOLATION.
+
+    Cierra el hallazgo STCA-1: bajo el contrato, ambas fases describen la misma
+    aeronave en el mismo marco; el doble linaje deja de ser una fuente de error.
+    """
+    latA, lonA = 0.0, 0.0
+    latB, lonB = 0.0, 0.2                 # ~12 NM al Este (>10 → sin violación aún)
+    xA, yA = _proj_local(latA, lonA)
+    xB, yB = _proj_local(latB, lonB)
+    tracks = {
+        "A": mk(lat_render=latA, lon_render=lonA, x=xA, y=yA, vx=100.0, vy=0.0,
+                mode3a="1111", mode_s="AAAAAA"),
+        "B": mk(lat_render=latB, lon_render=lonB, x=xB, y=yB, vx=-100.0, vy=0.0,
+                mode3a="2222", mode_s="BBBBBB"),
+    }
+    c = eng.evaluar_conflictos(tracks)
+    assert len(c) == 1
+    _, _, estado, tiempo, dist_h, _ = c[0]
+    assert estado == "PREDICTION"
+    # Convergen de frente a co-altitud → CPA prácticamente en colisión (dist≈0)…
+    assert dist_h < 1.0
+    # …y el tiempo al CPA coincide con la geometría cruda: 12 NM / 200 m/s de cierre.
+    assert tiempo == pytest.approx((lonB * 111120.0) / 200.0, abs=5)
+
+
+def test_contrato_xy_inconsistente_no_oculta_violacion(eng):
+    """HLR-STCA-06 (residual acotado): aunque el caller viole el contrato y pase
+    x/y inconsistentes, la fase crítica (VIOLATION) —que usa solo la posición
+    cruda— NO puede ser ocultada. Acota el riesgo del hallazgo STCA-1 a la
+    precisión de la PREDICTION, nunca a un conflicto real omitido."""
+    tracks = {
+        "A": mk(lat_render=0.0, lon_render=0.0, x=0.0, y=0.0, vx=1.0, vy=0.0,
+                mode3a="1111", mode_s="AAAAAA"),
+        # Raw = 3 NM (violación real); x/y mienten y quedan lejísimos.
+        "B": mk(lat_render=0.0, lon_render=0.05, x=9.9e6, y=9.9e6, vx=1.0, vy=0.0,
+                mode3a="2222", mode_s="BBBBBB"),
+    }
+    c = eng.evaluar_conflictos(tracks)
+    assert len(c) == 1 and c[0][2] == "VIOLATION"

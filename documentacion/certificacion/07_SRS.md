@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **Norma de referencia:** EUROCAE ED-109A / RTCA DO-278A; EUROCONTROL ASTERIX Specs Ed. 1.x por categoría.
-**Versión:** 0.1 (borrador). **Fecha:** 2026-07-01.
+**Versión:** 0.2 (borrador). **Fecha:** 2026-07-05.
 **Estado:** PROPUESTO — requiere revisión técnica interna y aprobación de ANAC en SOI-2.
 
 > Este SRS formaliza los **Requisitos de Alto Nivel (HLR)** del software. Los HLR se derivan de:  
@@ -192,6 +192,9 @@ Ver HLR-HMI-05.
 ### HLR-STCA-05 — Ausencia de alerta fuera del umbral `SWAL 3`
 El sistema **NO DEBE** generar alertas STCA para pares de tracks cuya distancia horizontal en CPA sea ≥ `stca_horizontal_nm` + margen de histéresis (`stca_hysteresis_nm`, por defecto 0.5 NM) para evitar alarm flicker.
 
+### HLR-STCA-06 — Marco de posición único y consistente `[SSR-07]` `SWAL 3`
+El origen de datos del motor STCA (el caller) **DEBE** suministrar a ambas fases —separación actual (VIOLATION) y predicción de CPA (PREDICTION)— la **misma posición de la aeronave expresada en marcos consistentes**: las coordenadas cartesianas `x/y` (metros) **DEBEN** ser la proyección local de las coordenadas `lat_render/lon_render` (grados) usadas por la fase de violación. El motor **NO DEBE** mezclar dos linajes de posición distintos (p. ej. posición cruda para la violación y posición suavizada para la predicción) sin garantizar esa consistencia. En todo caso, la fase de VIOLATION **DEBE** decidirse sobre la posición cruda reportada, de modo que un `x/y` inconsistente **NO PUEDA** ocultar una violación de separación real. *(Cierra el hallazgo de verificación STCA-1.)*
+
 ---
 
 ## 9. Requisitos APW (HLR-APW)
@@ -376,6 +379,7 @@ Los parámetros de cada sensor (SAC, SIC, lat, lon, nombre, rango máximo) **DEB
 | HLR-HMI-08 | REQ-HMI-4 | — | — | `tests/firmap/` |
 | HLR-STCA-01 | REQ-SN-1 | SSR-07 | FC-STCA-01 | `test_stca_engine.py` |
 | HLR-STCA-02..05 | REQ-SN-1 | — | FC-STCA-02/03 | `test_stca_engine.py` (parcial) |
+| HLR-STCA-06 | REQ-SN-1 | SSR-07 | FC-STCA-01 | `test_stca_engine.py::test_contrato_*` (marco único + residual acotado) |
 | HLR-APW-01..04 | REQ-SN-2 | SSR-09 | FC-APW-01/03 | `test_apw.py` |
 | HLR-MSAW-01..05 | REQ-SN-3/4 | SSR-08/09 | FC-MSAW-01..04 | `test_engine.py`, `test_suppression.py` |
 | HLR-FUS-01..04 | REQ-FUS-1/2 | — | FC-FUS-01/02 | `test_correlator.py` |
@@ -403,3 +407,4 @@ Los parámetros de cada sensor (SAC, SIC, lat, lon, nombre, rango máximo) **DEB
 | Ver | Fecha | Cambio |
 |-----|-------|--------|
 | 0.1 | 2026-07-01 | Primera edición. 56 HLR formalizados sobre 12 subsistemas. 11 HLR-SSR derivados del FHA. Matriz de trazabilidad HLR↔REQ↔SSR↔test. 5 brechas críticas identificadas. |
+| 0.2 | 2026-07-05 | Añadido **HLR-STCA-06** (marco de posición único y consistente) que formaliza el contrato del motor STCA y **cierra el hallazgo STCA-1**; trazado a `test_stca_engine.py::test_contrato_*`. |

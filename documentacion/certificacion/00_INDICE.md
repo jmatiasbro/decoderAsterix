@@ -28,7 +28,7 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | 04 | [Matriz de Trazabilidad](04_matriz_trazabilidad.md) | Requisitos ↔ diseño ↔ código ↔ test | Inicial/parcial |
 | 05 | [Hoja de Ruta de Certificación](05_hoja_de_ruta.md) | Planificación de cierre de brecha | Borrador |
 | 06 | [FHA — Functional Hazard Assessment](06_FHA.md) | Análisis de peligros; confirma SWAL; deriva SSR | Borrador v0.1 |
-| 07 | [SRS — Software Requirements Specification](07_SRS.md) | 56 HLR formalizados; 11 HLR-SSR del FHA; trazabilidad HLR↔test | Borrador v0.1 |
+| 07 | [SRS — Software Requirements Specification](07_SRS.md) | 57 HLR formalizados (incl. HLR-STCA-06); 11 HLR-SSR del FHA; trazabilidad HLR↔test | Borrador v0.2 |
 | 08 | [SDP — Software Development Plan](08_SDP.md) | Entorno, estándares de codificación, proceso de desarrollo, SOUP | Borrador v0.1 |
 | 09 | [SVP — Software Verification Plan](09_SVP.md) | Métodos, niveles de prueba, cobertura, trazabilidad HLR↔test | Borrador v0.1 |
 | 10 | [SCMP — Software Configuration Management Plan](10_SCMP.md) | Git como SCM, SCI, baseline, lockfile, archivo de resultados | Borrador v0.1 |

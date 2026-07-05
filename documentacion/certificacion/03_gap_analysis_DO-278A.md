@@ -1,6 +1,6 @@
 # Gap Analysis — DO-278A / ED-109A
 
-**Versión:** 0.6. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
+**Versión:** 0.7. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
 
 > Estado por objetivo: ✅ Cumplido · ⚠️ Parcial · ❌ Ausente. La columna *Evidencia* apunta a lo que
 > existe hoy en el repositorio. Los objetivos se agrupan por proceso DO-278A. La numeración es
@@ -99,9 +99,11 @@ está aún aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar
 | S-2 | PSSA / SSA | ❌ | No existe |
 | S-3 | Safety case / argumento de seguridad | ❌ | `safety_audit_dialog` audita tráfico, no es safety case de SW |
 
-### Hallazgos de verificación abiertos
+### Hallazgos de verificación (seguimiento)
 
-**STCA-1 — Doble marco de coordenadas en el motor STCA** (severidad: BAJA; estado: abierto).
+> Estado al 2026-07-05: **STCA-1 cerrado** (requisito HLR-STCA-06 + tests de contrato); **ROB-1 mitigado**.
+
+**STCA-1 — Doble marco de coordenadas en el motor STCA** (severidad: BAJA; estado: **CERRADO** 2026-07-05).
 `STCA_Engine.evaluar_conflictos` resuelve la **separación actual** con haversine sobre
 `lat_render/lon_render` (posición cruda reportada) y la **predicción de CPA** con `x/y`. El caller
 `radar_widget.evaluar_stca` alimenta `x/y` con la posición proyectada **suavizada alpha-beta**
@@ -112,15 +114,20 @@ en el builder STCA).
   (<10 NM) **siempre** dispara, sin depender de `x/y`. El efecto es una discontinuidad de precisión
   en el borde de los 10 NM (predicción adelantada/atrasada, posible falso positivo transitorio), no
   un conflicto omitido.
-- *Acción de certificación:* el SRS debe incluir un requisito de que el caller suministre un **único
-  marco de posición consistente** a ambas fases, o que el motor reproyecte `x/y` desde `lat_render`.
-  Contrato actual fijado por tests en `tests/stca/test_stca_engine.py` (`test_contrato_*`).
-- *Cobertura del comportamiento acotado (2026-07-05):* `tests/stca/test_stca_scenarios.py` verifica
-  **end-to-end por el pipeline del widget** que un conflicto real <10 NM co-altitud **siempre**
-  dispara VIOLATION (fase crítica, sobre posición cruda), y que no hay falsos positivos en separación
-  vertical/horizontal, misma aeronave, blancos estáticos, fuera de banda FL e inhibición. Esto acota
-  empíricamente el riesgo del hallazgo a la precisión de la fase PREDICTION en el borde de los 10 NM,
-  sin conflicto omitido. El defecto de diseño (doble marco) permanece **abierto** hasta el requisito SRS.
+- *Riesgo acotado:* la fase VIOLATION (crítica) usa la posición cruda → un conflicto real cercano
+  (<10 NM) **siempre** dispara, sin depender de `x/y`. El efecto es una discontinuidad de precisión
+  en el borde de los 10 NM (predicción adelantada/atrasada, posible falso positivo transitorio), no
+  un conflicto omitido.
+- *Cierre (2026-07-05):* se formalizó el contrato como requisito **[HLR-STCA-06](07_SRS.md)** («marco
+  de posición único y consistente»): el caller debe suministrar `x/y` como la proyección local de
+  `lat_render/lon_render`, y la VIOLATION se decide siempre sobre la posición cruda. El requisito queda
+  verificado por `tests/stca/test_stca_engine.py`:
+  - `test_contrato_marco_unico_prediccion_coherente` — bajo el contrato (marco único), la PREDICTION es
+    geométricamente coherente con la geometría cruda de la VIOLATION.
+  - `test_contrato_xy_inconsistente_no_oculta_violacion` — un `x/y` inconsistente **no puede** ocultar
+    una violación real (residual acotado a la precisión de la PREDICTION, nunca a un conflicto omitido).
+  Complementado end-to-end por `tests/stca/test_stca_scenarios.py`. Con el requisito trazado y verificado,
+  el hallazgo se considera **cerrado**.
 
 **ROB-1 — Descarte silencioso de plots en el procesamiento** (severidad: BAJA; estado: mitigado).
 `radar_widget._process_plot_data` envuelve el procesamiento en `except Exception: return None`. Ante
@@ -139,7 +146,7 @@ campos bien tipados: `flight_level` es `float`/`None`, nunca string), sino una b
 Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0.3; SDD+LLR completos y D-2 en v0.4-0.6):
 
 1. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC.
-2. **Análisis de seguridad avanzado**: PSSA/SSA y safety case (S-2, S-3); cerrar STCA-1 vía requisito SRS.
+2. **Análisis de seguridad avanzado**: PSSA/SSA y safety case (S-2, S-3). *(STCA-1 ya cerrado vía HLR-STCA-06.)*
 3. **Higiene de configuración**: purgar binarios del histórico git (C-3) y ejecutar/registrar auditorías SQA por baseline (Q-1..Q-3).
 4. **Enlace con la autoridad** (A-1): coordinar SOI-1 con ANAC sobre el paquete ya construido.
 5. **Refinamiento de diseño** (D-3): diagramas de estados/despliegue del SDD ([SDD §13](15_SDD.md)).
@@ -154,3 +161,4 @@ Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0
 | 0.4 | 2026-07-05 | **SDD (doc 15)** con arquitectura y LLR de los 4 motores núcleo SWAL 2: **D-2** ❌→⚠️, **D-3** mejorado. Cobertura ~67 % → ~68 %. |
 | 0.5 | 2026-07-05 | SDD v0.2: LLR de HMI/DEC/GEO/AUD/ROL + diagramas de secuencia (profundiza D-2/D-3, sin cambio de estado). |
 | 0.6 | 2026-07-05 | SDD v0.3: LLR de robustez/altimetría/prestaciones/HMI secundaria — **todo HLR con LLR**. **D-2** ⚠️→✅. Cobertura ~68 % → ~70 %. |
+| 0.7 | 2026-07-05 | **STCA-1 cerrado** vía HLR-STCA-06 (marco de posición único) + tests de contrato. Sin cambio de % (S-2/S-3 siguen abiertos). |
