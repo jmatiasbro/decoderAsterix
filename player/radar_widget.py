@@ -41,7 +41,7 @@ from threading import Lock, RLock
 from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt, QTimer, QPointF, QRectF, pyqtSlot, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath, QFont, QFontMetrics, QPalette
+from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath, QFont, QFontMetrics, QPalette, QPixmap
 from PyQt6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QDialogButtonBox, QHBoxLayout, QLabel, QToolTip
@@ -811,6 +811,12 @@ class RadarWidget(_RadarBase):
         # Fuentes ODS cacheadas (normal y negrita), reusadas por track.
         self._font_ods = None
         self._font_ods_bold = None
+
+        # Cache del mapa de fondo (cartografía + coberturas + anillos): capas
+        # estáticas que se redibujaban vectorialmente en cada paint (~40 ms). Se
+        # renderizan a un QPixmap y solo se regeneran al cambiar zoom/pan/tamaño/capas.
+        self._basemap_cache = None
+        self._basemap_key = None
 
         # Filtros
         self.active_sensors: Set[Tuple[int, int]] = set()
@@ -3203,14 +3209,169 @@ class RadarWidget(_RadarBase):
         except Exception:
             pass
 
+    def _basemap_cache_key(self, w, h, z, center_x, center_y):
+        """Firma que invalida el cache del mapa de fondo. Incluye todo lo que
+        afecta el render estático: geometría de vista, capas visibles, intensidad,
+        centro de proyección y coberturas."""
+        map_sig = None
+        if hasattr(self, 'map_manager'):
+            try:
+                vis = self.map_manager.get_visible_layers("ESTRUCTURAL")
+                map_sig = tuple(sorted(getattr(l, 'name', '') for l in vis))
+            except Exception:
+                map_sig = None
+        intens = getattr(self, 'ods_layer_intensity', None)
+        map_factor = round(intens.get('map', 1.0), 3) if isinstance(intens, dict) else 1.0
+        return (
+            w, h, round(z, 9), round(center_x, 2), round(center_y, 2),
+            bool(getattr(self, 'vista_controlador', False)),
+            bool(getattr(self, 'projection_set', False)),
+            getattr(self, 'center_key', None),
+            len(getattr(self, 'radar_coverages', None) or ()),
+            map_sig, map_factor,
+        )
+
+    def _paint_static_basemap(self, painter, w, h, z, inv_z, center_x, center_y):
+        """Dibuja las capas estáticas desde un QPixmap cacheado. El cache se
+        regenera solo cuando cambia la clave (zoom/pan/tamaño/capas). Ante cualquier
+        fallo cae al dibujo directo para no romper nunca el render."""
+        try:
+            if w <= 0 or h <= 0:
+                return
+            key = self._basemap_cache_key(w, h, z, center_x, center_y)
+            if key != self._basemap_key or self._basemap_cache is None:
+                pm = QPixmap(w, h)
+                pm.fill(Qt.GlobalColor.transparent)
+                cp = QPainter(pm)
+                try:
+                    cp.setRenderHint(QPainter.RenderHint.Antialiasing)
+                    cp.translate(center_x, center_y)
+                    cp.scale(z, -z)
+                    self._draw_static_basemap(cp, inv_z)
+                finally:
+                    cp.end()
+                self._basemap_cache = pm
+                self._basemap_key = key
+            painter.save()
+            painter.resetTransform()
+            painter.drawPixmap(0, 0, self._basemap_cache)
+            painter.restore()
+        except Exception:
+            # Fallback robusto: dibujo directo con el transform de mundo ya aplicado.
+            self._draw_static_basemap(painter, inv_z)
+
+    def _draw_static_basemap(self, painter: QPainter, inv_z: float):
+        """Capas estáticas del fondo: cartografía estructural, coberturas de radar
+        y anillos de rango. Sin estado dinámico (barrido, tracks, selección)."""
+        # ---- 1. MAPA ESTRUCTURAL (FONDO) ----
+        self._draw_video_maps(painter, inv_z, "ESTRUCTURAL")
+
+        # ---- 1.5. COBERTURAS DE RADAR (Fase 16) — oculto en vista controlador ----
+        if (not self.vista_controlador) and getattr(self, 'radar_coverages', None) and self.projection_set and self.proy.activo:
+            try:
+                for cov in self.radar_coverages:
+                    lat = cov['lat']
+                    lon = cov['lon']
+                    radius_nm = cov['radius_nm']
+                    short_name = cov['short_name']
+
+                    cx, cy = self.proy.latlon_to_xy(lat, lon)
+                    if not is_valid_coord(cx, cy):
+                        continue
+
+                    # Si está en el origen (es el active projection center)
+                    is_active = (cx * cx + cy * cy) < 1000.0 * 1000.0
+
+                    if is_active:
+                        # El radar activo se ancla al origen de proyección (0,0) para
+                        # que el círculo/etiqueta coincidan con el símbolo 'Y' del sensor.
+                        # La coord. del .map difiere <1km de la de site-params y causaba desfase.
+                        cx, cy = 0.0, 0.0
+                        # Highlighted active radar coverage
+                        pen_active = QPen(QColor(0, 229, 255, 100))
+                        pen_active.setWidthF(inv_z * 1.2)
+                        pen_active.setStyle(Qt.PenStyle.DashLine)
+                        painter.setPen(pen_active)
+                        painter.setBrush(QBrush(QColor(0, 229, 255, 8))) # opacidad 3%
+
+                        r = radius_nm * METERS_PER_NM
+                        painter.drawEllipse(QPointF(cx, cy), r, r)
+
+                        # Centro del radar activo
+                        pen_center = QPen(QColor(0, 229, 255, 200))
+                        pen_center.setWidthF(inv_z * 1.5)
+                        painter.setPen(pen_center)
+                        painter.setBrush(QBrush(QColor(0, 229, 255, 120)))
+                        painter.drawEllipse(QPointF(cx, cy), inv_z * 4.0, inv_z * 4.0)
+
+                        # Etiqueta
+                        painter.setFont(QFont("Monospace", 8))
+                        painter.setPen(QColor(0, 229, 255, 220))
+                        painter.save()
+                        painter.translate(cx, cy)
+                        painter.scale(inv_z, -inv_z)
+                        # Título separado del símbolo (arriba-derecha) para no pisarlo
+                        painter.drawText(QPointF(12, 22), f"{short_name} (ACTIVE)")
+                        painter.restore()
+                    else:
+                        # Subtle background radar coverage
+                        pen_bg = QPen(QColor(0, 229, 255, 22)) # opacidad muy sutil
+                        pen_bg.setWidthF(inv_z * 0.8)
+                        pen_bg.setStyle(Qt.PenStyle.DotLine)
+                        painter.setPen(pen_bg)
+                        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+
+                        r = radius_nm * METERS_PER_NM
+                        painter.drawEllipse(QPointF(cx, cy), r, r)
+
+                        # Centro del radar secundario
+                        pen_center = QPen(QColor(0, 229, 255, 45))
+                        pen_center.setWidthF(inv_z * 0.8)
+                        painter.setPen(pen_center)
+                        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                        painter.drawEllipse(QPointF(cx, cy), inv_z * 2.5, inv_z * 2.5)
+
+                        # Etiqueta
+                        painter.setFont(QFont("Monospace", 8))
+                        painter.setPen(QColor(0, 229, 255, 40))
+                        painter.save()
+                        painter.translate(cx, cy)
+                        painter.scale(inv_z, -inv_z)
+                        painter.drawText(QPointF(12, 22), short_name)
+                        painter.restore()
+            except Exception:
+                pass
+
+        # ---- 2. ANILLOS DE RANGO (sensor-céntricos) — ocultos en vista controlador ----
+        if not self.vista_controlador:
+            try:
+                pen_ring = QPen(COLOR_RING)
+                pen_ring.setWidthF(inv_z)
+                painter.setPen(pen_ring)
+                for dist_nm in [50, 100, 200]:
+                    r = dist_nm * METERS_PER_NM
+                    painter.drawEllipse(QPointF(0.0, 0.0), r, r)
+                font_label = QFont("Monospace", 8)
+                painter.setFont(font_label)
+                painter.setPen(COLOR_RING_LABEL)
+                for dist_nm in [50, 100, 200]:
+                    r = dist_nm * METERS_PER_NM
+                    painter.save()
+                    painter.translate(0.0 + r, 0.0)
+                    painter.scale(inv_z, -inv_z)
+                    painter.drawText(QPointF(4, 12), f"{dist_nm} NM")
+                    painter.restore()
+            except Exception:
+                pass
+
     def _draw_video_maps(self, painter: QPainter, inv_z: float, tipo: str):
         if not hasattr(self, 'map_manager'):
             return
-            
+
         visibles = self.map_manager.get_visible_layers(tipo)
         if not visibles:
             return
-            
+
         try:
             painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
 
@@ -3401,106 +3562,8 @@ class RadarWidget(_RadarBase):
             painter.translate(center_x, center_y)
             painter.scale(z, -z)
 
-            # ---- 1. MAPA ESTRUCTURAL (FONDO) ----
-            self._draw_video_maps(painter, inv_z, "ESTRUCTURAL")
-
-            # ---- 1.5. COBERTURAS DE RADAR (Fase 16) — oculto en vista controlador ----
-            if (not self.vista_controlador) and getattr(self, 'radar_coverages', None) and self.projection_set and self.proy.activo:
-                try:
-                    for cov in self.radar_coverages:
-                        lat = cov['lat']
-                        lon = cov['lon']
-                        radius_nm = cov['radius_nm']
-                        short_name = cov['short_name']
-                        
-                        cx, cy = self.proy.latlon_to_xy(lat, lon)
-                        if not is_valid_coord(cx, cy):
-                            continue
-                            
-                        # Si está en el origen (es el active projection center)
-                        is_active = (cx * cx + cy * cy) < 1000.0 * 1000.0
-                        
-                        if is_active:
-                            # El radar activo se ancla al origen de proyección (0,0) para
-                            # que el círculo/etiqueta coincidan con el símbolo 'Y' del sensor.
-                            # La coord. del .map difiere <1km de la de site-params y causaba desfase.
-                            cx, cy = 0.0, 0.0
-                            # Highlighted active radar coverage
-                            pen_active = QPen(QColor(0, 229, 255, 100))
-                            pen_active.setWidthF(inv_z * 1.2)
-                            pen_active.setStyle(Qt.PenStyle.DashLine)
-                            painter.setPen(pen_active)
-                            painter.setBrush(QBrush(QColor(0, 229, 255, 8))) # opacidad 3%
-                            
-                            r = radius_nm * METERS_PER_NM
-                            painter.drawEllipse(QPointF(cx, cy), r, r)
-                            
-                            # Centro del radar activo
-                            pen_center = QPen(QColor(0, 229, 255, 200))
-                            pen_center.setWidthF(inv_z * 1.5)
-                            painter.setPen(pen_center)
-                            painter.setBrush(QBrush(QColor(0, 229, 255, 120)))
-                            painter.drawEllipse(QPointF(cx, cy), inv_z * 4.0, inv_z * 4.0)
-                            
-                            # Etiqueta
-                            painter.setFont(QFont("Monospace", 8))
-                            painter.setPen(QColor(0, 229, 255, 220))
-                            painter.save()
-                            painter.translate(cx, cy)
-                            painter.scale(inv_z, -inv_z)
-                            # Título separado del símbolo (arriba-derecha) para no pisarlo
-                            painter.drawText(QPointF(12, 22), f"{short_name} (ACTIVE)")
-                            painter.restore()
-                        else:
-                            # Subtle background radar coverage
-                            pen_bg = QPen(QColor(0, 229, 255, 22)) # opacidad muy sutil
-                            pen_bg.setWidthF(inv_z * 0.8)
-                            pen_bg.setStyle(Qt.PenStyle.DotLine)
-                            painter.setPen(pen_bg)
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            
-                            r = radius_nm * METERS_PER_NM
-                            painter.drawEllipse(QPointF(cx, cy), r, r)
-                            
-                            # Centro del radar secundario
-                            pen_center = QPen(QColor(0, 229, 255, 45))
-                            pen_center.setWidthF(inv_z * 0.8)
-                            painter.setPen(pen_center)
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            painter.drawEllipse(QPointF(cx, cy), inv_z * 2.5, inv_z * 2.5)
-                            
-                            # Etiqueta
-                            painter.setFont(QFont("Monospace", 8))
-                            painter.setPen(QColor(0, 229, 255, 40))
-                            painter.save()
-                            painter.translate(cx, cy)
-                            painter.scale(inv_z, -inv_z)
-                            painter.drawText(QPointF(12, 22), short_name)
-                            painter.restore()
-                except Exception:
-                    pass
-
-            # ---- 2. ANILLOS DE RANGO (sensor-céntricos) — ocultos en vista controlador ----
-            if not self.vista_controlador:
-                try:
-                    pen_ring = QPen(COLOR_RING)
-                    pen_ring.setWidthF(inv_z)
-                    painter.setPen(pen_ring)
-                    for dist_nm in [50, 100, 200]:
-                        r = dist_nm * METERS_PER_NM
-                        painter.drawEllipse(QPointF(0.0, 0.0), r, r)
-                    font_label = QFont("Monospace", 8)
-                    painter.setFont(font_label)
-                    painter.setPen(COLOR_RING_LABEL)
-                    for dist_nm in [50, 100, 200]:
-                        r = dist_nm * METERS_PER_NM
-                        painter.save()
-                        painter.translate(0.0 + r, 0.0)
-                        painter.scale(inv_z, -inv_z)
-                        painter.drawText(QPointF(4, 12), f"{dist_nm} NM")
-                        painter.restore()
-                except Exception:
-                    pass
+            # ---- 1. MAPA ESTÁTICO (cartografía + coberturas + anillos) vía cache ----
+            self._paint_static_basemap(painter, w, h, z, inv_z, center_x, center_y)
 
             # ---- 2.b ANILLO DE ÁREA DE CONTROL (controlador o toggle de incumbencia) ----
             if (self.vista_controlador or getattr(self, 'mostrar_incumbencia', False)) \

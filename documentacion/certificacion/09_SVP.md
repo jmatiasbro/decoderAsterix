@@ -149,13 +149,49 @@ Verifica que la aplicación arranca, procesa un PCAP real y no produce errores f
 - PCAP de referencia: `baires.pcap` (~296 k paquetes, ~5000 PPS).
 - Criterio: sin `SystemExit` no controlado, sin `RuntimeError` no capturado.
 
-### 5.4 Prueba de rendimiento (pendiente)
+### 5.4 Prueba de rendimiento
 
 Verifica que la cadena de procesamiento cumple las cotas de latencia declaradas en HLR-PERF-*.
 
-- Herramienta objetivo: `pytest-benchmark`.
-- Escenarios: batch de 100 plots a 50 PPS, ciclo de safety nets a 1 Hz con 50 tracks activos.
-- Criterio: a definir; propuesta inicial < 100 ms por ciclo de safety nets.
+**Cobertura automática (pytest, `tests/tracking/test_perf.py`):**
+- HLR-PERF-01: latencia de lote de 200 plots < 200 ms.
+- HLR-PERF-02: cadencia de safety chain configurable (0.5–2 Hz).
+- HLR-PERF-03: creación de 500 tracks < 2 s; reconciliación de 500 tracks < 500 ms.
+
+**Cobertura manual (banco de estrés UDP, `HLR-PERF-04/05`):**
+
+Instrumentación: variable de entorno `DECODE_PERF=1` (umbral `DECODE_PERF_MS`), que
+registra en consola cada callback del hilo de UI que supere el umbral, con nº de tracks.
+
+Inyector: `stress_tester.py` reproduce `baires.pcap` (multi-sensor: radares SSR/PSR +
+ADS-B) a una tasa de PPS configurable contra el puerto UDP 8600.
+
+- **HLR-PERF-04 — refresco del PPI:** el repintado está capado a 15 FPS (`_request_repaint`,
+  `_repaint_min_dt = 1/15`). El presupuesto por frame es 66 ms. Criterio: `paintEvent < 66 ms`
+  con la carga operativa nominal (playback multi-sensor de `baires.pcap` a tiempo real).
+- **HLR-PERF-05 — capacidad de ingesta:** tasa de PPS sostenible sin degradar la
+  interactividad de la HMI (los menús responden). Se determina empíricamente por rampa.
+
+#### 5.4.1 Resultados de la rampa de estrés (fecha: _______, operador: _______)
+
+| PPS objetivo | paintEvent (ms) | Tracks | Menús responden | Veredicto |
+|---|---|---|---|---|
+| 500  | ____ | ____ | Sí/No | ____ |
+| 800  | ____ | ____ | Sí/No | ____ |
+| 1000 | ____ | ____ | Sí/No | ____ |
+| 1500 | ____ | ____ | Sí/No | ____ |
+
+**Tasa sostenible verificada:** ______ PPS (agregada, multi-sensor).
+
+**Hallazgo (borrador):** el costo de `paintEvent` (~40–43 ms) es dominado por el redibujo
+vectorial del mapa de fondo (cartografía + coberturas de radar + anillos) y es **independiente
+del nº de tracks**. Bajo flood de un único stream UDP a ≥2500 PPS, el hilo de decodificación
+(worker) compite con el hilo de UI por el GIL de Python y degrada la interactividad. El
+playback multi-sensor a tiempo real —la carga operativa real— no presenta esta degradación.
+La mejora planificada (cache del mapa de fondo a `QPixmap`) eleva el techo de PPS; ver
+[08_SDP.md](08_SDP.md) mejoras de rendimiento.
+
+- Herramienta futura para 01–03: migrar a `pytest-benchmark` para históricos de regresión.
 
 ---
 
