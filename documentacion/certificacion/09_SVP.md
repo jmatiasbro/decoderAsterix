@@ -174,24 +174,47 @@ ADS-B) a una tasa de PPS configurable contra el puerto UDP 8600.
 
 #### 5.4.1 Resultados de la rampa de estrés (fecha: _______, operador: _______)
 
-| PPS objetivo | paintEvent (ms) | Tracks | Menús responden | Veredicto |
-|---|---|---|---|---|
-| 500  | ____ | ____ | Sí/No | ____ |
-| 800  | ____ | ____ | Sí/No | ____ |
-| 1000 | ____ | ____ | Sí/No | ____ |
-| 1500 | ____ | ____ | Sí/No | ____ |
+| PPS objetivo | Interactividad (menús) | Presentación | Veredicto |
+|---|---|---|---|
+| 500  | Fluida | Correcta | ✅ Sostenible |
+| 800  | Fluida, menús operativos | Duplicados (ver Hallazgo 2) | ⚠️ Límite |
+| 1000 | Degradada | Tracks se atrasan y saltan (backlog) | ❌ |
+| 2500 | No responde | — | ❌ |
 
-**Tasa sostenible verificada:** ______ PPS (agregada, multi-sensor).
+**Tasa sostenible verificada (interactividad):** **800 PPS** (inyección de un único stream
+UDP, `baires.pcap` multi-sensor, replay en loop). Muy por encima de la carga operativa real
+(un radar SSR ≈ 50–200 PPS; agregado multi-sensor, cientos).
 
-**Hallazgo (borrador):** el costo de `paintEvent` (~40–43 ms) es dominado por el redibujo
-vectorial del mapa de fondo (cartografía + coberturas de radar + anillos) y es **independiente
-del nº de tracks**. Bajo flood de un único stream UDP a ≥2500 PPS, el hilo de decodificación
-(worker) compite con el hilo de UI por el GIL de Python y degrada la interactividad. El
-playback multi-sensor a tiempo real —la carga operativa real— no presenta esta degradación.
-La mejora planificada (cache del mapa de fondo a `QPixmap`) eleva el techo de PPS; ver
-[08_SDP.md](08_SDP.md) mejoras de rendimiento.
+**Hallazgo 1 — costo de render (RESUELTO).** El `paintEvent` costaba ~40–43 ms **independiente
+del nº de tracks**: lo dominaba el redibujo vectorial del mapa de fondo (cartografía +
+coberturas + anillos). Se implementó cache del mapa de fondo a `QPixmap` (regenerado solo al
+cambiar zoom/pan/tamaño/capas). Además se corrigió: emisión única de `sensor_detected` por
+sensor, límite de drenaje UDP por ciclo, `deque` para el búfer de plots y throttle del `print`
+de RPM en el hilo de UI. Tras estos cambios la interactividad es fluida hasta 800 PPS.
+
+**Hallazgo 2 — duplicados bajo estrés (ARTEFACTO DEL BANCO, no defecto).** A ≥800 PPS con el
+inyector sintético aparecen tracks duplicados (el mismo avión, sin fusionar entre sensores).
+Causa raíz: la fusión multi-radar (`fusion/correlator.py::son_misma_aeronave`) decide identidad
+por co-ubicación **extrapolada a un tiempo de referencia común** y por asociación squawk↔Mode-S
+**aprendida en el tiempo**. El banco de estrés comprime el tiempo ~10×, reproduce el PCAP en
+loop e inyecta todos los sensores en un solo stream a velocidad no realista; bajo esas
+condiciones la extrapolación temporal y el aprendizaje de asociación no operan como en régimen
+real y las representaciones quedan sin fusionar.
+
+*Verificación de aislamiento:* en **playback a 1× no hay duplicados** — la fusión opera
+correctamente en condiciones operativas. El defecto NO se reproduce en régimen real.
+
+*Decisión de diseño (crítica para seguridad):* **NO se relajan los gates de fusión** para
+suprimir estos duplicados. Aflojar el umbral para fusionar representaciones dispersas
+arriesgaría fusionar dos aeronaves realmente distintas en operación real, **ocultando un
+conflicto STCA entre ellas**. La política conservadora (preferir un duplicado visible antes que
+una fusión errónea) es la correcta para un sistema de seguridad: un duplicado es visible y
+diagnosticable; una fusión indebida esconde tráfico. Traza a HLR-TRK/HLR-FUS y a la FHA.
 
 - Herramienta futura para 01–03: migrar a `pytest-benchmark` para históricos de regresión.
+- Mejora futura para elevar el techo >800 PPS: mover matching/decodificación fuera del hilo de
+  UI o aplicar load-shedding bajo sobrecarga; ver [08_SDP.md](08_SDP.md). No requerido para la
+  capacidad operativa nominal.
 
 ---
 
