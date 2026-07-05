@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **Norma:** EUROCAE ED-109A / RTCA DO-278A — Sección 8 (Aseguramiento de la Calidad del Software).
-**Versión:** 0.1 (borrador). **Fecha:** 2026-07-03. **Estado:** PROPUESTO — no aprobado por ANAC.
+**Versión:** 0.2 (borrador). **Fecha:** 2026-07-05. **Estado:** PROPUESTO — no aprobado por ANAC.
 
 ---
 
@@ -87,20 +87,20 @@ referencia al artefacto de evidencia.
 | FHA borrador entregado | ✅ |
 | SRS borrador entregado (≥ 50 HLR formalizados) | ✅ (56 HLR) |
 | Gap analysis actualizado | ✅ |
-| Suite de tests ≥ 400 tests pasando | ✅ (474) |
-| Baseline SCM etiquetado | ❌ Pendiente |
-| Resultados de tests archivados | ❌ Pendiente |
+| Suite de tests ≥ 400 tests pasando | ✅ (526) |
+| Baseline SCM etiquetado | ✅ `v0.1.0-soi1`, `v0.2.0-perf`, `v0.3.0` |
+| Resultados de tests archivados | ✅ `documentacion/certificacion/resultados_soi1.html` |
 
 ### 4.2 Criterios de entrada a SOI-2 (revisión de verificación)
 
 | Criterio | Estado |
 |---|---|
 | SRS aprobada internamente | Parcial |
-| 100 % de HLR con test asociado | ❌ HLR-HMI-04, HLR-PERF-01..05 sin test |
-| Cobertura de decisiones ≥ objetivo en módulos SWAL 2 | ❌ No medida |
+| 100 % de HLR con test asociado | ✅ HLR-HMI-01..06 y HLR-PERF-01..03 con test; HLR-PERF-04/05 verificados manualmente (SVP §5.4) |
+| Cobertura de decisiones ≥ objetivo en módulos SWAL 2 | ❌ No medida (falta CI + `pytest-cov`) |
 | Registros de revisión de código para SWAL 2 | ❌ No existen |
-| Resultados de verificación archivados en baseline | ❌ No archivados |
-| No conformidades abiertas: ninguna Clase A | ❌ Sin sistema de seguimiento |
+| Resultados de verificación archivados en baseline | ✅ `resultados_soi1.html` (regenerar por baseline en CI) |
+| No conformidades abiertas: ninguna Clase A | ✅ Ninguna Clase A abierta; seguimiento en §5.3 |
 
 ---
 
@@ -130,12 +130,18 @@ referencia al artefacto de evidencia.
 
 | RNC | Clase | Descripción | Estado |
 |---|---|---|---|
-| RNC-001 | B | Sin lockfile de dependencias (riesgo de reproducibilidad) | Abierta |
-| RNC-002 | B | Sin resultados de tests archivados vinculados a baseline | Abierta |
-| RNC-003 | B | Tests HLR-HMI-04 y HLR-PERF-01..05 ausentes | Abierta |
-| RNC-004 | C | `requirements.txt` incompleto (no refleja paquetes realmente usados) | Abierta |
-| RNC-005 | C | Artefacto binario `baires.pcap` en el árbol sin hash verificable | Abierta |
+| RNC-001 | B | Sin lockfile de dependencias (riesgo de reproducibilidad) | **CERRADA** — `requirements.lock` (commit `d74eb85`) |
+| RNC-002 | B | Sin resultados de tests archivados vinculados a baseline | **CERRADA** — `resultados_soi1.html` (commit `e717855`); pendiente automatizar en CI |
+| RNC-003 | B | Tests HLR-HMI-04 y HLR-PERF-01..05 ausentes | **CERRADA** — `test_track_state`, `test_safety_watchdog`, `test_perf` (commit `d74eb85`); HLR-PERF-04/05 verificados manualmente (SVP §5.4) |
+| RNC-004 | C | `requirements.txt` incompleto (no refleja paquetes realmente usados) | Abierta — mitigada por `requirements.lock`; falta depurar `requirements.txt` |
+| RNC-005 | C | Artefacto binario `baires.pcap` en el árbol sin hash verificable | **CERRADA** — `tests/data/checksums.txt` (commit `d74eb85`) |
 | RNC-006 | B | Sin independencia de verificación para módulos SWAL 2 | Abierta (acuerdo con ANAC) |
+| RNC-007 | C | Cobertura de decisiones no medida en módulos SWAL 2 | Abierta — requiere CI + `pytest-cov` |
+| RNC-008 | B | Sin registros de revisión de código para módulos SWAL 2 | Abierta |
+
+> **Nota de estado (2026-07-05):** de las seis RNC iniciales, cuatro (001/002/003/005) quedaron cerradas
+> con evidencia versionada. Se incorporan RNC-007 y RNC-008 para trazar las dos brechas de proceso aún
+> abiertas (cobertura estructural y revisiones de código), antes implícitas en los criterios de SOI-2.
 
 ---
 
@@ -145,12 +151,12 @@ El SQA monitorea las siguientes métricas como indicadores del estado del proces
 
 | Métrica | Valor actual | Objetivo SOI-2 |
 |---|---|---|
-| Tests pasando / total | 474/474 (100 %) | 100 % |
-| HLR con test asociado | ~44/56 (79 %) | 100 % |
+| Tests pasando / total | 526/526 (100 %) | 100 % |
+| HLR con test asociado | ~56/56 (100 %) — HLR-PERF-04/05 por verificación manual | 100 % |
 | RNCs Clase A abiertas | 0 | 0 |
-| RNCs Clase B abiertas | 4 | 0 |
+| RNCs Clase B abiertas | 2 (RNC-006, RNC-008) | 0 |
 | Cobertura de decisiones (SWAL 2) | No medida | ≥ 80 % (objetivo propuesto) |
-| Commits con referencia a HLR (mensajes) | ~60 % | ≥ 90 % |
+| Commits con referencia a HLR (mensajes) | ~65 % | ≥ 90 % |
 
 ---
 
@@ -194,3 +200,4 @@ objetivos de independencia:
 | Ver | Fecha | Cambio |
 |-----|-------|--------|
 | 0.1 | 2026-07-03 | Creación del borrador inicial. |
+| 0.2 | 2026-07-05 | Cierre de RNC-001/002/003/005 con evidencia versionada; alta de RNC-007/008 (cobertura y revisiones de código); actualización de criterios SOI-1/2, métricas (526 tests, 100 % HLR con test) y baselines etiquetados. |

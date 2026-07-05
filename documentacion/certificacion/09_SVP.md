@@ -68,8 +68,12 @@ tests/
 | Fusión multi-radar | ~26 | HLR-FUS-01..02 | ✅ |
 | Persistencia / Auditoría | ~17 | HLR-AUD-01..02 | ✅ |
 | FDP / ADEXP | 32 | — (operacional) | ✅ |
+| HMI (completitud / fidelidad / estado / watchdog) | 34 | HLR-HMI-01..06 | ✅ |
+| Rendimiento del motor | 6 | HLR-PERF-01..03 | ✅ |
+| Integración end-to-end PCAP | 6 | REQ-DEC/GEO/TRK + safety | ✅ |
+| Navegación / zoom PPI | 6 | — (HMI) | ✅ |
 | Varios (ATM, ODS, FIR, stats) | ~248 | — | ✅ |
-| **Total** | **474** | | |
+| **Total** | **526** | | |
 
 ### 3.3 Brechas de cobertura abiertas
 
@@ -270,9 +274,9 @@ justificación de adecuación de la herramienta (Tool Qualification Consideratio
 
 | Criterio | Estado actual |
 |---|---|
-| 100 % de tests pasan | ✅ (474/474) |
-| Trazabilidad HLR ↔ test completa para SWAL 2 | Parcial — HLR-HMI/PERF sin test |
-| Cobertura de decisiones ≥ objetivo en módulos SWAL 2 | ❌ No medida |
+| 100 % de tests pasan | ✅ (526/526) |
+| Trazabilidad HLR ↔ test completa para SWAL 2 | ✅ HLR-HMI/PERF cubiertos (PERF-04/05 por verificación manual) |
+| Cobertura de decisiones ≥ objetivo en módulos SWAL 2 | ❌ No medida (RNC-007: falta CI + `pytest-cov`) |
 | Registros de revisión de código para módulos SWAL 2 | ❌ No existen |
 | Resultados de verificación archivados y reproducibles | ❌ Solo ejecución local |
 
