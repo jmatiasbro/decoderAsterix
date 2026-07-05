@@ -34,6 +34,7 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | 10 | [SCMP — Software Configuration Management Plan](10_SCMP.md) | Git como SCM, SCI, baseline, lockfile, archivo de resultados | Borrador v0.1 |
 | 11 | [SQAP — Software Quality Assurance Plan](11_SQAP.md) | Auditorías, no conformidades, métricas, coordinación ANAC/SOI | Borrador v0.2 |
 | 12 | [Registros de Revisión de Código](12_registros_revision_codigo.md) | Revisión por inspección de los 5 módulos SWAL 2 (RR-01..05) | Borrador v0.1 |
+| 13 | [Estándar de Codificación y Diseño](13_estandar_codificacion.md) | Reglas EC/ED verificables (cierra P-5); base de la revisión de código | Borrador v0.1 |
 
 ## 3. Cómo leer el paquete
 

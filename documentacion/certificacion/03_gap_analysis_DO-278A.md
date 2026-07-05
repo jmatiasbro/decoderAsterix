@@ -12,14 +12,14 @@
 
 | Proceso | Objetivos | ✅ | ⚠️ | ❌ | % cobertura aprox. |
 |---------|-----------|----|----|----|--------------------|
-| Planificación | 5 | 3 | 1 | 1 | 70% |
+| Planificación | 5 | 3 | 2 | 0 | 80% |
 | Desarrollo (requisitos/diseño/código) | 6 | 3 | 2 | 1 | 65% |
 | Verificación | 7 | 4 | 2 | 1 | 70% |
 | Gestión de configuración (SCM) | 4 | 2 | 2 | 0 | 75% |
 | Aseguramiento de calidad (SQA) | 3 | 0 | 3 | 0 | 50% |
 | Enlace con autoridad | 2 | 0 | 1 | 1 | 15% |
 | Análisis de seguridad | 3 | 1 | 0 | 2 | 33% |
-| **Total** | **30** | **13** | **11** | **6** | **~62%** |
+| **Total** | **30** | **13** | **12** | **5** | **~63%** |
 
 Conclusión: **la capa de evidencia de proceso está sustancialmente construida** (planes, FHA, SRS con
 56 HLR, matriz de trazabilidad, CI con cobertura de decisiones al 88.5 % sobre módulos SWAL 2, y
@@ -41,7 +41,7 @@ aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia SOI-
 | P-2 | SDP (plan de desarrollo) | ✅ | [08_SDP.md](08_SDP.md) |
 | P-3 | SVP (plan de verificación) | ✅ | [09_SVP.md](09_SVP.md) |
 | P-4 | SCMP + SQAP | ✅ | [10_SCMP.md](10_SCMP.md), [11_SQAP.md](11_SQAP.md) |
-| P-5 | Estándares de requisitos/diseño/código | ❌ | No formalizados; convenciones en CLAUDE.md y checklist de revisión (doc 12) |
+| P-5 | Estándares de requisitos/diseño/código | ⚠️ | Estándar de código/diseño en [13_estandar_codificacion.md](13_estandar_codificacion.md) (EC/ED); falta el estándar de **requisitos** |
 
 ## 2. Proceso de Desarrollo
 
@@ -50,7 +50,7 @@ aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia SOI-
 | D-1 | Requisitos de alto nivel (HLR) | ✅ | [07_SRS.md](07_SRS.md) — 56 HLR trazados a FHA/specs |
 | D-2 | Requisitos de bajo nivel (LLR) | ❌ | No documentados formalmente |
 | D-3 | Arquitectura de software | ⚠️ | CLAUDE.md, TECHNICAL.md y SRS §2; falta SDD formal |
-| D-4 | Código fuente conforme a estándares | ⚠️ | Revisado (RR-01..05, doc 12); falta estándar de codificación formal contra el cual verificar |
+| D-4 | Código fuente conforme a estándares | ⚠️ | Estándar formal en [13](13_estandar_codificacion.md); módulos SWAL 2 revisados contra él (RR-01..05); falta automatizar el linter en CI |
 | D-5 | Trazabilidad requisitos↔diseño↔test | ✅ | [04_matriz_trazabilidad.md](04_matriz_trazabilidad.md) — sin huecos de test |
 | D-6 | Determinismo / reproducibilidad | ✅ | Ciclo de vida por ToD; `time.time()` vedado (`lifecycle.py`) |
 
@@ -137,8 +137,8 @@ campos bien tipados: `flight_level` es `float`/`None`, nunca string), sino una b
 
 Reordenadas al estado actual (los ítems de v0.1 sobre planes/FHA/SRS/CI ya están cerrados):
 
-1. **Estándares formales** de codificación/diseño/requisitos (P-5, D-4) — última brecha grande de proceso interno.
-2. **Requisitos de bajo nivel (LLR)** y **SDD formal** (D-2, D-3).
+1. **Requisitos de bajo nivel (LLR)** y **SDD formal** (D-2, D-3); **estándar de requisitos** (resto de P-5). El estándar de código/diseño ya existe (doc 13) y falta automatizar su linter en CI (D-4).
+2. **Automatizar el linter** del estándar (doc 13 §7) en el workflow de CI, acotado a los módulos SWAL 2.
 3. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC.
 4. **Análisis de seguridad avanzado**: PSSA/SSA y safety case (S-2, S-3); cerrar STCA-1 vía requisito SRS.
 5. **Higiene de configuración**: purgar binarios del histórico git (C-3) y ejecutar/registrar auditorías SQA por baseline (Q-1..Q-3).
