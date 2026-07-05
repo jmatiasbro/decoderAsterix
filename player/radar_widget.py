@@ -820,6 +820,12 @@ class RadarWidget(_RadarBase):
         self._basemap_cache = None
         self._basemap_key = None
 
+        # Observabilidad de descartes: _process_plot_data traga excepciones para no
+        # caer el render, pero un plot descartado en silencio = aeronave no pintada
+        # (FC-HMI-01). Se contabiliza y loguea (throttle) para que no sea invisible.
+        self._plots_descartados = 0
+        self._descarte_log_last = 0.0
+
         # Filtros
         self.active_sensors: Set[Tuple[int, int]] = set()
         self.squawk_filter = ""
@@ -2133,14 +2139,33 @@ class RadarWidget(_RadarBase):
                 else:
                     self.pending_tracks[target_id] = plot
                 update_track(plot)
-            except Exception:
+            except Exception as _e:
+                self._registrar_descarte_plot(data, _e)
                 return None
 
             self.plot_count = len(self.tracks) + len(self.pending_tracks)
             self._last_tod = data.get('time', self._last_tod)
             return target_id
-        except Exception:
+        except Exception as _e:
+            self._registrar_descarte_plot(data, _e)
             return None
+
+    def _registrar_descarte_plot(self, data, exc):
+        """Contabiliza un plot descartado por excepción en el procesamiento y lo
+        loguea con throttle (~1/s) para no inundar bajo un error persistente. Hace
+        visible un descarte que de otro modo sería silencioso (observabilidad)."""
+        self._plots_descartados += 1
+        try:
+            import time as _t
+            now = _t.monotonic()
+            if now - self._descarte_log_last >= 1.0:
+                self._descarte_log_last = now
+                sid = (data or {}).get('sac_sic', '?')
+                cat = (data or {}).get('category', '?')
+                print(f"[PLOT DESCARTADO] sensor={sid} cat={cat} "
+                      f"{type(exc).__name__}: {exc} (total={self._plots_descartados})")
+        except Exception:
+            pass
 
     @pyqtSlot(object)
     @_timed("on_new_plot")

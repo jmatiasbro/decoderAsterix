@@ -138,6 +138,7 @@ referencia al artefacto de evidencia.
 | RNC-006 | B | Sin independencia de verificación para módulos SWAL 2 | Abierta (acuerdo con ANAC) |
 | RNC-007 | C | Cobertura de decisiones no medida en módulos SWAL 2 | **CERRADA** — medida con `pytest-cov` (branch), línea base **88.5 %** ≥ objetivo 80 %; automatizada en CI (`.github/workflows/ci.yml`). Ver SVP §4.4 |
 | RNC-008 | B | Sin registros de revisión de código para módulos SWAL 2 | Abierta |
+| RNC-009 | C | Descarte silencioso de plots en `_process_plot_data` (brecha de observabilidad, ver gap analysis ROB-1) | **CERRADA** — contador + logging con throttle; `tests/tracking/test_plot_descarte.py` (3 casos) |
 
 > **Nota de estado (2026-07-05):** de las seis RNC iniciales, cuatro (001/002/003/005) quedaron cerradas
 > con evidencia versionada. Se incorporan RNC-007 y RNC-008 para trazar las dos brechas de proceso aún

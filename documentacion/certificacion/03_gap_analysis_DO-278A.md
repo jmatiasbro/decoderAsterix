@@ -113,6 +113,18 @@ en el builder STCA).
   empíricamente el riesgo del hallazgo a la precisión de la fase PREDICTION en el borde de los 10 NM,
   sin conflicto omitido. El defecto de diseño (doble marco) permanece **abierto** hasta el requisito SRS.
 
+**ROB-1 — Descarte silencioso de plots en el procesamiento** (severidad: BAJA; estado: mitigado).
+`radar_widget._process_plot_data` envuelve el procesamiento en `except Exception: return None`. Ante
+una excepción inesperada en cualquier campo, el plot se descartaba **sin traza** — equivalente a una
+aeronave no pintada (mismo modo de falla que FC-HMI-01). No es un defecto activo (el decoder emite los
+campos bien tipados: `flight_level` es `float`/`None`, nunca string), sino una brecha de
+*observabilidad*.
+- *Mitigación aplicada (2026-07-05):* se añadió un **contador de descartes** (`_plots_descartados`) y
+  logging con throttle (`_registrar_descarte_plot`), de modo que un descarte deja de ser silencioso.
+  Verificado por `tests/tracking/test_plot_descarte.py` (3 casos).
+- *Acción de certificación:* considerar exponer el contador en la HMI/telemetría técnica y acotar el
+  alcance del `except` a las secciones que realmente lo requieren (evitar tragar errores de programación).
+
 ## 8. Prioridades de cierre (top 5)
 
 1. **FHA + confirmación de SWAL** (desbloquea todo el rigor aplicable).
