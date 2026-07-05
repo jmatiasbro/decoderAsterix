@@ -804,6 +804,14 @@ class RadarWidget(_RadarBase):
         self._last_repaint = 0.0
         self._repaint_min_dt = 1.0 / 15.0
 
+        # Fuente y métricas de etiqueta OACI cacheadas: se construían por track en
+        # cada paint (QFontMetrics es caro). La fuente es fija, así que se reusan.
+        self._font_oaci = None
+        self._fm_oaci = None
+        # Fuentes ODS cacheadas (normal y negrita), reusadas por track.
+        self._font_ods = None
+        self._font_ods_bold = None
+
         # Filtros
         self.active_sensors: Set[Tuple[int, int]] = set()
         self.squawk_filter = ""
@@ -5351,9 +5359,11 @@ class RadarWidget(_RadarBase):
         painter.setPen(pen)
         painter.drawLine(QPointF(sp.x(), sp.y()), QPointF(lx, ly))  # leader line
         # A intensidad máxima, negrita para que la etiqueta se lea más clara.
-        font = QFont("Consolas", 8)
-        if lab_intensity >= 0.95:
-            font.setBold(True)
+        if self._font_ods is None:
+            self._font_ods = QFont("Consolas", 8)
+            self._font_ods_bold = QFont("Consolas", 8)
+            self._font_ods_bold.setBold(True)
+        font = self._font_ods_bold if lab_intensity >= 0.95 else self._font_ods
         painter.setFont(font)
         fm = painter.fontMetrics()
         hitbox = None
@@ -5752,9 +5762,12 @@ class RadarWidget(_RadarBase):
                     painter.translate(x, y)
                     painter.scale(inv_z, -inv_z)
                     
-                    font_oaci = QFont("Consolas", 9)
+                    if self._font_oaci is None:
+                        self._font_oaci = QFont("Consolas", 9)
+                        self._fm_oaci = QFontMetrics(self._font_oaci)
+                    font_oaci = self._font_oaci
                     painter.setFont(font_oaci)
-                    
+
                     if is_coasting:
                         label_pen_color = QColor(128, 128, 128)
                     elif is_emergency:
@@ -5762,9 +5775,9 @@ class RadarWidget(_RadarBase):
                     else:
                         label_pen_color = QColor(plot_color)
                         label_pen_color.setAlpha(alpha)
-                        
+
                     painter.setPen(label_pen_color)
-                    fm = QFontMetrics(font_oaci)
+                    fm = self._fm_oaci
                     
                     max_w = max(fm.horizontalAdvance(line) for line in lines)
                     
