@@ -112,15 +112,40 @@ python -m pytest tests/fdp/               # FDP/ADEXP
 python -m pytest tests/tracking/test_matching.py::TestModoNoIntegrado -v
 ```
 
-### 4.4 Cobertura (objetivo futuro)
+### 4.4 Cobertura de decisiones (branch) — módulos SWAL 2
+
+Para SWAL 2 se mide cobertura de **decisiones** (branch) sobre las unidades de seguridad:
+redes de seguridad (STCA/APW/MSAW), ciclo de vida de tracks y correlación multi-radar.
+Los módulos de presentación/render (`*/render.py`) se excluyen (no contienen lógica de
+decisión de seguridad). Configuración en [`.coveragerc`](../../.coveragerc).
+
+**Comando canónico:**
 
 ```
-python -m pytest tests/ --cov=decoder --cov=player/tracking --cov=player/areas \
-    --cov=player/msaw --cov-report=html --cov-fail-under=80
+python -m pytest tests/ \
+    --cov=player/tracking --cov=player/areas --cov=player/msaw \
+    --cov=analysis/stca_analyzer --cov=fusion/correlator \
+    --cov-config=.coveragerc \
+    --cov-branch --cov-report=term --cov-report=html:coverage/htmlcov
 ```
 
-> **Brecha:** No se mide cobertura de forma sistemática. Para SWAL 2 se exige cobertura de
-> **decisiones** (branch coverage) ≥ objetivo a acordar con ANAC. A implementar con `pytest-cov`.
+**Línea base medida (2026-07-05, 526 tests):**
+
+| Módulo | Cobertura (branch) |
+|---|---|
+| `analysis/stca_analyzer.py` (STCA) | 100 % |
+| `fusion/correlator.py` (correlación) | 100 % |
+| `player/tracking/lifecycle.py` (ciclo de vida) | 92 % |
+| `player/msaw/model.py` | 90 % |
+| `player/areas/model.py` | 87 % |
+| `player/msaw/engine.py` | 86 % |
+| `player/areas/apw.py` | 85 % |
+| `player/msaw/data.py`, `player/areas/store.py` | 85 % / 97 % |
+| **TOTAL núcleo SWAL 2** | **88.5 %** |
+
+Objetivo propuesto para SWAL 2: **≥ 80 %** (a acordar con ANAC) — **alcanzado**. La medición
+se automatiza en Integración Continua ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml))
+en cada *push*/PR, con `--cov-fail-under=80` y publicación del reporte HTML como artefacto.
 
 ---
 

@@ -1,0 +1,23 @@
+# Configuración de cobertura para módulos SWAL 2 (redes de seguridad + ciclo de
+# vida + correlación). Mide cobertura de DECISIONES (branch). El scope de módulos
+# se pasa por CLI con --cov=<ruta> (ver comando canónico en 09_SVP.md §4.4).
+# Uso: pytest tests/ --cov=player/tracking --cov=player/areas --cov=player/msaw \
+#      --cov=analysis/stca_analyzer --cov=fusion/correlator --cov-branch \
+#      --cov-config=.coveragerc
+[run]
+branch = True
+
+omit =
+    */tests/*
+    */__pycache__/*
+    */render.py
+
+[report]
+precision = 1
+show_missing = True
+# Objetivo SWAL 2 (propuesto, a acordar con ANAC): cobertura de decisiones >= 80 %.
+fail_under = 80
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:

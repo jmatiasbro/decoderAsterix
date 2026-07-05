@@ -64,3 +64,4 @@ test_crash_count.txt
 .coverage.*
 htmlcov/
 coverage.xml
+coverage/

@@ -97,7 +97,7 @@ referencia al artefacto de evidencia.
 |---|---|
 | SRS aprobada internamente | Parcial |
 | 100 % de HLR con test asociado | ✅ HLR-HMI-01..06 y HLR-PERF-01..03 con test; HLR-PERF-04/05 verificados manualmente (SVP §5.4) |
-| Cobertura de decisiones ≥ objetivo en módulos SWAL 2 | ❌ No medida (falta CI + `pytest-cov`) |
+| Cobertura de decisiones ≥ objetivo en módulos SWAL 2 | ✅ 88.5 % (branch) ≥ 80 %; medida y en CI |
 | Registros de revisión de código para SWAL 2 | ❌ No existen |
 | Resultados de verificación archivados en baseline | ✅ `resultados_soi1.html` (regenerar por baseline en CI) |
 | No conformidades abiertas: ninguna Clase A | ✅ Ninguna Clase A abierta; seguimiento en §5.3 |
@@ -136,7 +136,7 @@ referencia al artefacto de evidencia.
 | RNC-004 | C | `requirements.txt` incompleto (no refleja paquetes realmente usados) | Abierta — mitigada por `requirements.lock`; falta depurar `requirements.txt` |
 | RNC-005 | C | Artefacto binario `baires.pcap` en el árbol sin hash verificable | **CERRADA** — `tests/data/checksums.txt` (commit `d74eb85`) |
 | RNC-006 | B | Sin independencia de verificación para módulos SWAL 2 | Abierta (acuerdo con ANAC) |
-| RNC-007 | C | Cobertura de decisiones no medida en módulos SWAL 2 | Abierta — requiere CI + `pytest-cov` |
+| RNC-007 | C | Cobertura de decisiones no medida en módulos SWAL 2 | **CERRADA** — medida con `pytest-cov` (branch), línea base **88.5 %** ≥ objetivo 80 %; automatizada en CI (`.github/workflows/ci.yml`). Ver SVP §4.4 |
 | RNC-008 | B | Sin registros de revisión de código para módulos SWAL 2 | Abierta |
 
 > **Nota de estado (2026-07-05):** de las seis RNC iniciales, cuatro (001/002/003/005) quedaron cerradas
@@ -155,7 +155,7 @@ El SQA monitorea las siguientes métricas como indicadores del estado del proces
 | HLR con test asociado | ~56/56 (100 %) — HLR-PERF-04/05 por verificación manual | 100 % |
 | RNCs Clase A abiertas | 0 | 0 |
 | RNCs Clase B abiertas | 2 (RNC-006, RNC-008) | 0 |
-| Cobertura de decisiones (SWAL 2) | No medida | ≥ 80 % (objetivo propuesto) |
+| Cobertura de decisiones (SWAL 2) | 88.5 % (medida) | ≥ 80 % (objetivo propuesto) |
 | Commits con referencia a HLR (mensajes) | ~65 % | ≥ 90 % |
 
 ---
@@ -190,7 +190,7 @@ objetivos de independencia:
 |---|---|---|
 | Independencia de verificación | Verificador = Desarrollador para módulos SWAL 2 | Revisor externo para módulos tracking/APW/MSAW; o acuerdo con ANAC |
 | Independencia SQA | Auditor SQA = Desarrollador | Ídem o auditoría por pares con tercero |
-| Sin CI/CD | Resultados de tests dependen de ejecución manual | Implementar GitHub Actions con pytest y pytest-cov |
+| ~~Sin CI/CD~~ | **Mitigada** — GitHub Actions (`.github/workflows/ci.yml`) ejecuta la suite y mide cobertura de decisiones en cada *push*/PR, publicando reportes como artefactos | — |
 | Sin herramienta de seguimiento de defectos | Git issues como sustituto mínimo | Suficiente para estado actual; migrar a Jira/linear si escala |
 
 ---
