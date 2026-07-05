@@ -1,6 +1,7 @@
 import time
 import socket
-from typing import List, Dict, Optional, Set
+from collections import deque
+from typing import Dict, Optional, Set
 from PyQt6.QtCore import QThread, pyqtSignal, QMutex
 
 from decoder.data_engine import DataEngine, AsterixPlot
@@ -71,7 +72,7 @@ class PlaybackWorker(QThread):
         self._mutex = QMutex()
         
         # Estado
-        self._plots: List[AsterixPlot] = []
+        self._plots: "deque[AsterixPlot]" = deque(maxlen=150_000)
         self._filter_targets: Optional[Set[tuple]] = None  # si != None, solo se dibujan estas aeronaves
         self._play_index = 0
         self._duration = 0.0
@@ -328,6 +329,7 @@ class PlaybackWorker(QThread):
         proy_cache = {}
         batch = []
         last_emit = pytime.time()
+        sensores_emitidos: set = set()   # evita emitir sensor_detected miles de veces por segundo
 
         while True:
             self._mutex.lock()
@@ -350,11 +352,13 @@ class PlaybackWorker(QThread):
                     batch = []
                 continue
 
-            # Drenar cada socket listo
+            # Drenar cada socket listo (máx MAX_DRAIN por ciclo para no saturar el hilo principal)
+            MAX_DRAIN = 200
             packets = []  # (data, addr, dst_port)
             for s in ready:
                 dst_port = sock_port.get(s.fileno())
-                while True:
+                drained = 0
+                while drained < MAX_DRAIN:
                     try:
                         data, addr = s.recvfrom(65535)
                     except (BlockingIOError, pysocket.error):
@@ -362,6 +366,7 @@ class PlaybackWorker(QThread):
                     if not data:
                         break
                     packets.append((data, addr, dst_port))
+                    drained += 1
 
             for data, addr, port in packets:
                 if not data:
@@ -431,11 +436,14 @@ class PlaybackWorker(QThread):
                             if plot is None:
                                 continue
 
-                            # Notificar sensor detectado para registro dinámico
+                            # Notificar sensor detectado una sola vez por sesión
                             try:
                                 parts = plot.sac_sic.split('/')
                                 sac, sic = int(parts[0]), int(parts[1])
-                                self.sensor_detected.emit(sac, sic)
+                                key = (sac, sic)
+                                if key not in sensores_emitidos:
+                                    sensores_emitidos.add(key)
+                                    self.sensor_detected.emit(sac, sic)
                             except Exception:
                                 pass
 
@@ -448,9 +456,7 @@ class PlaybackWorker(QThread):
 
                             # Acumular plots en memoria con límite de seguridad de 150,000 para habilitar el Análisis PASS en vivo
                             self._mutex.lock()
-                            self._plots.append(plot)
-                            if len(self._plots) > 150000:
-                                self._plots.pop(0)
+                            self._plots.append(plot)  # deque(maxlen=150_000) descarta automáticamente
                             if len(self._plots) > 1:
                                 self._duration = self._plots[-1].time - self._plots[0].time
                             self._mutex.unlock()
@@ -458,7 +464,9 @@ class PlaybackWorker(QThread):
                     print(f"[UDP Live] Error procesando paquete ASTERIX: {e}")
 
             now = pytime.time()
-            if batch and (now - last_emit >= 0.05 or len(batch) >= self.batch_size):
+            # Emitir cada 100 ms o al acumular batch_size plots; nunca más de 10 Hz
+            # para no saturar la cola de señales del hilo principal bajo alta carga UDP.
+            if batch and (now - last_emit >= 0.10 or len(batch) >= self.batch_size):
                 self.new_plot_batch.emit(batch)
                 batch = []
                 last_emit = now
