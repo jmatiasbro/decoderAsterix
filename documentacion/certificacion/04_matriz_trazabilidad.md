@@ -61,12 +61,14 @@
 | ~~**Fusión sin test** (REQ-FUS-1/2)~~ | ✅ **Cerrado** | `tests/fusion_tests/test_correlator.py` (26 casos) |
 | ~~HMI sin test de completitud/fidelidad/watchdog (HLR-HMI-01..06)~~ | ✅ **Cerrado** | `tests/tracking/test_hmi.py`, `test_track_state.py`, `test_safety_watchdog.py` (34 casos) |
 | ~~Rendimiento sin verificación (HLR-PERF-01..05)~~ | ✅ **Cerrado** | `tests/tracking/test_perf.py` (6 casos) + verificación manual SVP §5.4 (800 PPS) |
+| ~~Integración end-to-end PCAP sin test~~ | ✅ **Cerrado** | `tests/integration/test_pcap_e2e.py` (6 casos: decode→proyección→matching→safety sobre `cat_034_048.pcap`) |
 | **Scripts ad-hoc en raíz** | Media — no son la suite | Migrar lo válido a `tests/`, descartar el resto |
+| Escenarios PCAP para STCA (hallazgo STCA-1) | Media | Casos end-to-end derivados de tráfico con conflictos reales |
 
 ## 4. Cobertura agregada (estimación cualitativa)
 
 - **Bien cubierto:** STCA, MSAW, APW, ODS/HMI, firmap, geo-declinación, ATM-DB, FDP/ADEXP, stats, centro técnico, ciclo de vida, decodificadores CAT001/002/021/034/048/062, matching A–E, correlación multi-radar, auditoría safety, completitud/fidelidad HMI + watchdog (HLR-HMI-01..06), rendimiento del motor + capacidad de ingesta verificada (HLR-PERF-01..05).
-- **Sin cubrir:** integración end-to-end PCAP, escenarios PCAP STCA (hallazgo STCA-1), purga binarios del histórico git.
+- **Sin cubrir:** escenarios PCAP con conflictos STCA reales (hallazgo STCA-1), purga binarios del histórico git.
 
 > Tras cerrar STCA, la prioridad #1 de verificación restante son los **decodificadores ASTERIX por
 > categoría** (núcleo SWAL 2 sin tests) y el **matching/reconciliación de tracks**.
