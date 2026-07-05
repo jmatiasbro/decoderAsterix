@@ -1,6 +1,6 @@
 # Matriz de Trazabilidad — Requisitos ↔ Diseño ↔ Código ↔ Verificación
 
-**Versión:** 0.1 (inicial/parcial). **Fecha:** 2026-06-28.
+**Versión:** 0.2 (parcial). **Fecha:** 2026-07-04.
 
 > Trazabilidad bidireccional exigida por DO-278A (requisito → diseño → código → caso de prueba, y a la
 > inversa). Esta versión es un **punto de partida**: aún **no existe un SRS**, por lo que los
@@ -36,6 +36,11 @@
 | REQ-HMI-2 | Declutter / niveles de información | `player/ods/` | `tests/ods/test_declutter.py` | ✅ |
 | REQ-HMI-3 | Estado de track (símbolo según calidad) | `player/ods/` | `tests/ods/test_track_state.py` | ✅ |
 | REQ-HMI-4 | Vista FIR satelital | `player/firmap/` | `tests/firmap/` | ✅ |
+| REQ-HMI-5 | Completitud de presentación (ningún track activo omitido) y fidelidad de etiqueta (callsign/Mode3A/FL) | `radar_widget.py` (`_draw_oaci_track`, `is_alive`) | `tests/tracking/test_hmi.py` (17 casos, HLR-HMI-01/02/03) | ✅ |
+| REQ-HMI-6 | Estado de track por calidad (coasting / Mode-S / ADS-B) | `radar_widget.py` (`RadarPlot.is_coasting`), `player/ods/track_state.py` | `tests/tracking/test_track_state.py` (12 casos, HLR-HMI-04) | ✅ |
+| REQ-HMI-7 | Watchdog de cadena de safety-nets (alerta si sin salida > 5 s) | `radar_widget.py` (`_check_safety_watchdog`, `_watchdog_timer`) | `tests/tracking/test_safety_watchdog.py` (5 casos, HLR-HMI-06) | ✅ |
+| REQ-PERF-1 | Cotas de rendimiento del motor (latencia de lote, cadencia safety, 500 tracks) | `radar_widget.py`, `player/playback_worker.py` | `tests/tracking/test_perf.py` (6 casos, HLR-PERF-01/02/03) | ✅ |
+| REQ-PERF-2 | Refresco PPI e ingesta sostenible (HLR-PERF-04/05) | `radar_widget.py` (cache de mapa de fondo), `player/playback_worker.py` | Manual: [09_SVP.md](09_SVP.md) §5.4 — banco de estrés UDP, 800 PPS verificados | ✅ (manual) |
 | REQ-FUS-1 | Correlación multi-radar | `fusion/correlator.py` | `tests/fusion_tests/test_correlator.py` (26 casos) | ✅ |
 | REQ-FUS-2 | Calibración/registración (solo rol técnico) | `fusion/correlator.py` | `tests/fusion_tests/test_correlator.py` (claves, extrapolación, asociación) | ✅ |
 | REQ-ATM-1 | Base ATM read-only (aeropuertos/aerovías/fixes) | `player/atm_db.py`, `data/atm/` | `tests/atm/test_atm_db.py` | ✅ |
@@ -54,11 +59,13 @@
 | ~~Decodificadores CAT sin tests (REQ-DEC-1/2/3/4)~~ | ✅ **Cerrado** | `tests/decoders/` (91 casos: 46 CAT001/002/021/034 + 45 CAT048/062) |
 | ~~Matching/reconciliación sin test (REQ-TRK-2)~~ | ✅ **Cerrado** | `tests/tracking/test_matching.py` (31 casos, pasos A–E + CAT62) |
 | ~~**Fusión sin test** (REQ-FUS-1/2)~~ | ✅ **Cerrado** | `tests/fusion_tests/test_correlator.py` (26 casos) |
+| ~~HMI sin test de completitud/fidelidad/watchdog (HLR-HMI-01..06)~~ | ✅ **Cerrado** | `tests/tracking/test_hmi.py`, `test_track_state.py`, `test_safety_watchdog.py` (34 casos) |
+| ~~Rendimiento sin verificación (HLR-PERF-01..05)~~ | ✅ **Cerrado** | `tests/tracking/test_perf.py` (6 casos) + verificación manual SVP §5.4 (800 PPS) |
 | **Scripts ad-hoc en raíz** | Media — no son la suite | Migrar lo válido a `tests/`, descartar el resto |
 
 ## 4. Cobertura agregada (estimación cualitativa)
 
-- **Bien cubierto:** STCA, MSAW, APW, ODS/HMI, firmap, geo-declinación, ATM-DB, FDP/ADEXP, stats, centro técnico, ciclo de vida, decodificadores CAT001/002/021/034/048/062, matching A–E, correlación multi-radar, auditoría safety.
+- **Bien cubierto:** STCA, MSAW, APW, ODS/HMI, firmap, geo-declinación, ATM-DB, FDP/ADEXP, stats, centro técnico, ciclo de vida, decodificadores CAT001/002/021/034/048/062, matching A–E, correlación multi-radar, auditoría safety, completitud/fidelidad HMI + watchdog (HLR-HMI-01..06), rendimiento del motor + capacidad de ingesta verificada (HLR-PERF-01..05).
 - **Sin cubrir:** integración end-to-end PCAP, escenarios PCAP STCA (hallazgo STCA-1), purga binarios del histórico git.
 
 > Tras cerrar STCA, la prioridad #1 de verificación restante son los **decodificadores ASTERIX por
