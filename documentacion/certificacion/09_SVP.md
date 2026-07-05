@@ -145,7 +145,7 @@ python -m pytest tests/ \
 | **TOTAL núcleo SWAL 2** | **88.5 %** |
 
 Objetivo propuesto para SWAL 2: **≥ 80 %** (a acordar con ANAC) — **alcanzado**. La medición
-se automatiza en Integración Continua ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml))
+se automatiza en Integración Continua ([`.github/workflows/tests.yml`](../../.github/workflows/tests.yml))
 en cada *push*/PR, con `--cov-fail-under=80` y publicación del reporte HTML como artefacto.
 
 ---

@@ -34,14 +34,21 @@ jobs:
           pip install PyQt6 pyproj duckdb pytest pytest-cov
 
       - name: Ejecutar suite con cobertura
+        # El scope y el gate (fail_under=80) de la cobertura de DECISIONES sobre los
+        # módulos SWAL 2 los fija .coveragerc ([report] include). La medición amplia
+        # de abajo se acota allí a las 9 unidades de seguridad. Ver 09_SVP.md §4.4.
         run: |
           pytest tests/ \
             --cov=decoder --cov=player --cov=analysis --cov=fusion --cov=storage \
-            --cov-report=term-missing --cov-report=xml
+            --cov-report=term-missing --cov-report=xml \
+            --cov-report=html:htmlcov
 
-      - name: Publicar reporte de cobertura
+      - name: Publicar reportes de cobertura (xml + html)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-xml
-          path: coverage.xml
+          name: reportes-cobertura
+          path: |
+            coverage.xml
+            htmlcov/
+          retention-days: 90

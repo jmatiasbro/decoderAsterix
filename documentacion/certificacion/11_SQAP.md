@@ -136,7 +136,7 @@ referencia al artefacto de evidencia.
 | RNC-004 | C | `requirements.txt` incompleto (no refleja paquetes realmente usados) | **CERRADA** — depurado contra los imports reales del app canónico; añadidos `qtawesome`/`pyqtgraph`/`simplekml`, `flask` marcado opcional, dependencias comentadas por origen |
 | RNC-005 | C | Artefacto binario `baires.pcap` en el árbol sin hash verificable | **CERRADA** — `tests/data/checksums.txt` (commit `d74eb85`) |
 | RNC-006 | B | Sin independencia de verificación para módulos SWAL 2 | Abierta (acuerdo con ANAC) |
-| RNC-007 | C | Cobertura de decisiones no medida en módulos SWAL 2 | **CERRADA** — medida con `pytest-cov` (branch), línea base **88.5 %** ≥ objetivo 80 %; automatizada en CI (`.github/workflows/ci.yml`). Ver SVP §4.4 |
+| RNC-007 | C | Cobertura de decisiones no medida en módulos SWAL 2 | **CERRADA** — medida con `pytest-cov` (branch), línea base **88.5 %** ≥ objetivo 80 %; automatizada en CI (`.github/workflows/tests.yml`). Ver SVP §4.4 |
 | RNC-008 | B | Sin registros de revisión de código para módulos SWAL 2 | **CERRADA** — [12_registros_revision_codigo.md](12_registros_revision_codigo.md) (RR-01..05, 5 módulos). Independencia sigue como RNC-006 |
 | RNC-009 | C | Descarte silencioso de plots en `_process_plot_data` (brecha de observabilidad, ver gap analysis ROB-1) | **CERRADA** — contador + logging con throttle; `tests/tracking/test_plot_descarte.py` (3 casos) |
 
@@ -191,7 +191,7 @@ objetivos de independencia:
 |---|---|---|
 | Independencia de verificación | Verificador = Desarrollador para módulos SWAL 2 | Revisor externo para módulos tracking/APW/MSAW; o acuerdo con ANAC |
 | Independencia SQA | Auditor SQA = Desarrollador | Ídem o auditoría por pares con tercero |
-| ~~Sin CI/CD~~ | **Mitigada** — GitHub Actions (`.github/workflows/ci.yml`) ejecuta la suite y mide cobertura de decisiones en cada *push*/PR, publicando reportes como artefactos | — |
+| ~~Sin CI/CD~~ | **Mitigada** — GitHub Actions (`.github/workflows/tests.yml`) ejecuta la suite y mide cobertura de decisiones en cada *push*/PR, publicando reportes como artefactos | — |
 | Sin herramienta de seguimiento de defectos | Git issues como sustituto mínimo | Suficiente para estado actual; migrar a Jira/linear si escala |
 
 ---
