@@ -133,7 +133,7 @@ referencia al artefacto de evidencia.
 | RNC-001 | B | Sin lockfile de dependencias (riesgo de reproducibilidad) | **CERRADA** — `requirements.lock` (commit `d74eb85`) |
 | RNC-002 | B | Sin resultados de tests archivados vinculados a baseline | **CERRADA** — `resultados_soi1.html` (commit `e717855`); pendiente automatizar en CI |
 | RNC-003 | B | Tests HLR-HMI-04 y HLR-PERF-01..05 ausentes | **CERRADA** — `test_track_state`, `test_safety_watchdog`, `test_perf` (commit `d74eb85`); HLR-PERF-04/05 verificados manualmente (SVP §5.4) |
-| RNC-004 | C | `requirements.txt` incompleto (no refleja paquetes realmente usados) | Abierta — mitigada por `requirements.lock`; falta depurar `requirements.txt` |
+| RNC-004 | C | `requirements.txt` incompleto (no refleja paquetes realmente usados) | **CERRADA** — depurado contra los imports reales del app canónico; añadidos `qtawesome`/`pyqtgraph`/`simplekml`, `flask` marcado opcional, dependencias comentadas por origen |
 | RNC-005 | C | Artefacto binario `baires.pcap` en el árbol sin hash verificable | **CERRADA** — `tests/data/checksums.txt` (commit `d74eb85`) |
 | RNC-006 | B | Sin independencia de verificación para módulos SWAL 2 | Abierta (acuerdo con ANAC) |
 | RNC-007 | C | Cobertura de decisiones no medida en módulos SWAL 2 | **CERRADA** — medida con `pytest-cov` (branch), línea base **88.5 %** ≥ objetivo 80 %; automatizada en CI (`.github/workflows/ci.yml`). Ver SVP §4.4 |
