@@ -582,6 +582,366 @@ class PanelSensoresFlotante(QWidget):
         self._drag_offset = None
 
 
+from PyQt6.QtWidgets import QWidgetAction
+
+class ScrollableAreaListMenu(QWidgetAction):
+    def __init__(self, parent_menu, areas, main_window):
+        super().__init__(parent_menu)
+        self.main_window = main_window
+        self.areas = areas
+        
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(4)
+        
+        self.btn_all = QPushButton("Todos")
+        self.btn_all.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #00E5FF;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        self.btn_none = QPushButton("Ninguno")
+        self.btn_none.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #6B7A8D;
+                border: 1px solid rgba(107, 122, 141, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(107, 122, 141, 20);
+            }
+        """)
+        
+        btn_layout.addWidget(self.btn_all)
+        btn_layout.addWidget(self.btn_none)
+        layout.addLayout(btn_layout)
+        
+        self.list_widget = QListWidget()
+        num_items = len(areas)
+        list_height = min(300, 30 + num_items * 26)
+        self.list_widget.setFixedHeight(list_height)
+        self.list_widget.setFixedWidth(220)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #0B0E14;
+                color: #E0E6ED;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+            }
+            QListWidget::item {
+                padding: 4px;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        mm_ref = getattr(main_window.radar, 'map_manager', None)
+        for area in areas:
+            item = QListWidgetItem(area.name)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            
+            layer_name = f"AREA::{area.name}"
+            was_visible = mm_ref is not None and layer_name in mm_ref.layers
+            item.setCheckState(Qt.CheckState.Checked if was_visible else Qt.CheckState.Unchecked)
+            
+            item.setData(Qt.ItemDataRole.UserRole, area)
+            self.list_widget.addItem(item)
+            
+        layout.addWidget(self.list_widget)
+        
+        self.list_widget.itemChanged.connect(self.on_item_changed)
+        self.btn_all.clicked.connect(self.select_all)
+        self.btn_none.clicked.connect(self.select_none)
+        self.setDefaultWidget(container)
+        
+    def on_item_changed(self, item):
+        area = item.data(Qt.ItemDataRole.UserRole)
+        checked = item.checkState() == Qt.CheckState.Checked
+        self.main_window._toggle_individual_db_area(area, checked)
+        
+    def select_all(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Checked:
+                item.setCheckState(Qt.CheckState.Checked)
+                area = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_individual_db_area(area, True, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window.radar.update()
+        
+    def select_none(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Unchecked:
+                item.setCheckState(Qt.CheckState.Unchecked)
+                area = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_individual_db_area(area, False, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window.radar.update()
+
+
+class ScrollableMapListMenu(QWidgetAction):
+    def __init__(self, parent_menu, items_list, main_window):
+        super().__init__(parent_menu)
+        self.main_window = main_window
+        self.items_list = items_list
+        
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(4)
+        
+        self.btn_all = QPushButton("Todos")
+        self.btn_all.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #00E5FF;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        self.btn_none = QPushButton("Ninguno")
+        self.btn_none.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #6B7A8D;
+                border: 1px solid rgba(107, 122, 141, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(107, 122, 141, 20);
+            }
+        """)
+        
+        btn_layout.addWidget(self.btn_all)
+        btn_layout.addWidget(self.btn_none)
+        layout.addLayout(btn_layout)
+        
+        self.list_widget = QListWidget()
+        num_items = len(items_list)
+        list_height = min(300, 30 + num_items * 26)
+        self.list_widget.setFixedHeight(list_height)
+        self.list_widget.setFixedWidth(220)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #0B0E14;
+                color: #E0E6ED;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+            }
+            QListWidget::item {
+                padding: 4px;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        for label, paths in items_list:
+            item = QListWidgetItem(label)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            
+            is_checked = any(p in main_window._active_map_paths for p in paths)
+            item.setCheckState(Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked)
+            item.setData(Qt.ItemDataRole.UserRole, paths)
+            
+            item.setChecked = lambda checked, it=item: it.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+            item.isChecked = lambda it=item: it.checkState() == Qt.CheckState.Checked
+            
+            for p in paths:
+                main_window.map_actions[p] = item
+                
+            self.list_widget.addItem(item)
+            
+        layout.addWidget(self.list_widget)
+        
+        self.list_widget.itemChanged.connect(self.on_item_changed)
+        self.btn_all.clicked.connect(self.select_all)
+        self.btn_none.clicked.connect(self.select_none)
+        
+        self.setDefaultWidget(container)
+        
+    def on_item_changed(self, item):
+        paths = item.data(Qt.ItemDataRole.UserRole)
+        checked = item.checkState() == Qt.CheckState.Checked
+        
+        self.list_widget.blockSignals(True)
+        self.main_window._toggle_map_paths_group(paths, checked)
+        self.list_widget.blockSignals(False)
+        
+    def select_all(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Checked:
+                item.setCheckState(Qt.CheckState.Checked)
+                paths = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_map_paths_group(paths, True, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window._rebuild_and_draw_maps()
+        
+    def select_none(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Unchecked:
+                item.setCheckState(Qt.CheckState.Unchecked)
+                paths = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_map_paths_group(paths, False, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window._rebuild_and_draw_maps()
+
+
+class ScrollableATMListMenu(QWidgetAction):
+    def __init__(self, parent_menu, items_list, main_window):
+        super().__init__(parent_menu)
+        self.main_window = main_window
+        self.items_list = items_list
+        
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(4)
+        
+        self.btn_all = QPushButton("Todos")
+        self.btn_all.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #00E5FF;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        self.btn_none = QPushButton("Ninguno")
+        self.btn_none.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #6B7A8D;
+                border: 1px solid rgba(107, 122, 141, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(107, 122, 141, 20);
+            }
+        """)
+        
+        btn_layout.addWidget(self.btn_all)
+        btn_layout.addWidget(self.btn_none)
+        layout.addLayout(btn_layout)
+        
+        self.list_widget = QListWidget()
+        num_items = len(items_list)
+        list_height = min(300, 30 + num_items * 26)
+        self.list_widget.setFixedHeight(list_height)
+        self.list_widget.setFixedWidth(220)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #0B0E14;
+                color: #E0E6ED;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+            }
+            QListWidget::item {
+                padding: 4px;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        mm_ref = getattr(main_window.radar, 'map_manager', None)
+        for label, key, builder in items_list:
+            item = QListWidgetItem(label)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            
+            layer_name = f"ATM::{key}"
+            was_visible = mm_ref is not None and layer_name in mm_ref.layers
+            item.setCheckState(Qt.CheckState.Checked if was_visible else Qt.CheckState.Unchecked)
+            item.setData(Qt.ItemDataRole.UserRole, (key, builder))
+            
+            item.setChecked = lambda checked, it=item: it.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+            item.isChecked = lambda it=item: it.checkState() == Qt.CheckState.Checked
+            
+            main_window.atm_map_actions[key] = item
+            self.list_widget.addItem(item)
+            
+        layout.addWidget(self.list_widget)
+        
+        self.list_widget.itemChanged.connect(self.on_item_changed)
+        self.btn_all.clicked.connect(self.select_all)
+        self.btn_none.clicked.connect(self.select_none)
+        
+        self.setDefaultWidget(container)
+        
+    def on_item_changed(self, item):
+        key, builder = item.data(Qt.ItemDataRole.UserRole)
+        checked = item.checkState() == Qt.CheckState.Checked
+        self.main_window._toggle_atm_layer(key, checked, builder)
+        
+    def select_all(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Checked:
+                item.setCheckState(Qt.CheckState.Checked)
+                key, builder = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_atm_layer(key, True, builder, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window.radar.update()
+        
+    def select_none(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Unchecked:
+                item.setCheckState(Qt.CheckState.Unchecked)
+                key, builder = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_atm_layer(key, False, builder, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window.radar.update()
+
+
 class MainWindow(QMainWindow):
     # Sectores de Vuelo VFR: áreas de la DB que se muestran fuera de 'Áreas
     # Restringidas', en su propio submenú dentro de 'Mapas'.
@@ -1000,27 +1360,38 @@ class MainWindow(QMainWindow):
 
         if atm_db.available():
             sub_aero = self.menu_mapas.addMenu("Aerovías")
-            for label, cat in [("Superiores", "SUP"), ("Inferiores", "INF")]:
-                self._add_atm_action(sub_aero, f"AERO_{cat}", label,
-                                     (lambda c=cat: atm_maps.airway_segments(c)))
+            aero_items = [
+                ("Superiores", "AERO_SUP", lambda: atm_maps.airway_segments("SUP")),
+                ("Inferiores", "AERO_INF", lambda: atm_maps.airway_segments("INF"))
+            ]
+            scroll_aero = ScrollableATMListMenu(sub_aero, aero_items, self)
+            sub_aero.addAction(scroll_aero)
 
             sub_proc = self.menu_mapas.addMenu("Procedimientos por Aeropuerto")
             for icao in atm_db.airports_with_procedures():
                 sub_ap = sub_proc.addMenu(icao)
+                proc_items = []
                 for kind in ("SID", "STAR", "IAP"):
-                    self._add_atm_action(sub_ap, f"{icao}_{kind}", kind,
-                                         (lambda i=icao, k=kind: atm_maps.procedure_segments(i, k)))
+                    proc_items.append((kind, f"{icao}_{kind}", lambda i=icao, k=kind: atm_maps.procedure_segments(i, k)))
+                scroll_ap = ScrollableATMListMenu(sub_ap, proc_items, self)
+                sub_ap.addAction(scroll_ap)
 
             sub_fix = self.menu_mapas.addMenu("Puntos y Fixes (Waypoints)")
-            for label, kinds in [("VOR", ["VO"]), ("NDB", ["ND"]), ("DME", ["DM"]),
-                                 ("Ruta (ROU)", ["RO"]), ("Terminal (APP)", ["AP"])]:
-                self._add_atm_action(sub_fix, f"FIX_{label}", label,
-                                     (lambda k=kinds: atm_maps.fix_segments(k)))
+            fix_items = [
+                ("VOR", "FIX_VOR", lambda: atm_maps.fix_segments(["VO"])),
+                ("NDB", "FIX_NDB", lambda: atm_maps.fix_segments(["ND"])),
+                ("DME", "FIX_DME", lambda: atm_maps.fix_segments(["DM"])),
+                ("Ruta (ROU)", "FIX_Ruta (ROU)", lambda: atm_maps.fix_segments(["RO"])),
+                ("Terminal (APP)", "FIX_Terminal (APP)", lambda: atm_maps.fix_segments(["AP"]))
+            ]
+            scroll_fix = ScrollableATMListMenu(sub_fix, fix_items, self)
+            sub_fix.addAction(scroll_fix)
         else:
             act_na = self.menu_mapas.addAction("Base ATM no encontrada (data/atm/atm.duckdb)")
             act_na.setEnabled(False)
 
         self._setup_vfr_submenu()
+        self._setup_custom_categories_submenus()
 
         self._sep_cargar_mapa = self.menu_mapas.addSeparator()
         self.act_cargar_mapa = self.menu_mapas.addAction(
@@ -3850,23 +4221,85 @@ class MainWindow(QMainWindow):
 
     def _setup_vfr_submenu(self):
         """Submenú 'VFR' en Mapas con capas conmutables (ATZs, corredores VFR,
-        pistas y nombres). Cada acción carga/descarga su GeoJSON bajo demanda."""
+        pistas y nombres) usando un formato de lista scrollable con botones Todos/Ninguno."""
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         sub_vfr = self.menu_mapas.addMenu("VFR")
         archivos = [
-            ("ATZs", "files/ATZs.geojson"),
-            ("Corredores VFR", "files/corrVFR.geojson"),
-            ("Pistas", "files/pistas.json"),
-            ("Nombres", "files/nombres.json"),
+            ("ATZs", ["files/ATZs.geojson"]),
+            ("Corredores VFR", ["files/corrVFR.geojson"]),
+            ("Pistas", ["files/pistas.json"]),
+            ("Nombres", ["files/nombres.json"]),
         ]
-        for label, rel in archivos:
-            abs_path = os.path.abspath(os.path.join(base_dir, rel))
-            action = sub_vfr.addAction(label)
-            action.setCheckable(True)
-            action.setChecked(False)
-            action.triggered.connect(
-                lambda checked, p=abs_path: self._on_map_action_triggered(p))
-            self.map_actions[abs_path] = action
+        
+        items_list = []
+        for label, rel_paths in archivos:
+            abs_paths = [os.path.abspath(os.path.join(base_dir, rel)) for rel in rel_paths]
+            items_list.append((label, abs_paths))
+            
+        scroll_action = ScrollableMapListMenu(sub_vfr, items_list, self)
+        sub_vfr.addAction(scroll_action)
+
+    def _setup_custom_categories_submenus(self):
+        """Carga y agrega las subcarpetas del usuario (Antigranizo, Radares, AMA,
+        Sectores Externos y Sectores Internos) al menú de Mapas usando listas scrollables con Todos/Ninguno."""
+        import json
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        files_dir = os.path.join(base_dir, "files")
+        
+        categories = [
+            ("Antigranizo", "ANTIGRANIZO"),
+            ("Radares", "RADARES"),
+            ("AMA", "AMA"),
+            ("Sectores Externos", "SECTORES_EXTERNOS"),
+            ("Sectores Internos", "SECTORES_INTERNOS")
+        ]
+        
+        for menu_label, folder_name in categories:
+            folder_path = os.path.join(files_dir, folder_name)
+            if not os.path.exists(folder_path):
+                continue
+                
+            items_list = []
+            
+            if folder_name == "AMA":
+                groups = {
+                    "Sectores": ["AMA_SECTOR.json", "meridianos_sector.json", "paralelos_sector.json"],
+                    "TMA": ["AMA_TMA.json", "meridianos_tma.json", "paralelos_tma.json"],
+                    "CTR": ["meridianos_ctr.json", "paralelos_ctr.json"]
+                }
+                for group_name, file_names in groups.items():
+                    abs_paths = []
+                    for name in file_names:
+                        full_path = os.path.join(folder_path, name)
+                        if os.path.exists(full_path):
+                            abs_paths.append(full_path)
+                    if abs_paths:
+                        items_list.append((group_name, abs_paths))
+            else:
+                json_files = []
+                for file in os.listdir(folder_path):
+                    if file.lower().endswith('.json'):
+                        full_path = os.path.join(folder_path, file)
+                        try:
+                            with open(full_path, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                                if len(data.get("features", [])) > 0:
+                                    json_files.append((file[:-5], full_path))
+                        except:
+                            pass
+                            
+                if json_files:
+                    json_files.sort(key=lambda x: x[0])
+                    for label, abs_path in json_files:
+                        clean_label = label.replace('_', ' ')
+                        items_list.append((clean_label, [abs_path]))
+                        
+            if not items_list:
+                continue
+                
+            sub_menu = self.menu_mapas.addMenu(menu_label)
+            scroll_action = ScrollableMapListMenu(sub_menu, items_list, self)
+            sub_menu.addAction(scroll_action)
 
     def _cargar_mapa_al_final(self):
         """Reubica 'Cargar Mapa Personalizado' (y su separador) al final del menú
@@ -3950,6 +4383,51 @@ class MainWindow(QMainWindow):
                 self._active_map_paths.remove(abs_path)
             self._rebuild_and_draw_maps()
 
+    def _on_map_group_action_triggered(self, abs_paths: List[str], action):
+        is_checked = action.isChecked()
+        print(f"[MAPAS] Grupo de mapas gatillado - Activo: {is_checked}")
+        for abs_path in abs_paths:
+            abs_path = os.path.abspath(abs_path)
+            if is_checked:
+                if abs_path in self._loaded_custom_maps:
+                    self._active_map_paths.add(abs_path)
+                else:
+                    print(f"[MAPAS] Iniciando carga asíncrona de capa en grupo: {abs_path}")
+                    self.radar.map_is_absolute = True
+                    loader = DxfLoaderThread(abs_path)
+                    loader.dxf_data.connect(self._on_custom_map_loaded)
+                    loader.dxf_error.connect(lambda msg, p=abs_path: self._on_custom_map_error(p, msg))
+                    loader.start()
+                    if not hasattr(self, '_active_loaders'):
+                        self._active_loaders = []
+                    self._active_loaders.append(loader)
+            else:
+                if abs_path in self._active_map_paths:
+                    self._active_map_paths.remove(abs_path)
+        self._rebuild_and_draw_maps()
+
+    def _toggle_map_paths_group(self, abs_paths: List[str], checked: bool, redraw=True):
+        for abs_path in abs_paths:
+            abs_path = os.path.abspath(abs_path)
+            if checked:
+                if abs_path in self._loaded_custom_maps:
+                    self._active_map_paths.add(abs_path)
+                else:
+                    print(f"[MAPAS] Iniciando carga asíncrona de capa en grupo: {abs_path}")
+                    self.radar.map_is_absolute = True
+                    loader = DxfLoaderThread(abs_path)
+                    loader.dxf_data.connect(self._on_custom_map_loaded)
+                    loader.dxf_error.connect(lambda msg, p=abs_path: self._on_custom_map_error(p, msg))
+                    loader.start()
+                    if not hasattr(self, '_active_loaders'):
+                        self._active_loaders = []
+                    self._active_loaders.append(loader)
+            else:
+                if abs_path in self._active_map_paths:
+                    self._active_map_paths.remove(abs_path)
+        if redraw:
+            self._rebuild_and_draw_maps()
+
     def _on_custom_map_loaded(self, segments, min_x, min_y, max_x, max_y):
         loader = self.sender()
         if not loader:
@@ -3987,7 +4465,7 @@ class MainWindow(QMainWindow):
         act.toggled.connect(lambda on, k=key, b=builder: self._toggle_atm_layer(k, on, b))
         self.atm_map_actions[key] = act
 
-    def _toggle_atm_layer(self, key, on, builder):
+    def _toggle_atm_layer(self, key, on, builder, redraw=True):
         """Agrega/quita una capa ATM (aerovía/procedimiento/fixes) en el PPI."""
         from player import atm_maps
         mm = getattr(self.radar, 'map_manager', None)
@@ -4011,7 +4489,8 @@ class MainWindow(QMainWindow):
                 mm.reproject_all(self.radar.proy)
         else:
             mm.layers.pop(layer_name, None)
-        self.radar.update()
+        if redraw:
+            self.radar.update()
 
     def _rebuild_areas_menu(self):
         """Reconstruye el menú 'Áreas' con los submenús Restringidas, Prohibidas y Peligrosas
@@ -4048,53 +4527,7 @@ class MainWindow(QMainWindow):
                     if area_name not in current_db_names and area_name not in user_names:
                         mm.layers.pop(name, None)
 
-        from PyQt6.QtWidgets import QWidgetAction, QListWidget, QListWidgetItem
         from PyQt6.QtCore import Qt
-
-        class ScrollableAreaListMenu(QWidgetAction):
-            def __init__(self, parent_menu, areas, main_window):
-                super().__init__(parent_menu)
-                self.main_window = main_window
-                self.areas = areas
-                
-                self.list_widget = QListWidget()
-                self.list_widget.setFixedHeight(300)
-                self.list_widget.setFixedWidth(220)
-                self.list_widget.setStyleSheet("""
-                    QListWidget {
-                        background-color: #0B0E14;
-                        color: #E0E6ED;
-                        border: 1px solid rgba(0, 229, 255, 40);
-                        font-size: 8pt;
-                    }
-                    QListWidget::item {
-                        padding: 4px;
-                    }
-                    QListWidget::item:hover {
-                        background-color: rgba(0, 229, 255, 20);
-                    }
-                """)
-                
-                mm_ref = getattr(main_window.radar, 'map_manager', None)
-                for area in areas:
-                    item = QListWidgetItem(area.name)
-                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-                    
-                    layer_name = f"AREA::{area.name}"
-                    was_visible = mm_ref is not None and layer_name in mm_ref.layers
-                    item.setCheckState(Qt.CheckState.Checked if was_visible else Qt.CheckState.Unchecked)
-                    
-                    item.setData(Qt.ItemDataRole.UserRole, area)
-                    self.list_widget.addItem(item)
-                    
-                self.list_widget.itemChanged.connect(self.on_item_changed)
-                self.setDefaultWidget(self.list_widget)
-                
-            def on_item_changed(self, item):
-                area = item.data(Qt.ItemDataRole.UserRole)
-                checked = item.checkState() == Qt.CheckState.Checked
-                self.main_window._toggle_individual_db_area(area, checked)
-
         self.area_list_widgets = {}
 
         # Para cada tipo, creamos un submenú y agregamos el widget de lista scrollable
@@ -4251,7 +4684,7 @@ class MainWindow(QMainWindow):
             mm.layers.pop(name, None)
         self.radar.update()
 
-    def _toggle_individual_db_area(self, area, on):
+    def _toggle_individual_db_area(self, area, on, redraw=True):
         """Muestra u oculta una área de base de datos específica en el PPI/ODS."""
         from player.areas import render as _ar
         mm = getattr(self.radar, 'map_manager', None)
@@ -4270,7 +4703,8 @@ class MainWindow(QMainWindow):
                 print(f"[Áreas] Error generando capa individual {area.name}: {e}")
         else:
             mm.layers.pop(layer_name, None)
-        self.radar.update()
+        if redraw:
+            self.radar.update()
 
     def _toggle_area_layer(self, kind, on):
         """Refresca las capas de áreas individuales de la base de datos de un cierto tipo."""

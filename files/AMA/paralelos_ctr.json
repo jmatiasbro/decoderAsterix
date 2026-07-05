@@ -1,0 +1,121 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.0,
+            -30.5
+          ],
+          [
+            -64.5,
+            -30.5
+          ],
+          [
+            -64.0,
+            -30.5
+          ],
+          [
+            -63.5,
+            -30.5
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.0,
+            -31.0
+          ],
+          [
+            -64.5,
+            -31.0
+          ],
+          [
+            -64.0,
+            -31.0
+          ],
+          [
+            -63.5,
+            -31.0
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.0,
+            -31.5
+          ],
+          [
+            -64.5,
+            -31.5
+          ],
+          [
+            -64.0,
+            -31.5
+          ],
+          [
+            -63.5,
+            -31.5
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "",
+        "type": "polyline"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -65.0,
+            -32.0
+          ],
+          [
+            -64.5,
+            -32.0
+          ],
+          [
+            -64.0,
+            -32.0
+          ],
+          [
+            -63.5,
+            -32.0
+          ]
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "",
+        "type": "polyline"
+      }
+    }
+  ]
+}
