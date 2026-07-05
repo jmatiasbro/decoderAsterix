@@ -71,9 +71,10 @@ tests/
 | HMI (completitud / fidelidad / estado / watchdog) | 34 | HLR-HMI-01..06 | ✅ |
 | Rendimiento del motor | 6 | HLR-PERF-01..03 | ✅ |
 | Integración end-to-end PCAP | 6 | REQ-DEC/GEO/TRK + safety | ✅ |
+| STCA escenarios end-to-end | 7 | REQ-SN-1 / HLR-STCA-01 (STCA-1) | ✅ |
 | Navegación / zoom PPI | 6 | — (HMI) | ✅ |
 | Varios (ATM, ODS, FIR, stats) | ~248 | — | ✅ |
-| **Total** | **526** | | |
+| **Total** | **533** | | |
 
 ### 3.3 Brechas de cobertura abiertas
 

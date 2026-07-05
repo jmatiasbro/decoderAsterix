@@ -106,6 +106,12 @@ en el builder STCA).
 - *Acción de certificación:* el SRS debe incluir un requisito de que el caller suministre un **único
   marco de posición consistente** a ambas fases, o que el motor reproyecte `x/y` desde `lat_render`.
   Contrato actual fijado por tests en `tests/stca/test_stca_engine.py` (`test_contrato_*`).
+- *Cobertura del comportamiento acotado (2026-07-05):* `tests/stca/test_stca_scenarios.py` verifica
+  **end-to-end por el pipeline del widget** que un conflicto real <10 NM co-altitud **siempre**
+  dispara VIOLATION (fase crítica, sobre posición cruda), y que no hay falsos positivos en separación
+  vertical/horizontal, misma aeronave, blancos estáticos, fuera de banda FL e inhibición. Esto acota
+  empíricamente el riesgo del hallazgo a la precisión de la fase PREDICTION en el borde de los 10 NM,
+  sin conflicto omitido. El defecto de diseño (doble marco) permanece **abierto** hasta el requisito SRS.
 
 ## 8. Prioridades de cierre (top 5)
 

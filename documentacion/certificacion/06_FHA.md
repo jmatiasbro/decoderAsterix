@@ -213,7 +213,7 @@ formalizarse en el SRS.
 | FC-HMI-01/02 | — | ❌ Ausente | Requiere test de integración HMI o test de regresión visual |
 | FC-TRK-01/02/03 | `tests/tracking/test_matching.py` | Pasos A–E (31 casos) | Sin test de ML con Mode S ambiguo bajo carga |
 | FC-LIF-02 | `tests/tracking/test_lifecycle.py` | Timeout por ToD | Parcial: sin test de excepción en parser de ToD |
-| FC-STCA-01 | `tests/stca/test_stca_engine.py` | 27 casos (geometría CPA) | Sin escenario PCAP real con tráfico denso |
+| FC-STCA-01 | `tests/stca/test_stca_engine.py` + `test_stca_scenarios.py` | 27 unitarios (geometría CPA) + 7 escenarios end-to-end por el pipeline | Sin escenario con tráfico denso a partir de PCAP real (recomendado para SOI-3) |
 | FC-APW-01 | `tests/areas/test_apw.py` | Penetración básica | Sin test de carga corrupta de geometría |
 | FC-MSAW-01 | `tests/msaw/test_engine.py`, `test_suppression.py` | Lógica de alerta y supresión | Sin test con datos de terreno límite |
 | FC-AUD-01 | `tests/storage_tests/test_safety_audit.py` | Flush + query | ✅ Cubierto |
