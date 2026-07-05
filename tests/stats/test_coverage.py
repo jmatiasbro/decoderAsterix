@@ -35,9 +35,12 @@ def test_compute_coverage_p95_range():
     res = compute_coverage(plots, rlat, rlon)
     assert isinstance(res, CoverageResult)
     assert res.plot_count == 20
-    # banda 100, sector azimut 90 -> ~100 NM (tolerancia por proyección)
-    assert abs(res.levels[100][90] - 100.0) < 2.0
-    # sector sin datos -> 0
+    # banda 100, azimut ~90 -> ~100 NM. El sector exacto puede ser 89/90/91 según
+    # la precisión geodésica de la plataforma (pyproj/geographiclib): se busca en
+    # una ventana de ±1° en vez de asumir el sector 90 exacto.
+    rango_cerca_90 = max(res.levels[100][a] for a in (89, 90, 91))
+    assert abs(rango_cerca_90 - 100.0) < 2.0
+    # sector claramente sin datos -> 0
     assert res.levels[100][200] == 0.0
 
 def test_compute_coverage_requires_min_plots():
