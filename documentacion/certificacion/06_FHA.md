@@ -210,7 +210,7 @@ formalizarse en el SRS.
 |----|------------------------------|-----------|--------|
 | FC-DEC-02/03/04 | `tests/decoders/test_cat048_062.py` | Parsing unitario correcto | Sin test de propagación de error al display |
 | FC-GEO-01 | `tests/geo/test_stereographic.py` | Roundtrip y signos | Sin test de detección de parámetros fuera de rango |
-| FC-HMI-01/02 | — | ❌ Ausente | Requiere test de integración HMI o test de regresión visual |
+| FC-HMI-01/02 | `tests/tracking/test_hmi.py`, `test_plot_descarte.py` | ⚠️ Parcial: ningún track activo omitido (completitud), fidelidad de etiqueta (callsign/Mode3A/FL) y observabilidad de descartes (ROB-1) | Falta test de regresión **visual** del render (pixel/simbología ODS pintada) |
 | FC-TRK-01/02/03 | `tests/tracking/test_matching.py` | Pasos A–E (31 casos) | Sin test de ML con Mode S ambiguo bajo carga |
 | FC-LIF-02 | `tests/tracking/test_lifecycle.py` | Timeout por ToD | Parcial: sin test de excepción en parser de ToD |
 | FC-STCA-01 | `tests/stca/test_stca_engine.py` + `test_stca_scenarios.py` | 27 unitarios (geometría CPA) + 7 escenarios end-to-end por el pipeline | Sin escenario con tráfico denso a partir de PCAP real (recomendado para SOI-3) |
@@ -228,8 +228,8 @@ formalizarse en el SRS.
 | FHA-A1 | Validar supuestos H-AS-1 a H-AS-6 con EANA/explotador y documentar en acta | EANA + proyecto | Alta |
 | FHA-A2 | Confirmar que GPWS/EGPWS está presente en aeronaves del sector afectado (valida SWAL 3 para MSAW) | EANA | Alta |
 | FHA-A3 | Actualizar [02_clasificacion_SWAL.md](02_clasificacion_SWAL.md) con resultado del FHA (matching/lifecycle → SWAL 2) | Proyecto | Alta |
-| FHA-A4 | Incluir SSR-01 a SSR-11 en el SRS (por elaborar) y trazarlos en la [04_matriz_trazabilidad.md](04_matriz_trazabilidad.md) | Proyecto | Alta |
-| FHA-A5 | Elaborar tests de integración para FC-HMI-01/02/04 (presentación), hoy sin cobertura | Proyecto | Media |
+| FHA-A4 | ⚠️ En progreso — el [SRS](07_SRS.md) ya existe (56 HLR) y anota SSR-xx en los HLR; falta verificar que SSR-01 a SSR-11 estén completos y trazados en la [matriz](04_matriz_trazabilidad.md) | Proyecto | Alta |
+| FHA-A5 | ⚠️ En progreso — FC-HMI-01/02/04 cubiertos a nivel widget (`test_hmi.py`, `test_track_state.py`, `test_plot_descarte.py`); falta test de regresión **visual** del render | Proyecto | Media |
 | FHA-A6 | Completar PSSA a partir de este FHA para derivar requisitos de probabilidad de fallo y asignar presupuesto de peligros | Proyecto + EANA | Media |
 | FHA-A7 | Revisar este documento con la autoridad en SOI-1 | ANAC + proyecto | Alta |
 
