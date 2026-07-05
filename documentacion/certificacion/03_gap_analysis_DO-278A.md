@@ -1,6 +1,6 @@
 # Gap Analysis — DO-278A / ED-109A
 
-**Versión:** 0.7. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
+**Versión:** 0.8. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
 
 > Estado por objetivo: ✅ Cumplido · ⚠️ Parcial · ❌ Ausente. La columna *Evidencia* apunta a lo que
 > existe hoy en el repositorio. Los objetivos se agrupan por proceso DO-278A. La numeración es
@@ -18,16 +18,16 @@
 | Gestión de configuración (SCM) | 4 | 2 | 2 | 0 | 75% |
 | Aseguramiento de calidad (SQA) | 3 | 0 | 3 | 0 | 50% |
 | Enlace con autoridad | 2 | 0 | 1 | 1 | 15% |
-| Análisis de seguridad | 3 | 1 | 0 | 2 | 33% |
-| **Total** | **30** | **16** | **10** | **4** | **~70%** |
+| Análisis de seguridad | 3 | 1 | 2 | 0 | 67% |
+| **Total** | **30** | **16** | **12** | **2** | **~73%** |
 
 Conclusión: **la capa de evidencia de proceso está sustancialmente construida** (planes, FHA, SRS con
 56 HLR, matriz de trazabilidad, CI con cobertura de decisiones al 88.5 % sobre módulos SWAL 2,
 estándares formales de código/diseño (con linter en CI) y de requisitos, y registros de revisión de
-código, y SDD con LLR para **todas** las capas trazados a test). Las brechas restantes se concentran en:
-**independencia de verificación** (equipo unipersonal), **análisis de seguridad avanzado**
-(PSSA/SSA/safety case) e **higiene de configuración** (histórico git, auditorías SQA). El sistema no
-está aún aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia SOI-2.
+código, SDD con LLR para todas las capas, y PSSA/SSA con argumento de seguridad). Las brechas restantes
+se concentran en: **independencia de verificación** (equipo unipersonal), **validación con la autoridad**
+de los supuestos de seguridad (EANA/ANAC) e **higiene de configuración** (histórico git, auditorías SQA).
+El sistema no está aún aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar hacia SOI-2.
 
 > **Nota de trazabilidad de este documento:** la v0.1 (2026-06-28) precedía a la creación de los planes
 > y la FHA/SRS; esta v0.2 actualiza el estado a lo efectivamente producido.
@@ -96,8 +96,8 @@ está aún aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar
 | Obj | Descripción | Estado | Evidencia / Brecha |
 |-----|-------------|--------|--------------------|
 | S-1 | FHA (Functional Hazard Assessment) | ✅ | [06_FHA.md](06_FHA.md) — condiciones de falla, SSR y clasificación de severidad |
-| S-2 | PSSA / SSA | ❌ | No existe |
-| S-3 | Safety case / argumento de seguridad | ❌ | `safety_audit_dialog` audita tráfico, no es safety case de SW |
+| S-2 | PSSA / SSA | ⚠️ | [16_PSSA_SSA.md](16_PSSA_SSA.md): estrategia de arquitectura (SA-1..4), CCA, asignación FC→SSR→diseño→SWAL y verificación SSA de 11 SSR; falta validación EANA/ANAC |
+| S-3 | Safety case / argumento de seguridad | ⚠️ | [16 §7](16_PSSA_SSA.md): argumento C0..C4 con evidencia; falta validar supuestos H-AS-1..6 (FHA-A1/A2) y cerrar SSA-A1..4 |
 
 ### Hallazgos de verificación (seguimiento)
 
@@ -146,7 +146,7 @@ campos bien tipados: `flight_level` es `float`/`None`, nunca string), sino una b
 Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0.3; SDD+LLR completos y D-2 en v0.4-0.6):
 
 1. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC.
-2. **Análisis de seguridad avanzado**: PSSA/SSA y safety case (S-2, S-3). *(STCA-1 ya cerrado vía HLR-STCA-06.)*
+2. **Validar el análisis de seguridad** con EANA/ANAC: PSSA/SSA y safety case ya redactados ([doc 16](16_PSSA_SSA.md)); restan validar supuestos H-AS-1..6 (FHA-A1/A2) y cerrar SSA-A1..4. *(STCA-1 cerrado vía HLR-STCA-06.)*
 3. **Higiene de configuración**: purgar binarios del histórico git (C-3) y ejecutar/registrar auditorías SQA por baseline (Q-1..Q-3).
 4. **Enlace con la autoridad** (A-1): coordinar SOI-1 con ANAC sobre el paquete ya construido.
 5. **Refinamiento de diseño** (D-3): diagramas de estados/despliegue del SDD ([SDD §13](15_SDD.md)).
@@ -162,3 +162,4 @@ Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0
 | 0.5 | 2026-07-05 | SDD v0.2: LLR de HMI/DEC/GEO/AUD/ROL + diagramas de secuencia (profundiza D-2/D-3, sin cambio de estado). |
 | 0.6 | 2026-07-05 | SDD v0.3: LLR de robustez/altimetría/prestaciones/HMI secundaria — **todo HLR con LLR**. **D-2** ⚠️→✅. Cobertura ~68 % → ~70 %. |
 | 0.7 | 2026-07-05 | **STCA-1 cerrado** vía HLR-STCA-06 (marco de posición único) + tests de contrato. Sin cambio de % (S-2/S-3 siguen abiertos). |
+| 0.8 | 2026-07-05 | **PSSA/SSA + safety case (doc 16)**: **S-2/S-3** ❌→⚠️. Análisis de seguridad 33 % → 67 %; cobertura total ~70 % → ~73 %. |

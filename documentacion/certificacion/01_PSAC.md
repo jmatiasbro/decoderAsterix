@@ -84,7 +84,8 @@ criterios de transición. Hoy **inexistentes en forma controlada**.
 | Dato | Existe hoy | Brecha |
 |------|-----------|--------|
 | Plan de aseguramiento (este PSAC) | Borrador | Aprobación ANAC |
-| SRS — Especificación de Requisitos | ❌ | Redactar requisitos de alto y bajo nivel |
+| SRS — Especificación de Requisitos | [07_SRS.md](07_SRS.md) v0.2 (57 HLR) + LLR en SDD | Aprobación ANAC (SOI-2) |
+| FHA / PSSA / SSA — Análisis de seguridad | [06](06_FHA.md) / [16](16_PSSA_SSA.md) borradores | Validar supuestos con EANA; aprobación ANAC |
 | SDD — Descripción de Diseño | [15_SDD.md](15_SDD.md) v0.3 (arquitectura + LLR de todas las capas; todo HLR con LLR) | Diagramas de estados/despliegue; LLR por categoría |
 | Código fuente | ✅ | Bajo SCM con baseline |
 | Casos y procedimientos de verificación | Parcial (`tests/`) | Cobertura y trazabilidad |

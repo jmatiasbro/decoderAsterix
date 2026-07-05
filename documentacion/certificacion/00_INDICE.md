@@ -37,6 +37,7 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | 13 | [Estándar de Codificación y Diseño](13_estandar_codificacion.md) | Reglas EC/ED verificables + linter en CI (cierra D-4); base de la revisión de código | Borrador v0.2 |
 | 14 | [Estándar de Requisitos](14_estandar_requisitos.md) | Reglas ER/RR/CJ/VF/LR + checklist QR (cierra P-5) | Borrador v0.1 |
 | 15 | [SDD — Software Design Description](15_SDD.md) | Arquitectura (capas/flujo/secuencia/decisiones) + LLR de todas las capas — todo HLR con LLR (cierra D-2) | Borrador v0.3 |
+| 16 | [PSSA / SSA](16_PSSA_SSA.md) | Evaluación de seguridad del SW: arquitectura, FC→SSR→diseño→SWAL, verificación SSA, safety case (avanza S-2/S-3) | Borrador v0.1 |
 
 ## 3. Cómo leer el paquete
 
@@ -58,9 +59,11 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 
 ## 5. Limitaciones declaradas del estado actual
 
-- Sin plan de aseguramiento aprobado, sin baseline de configuración controlada.
-- `requirements.txt` incompleto; sin lockfile de dependencias.
-- Sin pipeline de Integración Continua ni cobertura de código medida.
-- Sin SRS (Software Requirements Specification) formal ni análisis de seguridad (FHA/PSSA/SSA).
-- Conviven scripts de prueba ad-hoc en la raíz con la suite estructurada `tests/`.
-- El `.venv` versionado y artefactos binarios (`.pcap`, `.duckdb`) en el árbol de fuentes.
+> Actualizado 2026-07-05: varios ítems de la v0.1 ya están cerrados; se conserva el registro con su estado.
+
+- ✅ SRS formal ([07](07_SRS.md)) y análisis de seguridad completos: FHA ([06](06_FHA.md)) + PSSA/SSA ([16](16_PSSA_SSA.md)).
+- ✅ Pipeline de CI con cobertura de decisiones medida (88.5 % sobre módulos SWAL 2) y linter del estándar.
+- ✅ `requirements.txt`/`-linux`/`.lock` con lockfile; baselines etiquetados.
+- ⚠️ Plan de aseguramiento **aún no aprobado por ANAC** (borrador coherente para SOI-1).
+- ⚠️ Conviven scripts de prueba ad-hoc en la raíz con la suite estructurada `tests/`.
+- ⚠️ Falta **purgar del histórico** los binarios (`.pcap`, `.duckdb`, `.venv`) ya versionados (C-3).

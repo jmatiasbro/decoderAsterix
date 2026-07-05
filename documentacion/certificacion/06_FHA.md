@@ -230,7 +230,7 @@ formalizarse en el SRS.
 | FHA-A3 | Actualizar [02_clasificacion_SWAL.md](02_clasificacion_SWAL.md) con resultado del FHA (matching/lifecycle → SWAL 2) | Proyecto | Alta |
 | FHA-A4 | ⚠️ En progreso — el [SRS](07_SRS.md) ya existe (56 HLR) y anota SSR-xx en los HLR; falta verificar que SSR-01 a SSR-11 estén completos y trazados en la [matriz](04_matriz_trazabilidad.md) | Proyecto | Alta |
 | FHA-A5 | ⚠️ En progreso — FC-HMI-01/02/04 cubiertos a nivel widget (`test_hmi.py`, `test_track_state.py`, `test_plot_descarte.py`); falta test de regresión **visual** del render | Proyecto | Media |
-| FHA-A6 | Completar PSSA a partir de este FHA para derivar requisitos de probabilidad de fallo y asignar presupuesto de peligros | Proyecto + EANA | Media |
+| FHA-A6 | ⚠️ En progreso — PSSA/SSA redactada en [16_PSSA_SSA.md](16_PSSA_SSA.md) (estrategia de arquitectura, FC→SSR→diseño→SWAL, verificación de 11 SSR, argumento de seguridad); resta validar supuestos con EANA y cerrar SSA-A1..4 | Proyecto + EANA | Media |
 | FHA-A7 | Revisar este documento con la autoridad en SOI-1 | ANAC + proyecto | Alta |
 
 ---
