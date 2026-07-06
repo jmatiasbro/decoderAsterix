@@ -137,17 +137,44 @@ class RadarFinderDialog(QDialog):
                                      f"{hit[2]} {query}")
             return
 
-        # C) Tránsito vivo: callsign o SSR (mode3a) en RadarWidget.tracks
-        for t in self.radar.tracks.values():
-            cs = (t.callsign or "").upper()
-            ssr = (t.mode3a or "")
-            if (cs and cs == query) or (ssr and ssr == query):
-                lat = t.raw_dict.get("lat")
-                lon = t.raw_dict.get("lon")
-                if lat is not None and lon is not None:
-                    self.target_located.emit(float(lat), float(lon), "AIRCRAFT",
-                                             cs or f"TRK-{t.id}")
-                    return
+        # C) Tránsito vivo: callsign o SSR (mode3a) en tracks confirmados Y tentativos.
+        #    Se buscan ambos conjuntos porque un blanco recién aparecido (o un
+        #    duplicado no confirmado) vive en pending_tracks. El SSR se normaliza
+        #    al mismo formato octal de 4 dígitos que muestra la etiqueta, para que
+        #    un mode3a entero (según sensor) también se encuentre.
+        pendientes = getattr(self.radar, "pending_tracks", {}) or {}
+        for coleccion in (self.radar.tracks, pendientes):
+            for t in coleccion.values():
+                cs = (t.callsign or "").upper()
+                ssr = self._norm_ssr(getattr(t, "mode3a", None))
+                if (cs and cs == query) or (ssr and ssr == query):
+                    lat, lon = self._track_latlon(t)
+                    if lat is not None and lon is not None:
+                        self.target_located.emit(float(lat), float(lon), "AIRCRAFT",
+                                                 cs or f"TRK-{t.id}")
+                        return
 
         QMessageBox.information(self, "Finder",
                                 f"'{query}' no disponible o fuera de cobertura.")
+
+    @staticmethod
+    def _norm_ssr(m3a):
+        """Normaliza el Mode 3/A al octal de 4 dígitos que muestra la etiqueta.
+        Un entero (según sensor) y un string quedan comparables con la query."""
+        if m3a is None or m3a == "":
+            return ""
+        if isinstance(m3a, int):
+            return f"{m3a:04o}"
+        return str(m3a).strip().upper()
+
+    @staticmethod
+    def _track_latlon(t):
+        """(lat, lon) del track, tolerante a raw_dict ausente o claves _render."""
+        raw = getattr(t, "raw_dict", None) or {}
+        lat = raw.get("lat") if raw.get("lat") is not None else raw.get("lat_render")
+        lon = raw.get("lon") if raw.get("lon") is not None else raw.get("lon_render")
+        if lat is None:
+            lat = getattr(t, "lat_render", None)
+        if lon is None:
+            lon = getattr(t, "lon_render", None)
+        return lat, lon
