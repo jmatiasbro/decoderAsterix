@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **Norma:** EUROCAE ED-109A / RTCA DO-278A — diseño de software (D-3) y requisitos de bajo nivel (D-2).
-**Versión:** 0.3 (borrador). **Fecha:** 2026-07-05. **Estado:** PROPUESTO — no aprobado por ANAC.
+**Versión:** 0.4 (borrador). **Fecha:** 2026-07-05. **Estado:** PROPUESTO — no aprobado por ANAC.
 
 > Formaliza la **arquitectura** y los **Requisitos de Bajo Nivel (LLR)** del software. Los LLR derivan
 > de los HLR del [SRS (doc 07)](07_SRS.md) y de la arquitectura, redactados conforme al
@@ -86,7 +86,58 @@ _schedule_safety()  →  (gate por *_habilitado)  →  evaluar_stca()  → STCA_
 _watchdog_timer (2 s)  →  _check_safety_watchdog()  →  si elapsed > 5 s: system_bus CRITICAL
 ```
 
-### 2.4 Decisiones de diseño con justificación (rationale)
+### 2.4 Diagrama de estados del ciclo de vida monoradar
+
+Estados y transiciones de `MonoradarLifecycle` (LLR-LIF-01..07); todas las transiciones se
+gobiernan por ToD ASTERIX, nunca por reloj de pared:
+
+```
+                    plot con identidad nueva
+                             │
+                             ▼
+                       ┌───────────┐  detección en vuelta posterior
+                       │ TENTATIVE │  (detecciones++ ; salto ≥1.5·T reinicia racha)
+                       └─────┬─────┘◄──────────────┐
+        pierde 1 vuelta      │                     │
+        (tick) → DELETED ◄───┤  detecciones ≥ confirm_n (4)
+                             ▼
+                       ┌───────────┐   tick: ≥1 vuelta sin detección
+                       │ CONFIRMED │ ─────────────────────────────► ┌──────────┐
+                       └───────────┘ ◄───────────────────────────── │ COASTING │
+                             ▲          nueva detección (recupera)  └────┬─────┘
+                             │                                          │ faltas ≥ drop_misses (4)
+             plot misma vuelta a <pair_nm:                              ▼
+             colapsa (no cambia estado);                           ┌─────────┐
+             lejano → DUPLICADO_LEJANO                             │ DELETED │
+                                                                   └─────────┘
+```
+
+### 2.5 Diagrama de despliegue (procesos e hilos)
+
+```
+┌────────────────────────── Proceso Python (main.py) ──────────────────────────┐
+│                                                                              │
+│  Hilo UI (Qt)                     QThread PlaybackWorker      Hilo worker    │
+│  ┌───────────────────────┐        ┌─────────────────────┐     storage        │
+│  │ MainWindow / Radar-   │ new_   │ decode UDP/PCAP     │     ┌───────────┐  │
+│  │ Widget: matching,     │◄───────│ (DataEngine),       │     │ DuckDB    │  │
+│  │ ciclo de vida, cadena │ plot_  │ deque(150k),        │     │ batches / │  │
+│  │ STCA→APW→MSAW (~1 Hz),│ batch  │ batch cada 0.10 s   │     │ flush     │  │
+│  │ render (≤15 Hz),      │        └──────────▲──────────┘     └─────▲─────┘  │
+│  │ watchdog (2 s)        │────── cola no bloqueante ────────────────┘        │
+│  └───────────┬───────────┘                   │                               │
+└──────────────┼───────────────────────────────┼───────────────────────────────┘
+               │ lectura RO                    │ UDP :20000+ (1 puerto = 1 sensor)
+       ┌───────▼────────┐              ┌───────▼────────┐      ┌──────────────┐
+       │ data/atm/      │              │ Sensores radar │      │ profiles/*.json
+       │ atm.duckdb (RO)│              │ (red) o PCAP   │      │ config/ (RW)  │
+       └────────────────┘              └────────────────┘      └──────────────┘
+```
+
+Las funciones de seguridad corren **en el hilo UI** (evaluación coalescida, no por plot); el
+worker de red y el de persistencia no toman decisiones de seguridad ([ED-1/ED-2], LLR-AUD-01).
+
+### 2.6 Decisiones de diseño con justificación (rationale)
 
 | Id | Decisión | Justificación | Traza |
 |----|----------|---------------|-------|
@@ -258,12 +309,12 @@ HLR operacional externo) y **deben** revisarse en el análisis de seguridad:
 
 ## 13. Pendiente de esta edición
 
-Con esta edición todos los HLR del [SRS](07_SRS.md) tienen al menos un LLR asociado. Resta como
-refinamiento (no bloqueante para SOI-1):
+Con esta edición todos los HLR del [SRS](07_SRS.md) tienen al menos un LLR asociado y los diagramas
+de secuencia (§2.3), estados (§2.4) y despliegue (§2.5) están incluidos. Resta como refinamiento
+(no bloqueante para SOI-1):
 
 - LLR por **categoría de decodificación** individual (CAT001/002/010/020/034/048/062) más allá del
   contrato de troceo/robustez ya cubierto por LLR-DEC-04/05.
-- Diagramas **de estados** del ciclo de vida (`TENTATIVE→CONFIRMED→COASTING→DELETED`) y de **despliegue**.
 - Formalización de precondiciones/poscondiciones por función en notación de contrato ([LR-3]).
 
 ## 14. Registro de cambios
@@ -273,3 +324,4 @@ refinamiento (no bloqueante para SOI-1):
 | 0.1 | 2026-07-05 | Emisión inicial: arquitectura (capas, flujo, decisiones DD-1..5) y LLR de los 4 motores núcleo SWAL 2 (LLR-LIF/COR/STC/APW/MSA), trazados a HLR y test. |
 | 0.2 | 2026-07-05 | Añadidos LLR de **HMI/PPI** (LLR-HMI-01..06), **decodificación/proyección** (LLR-DEC/GEO), **persistencia/auditoría** (LLR-AUD) y **roles** (LLR-ROL); diagramas de secuencia (§2.3). |
 | 0.3 | 2026-07-05 | Completados LLR de **robustez de decodificación** (LLR-DEC-04..06: troceo por LEN, excepción acotada, ADEXP), **altimetría** (LLR-GEO-04: TL/A-F, + test nuevo), **prestaciones** (LLR-PRF-01..05, §10) y **HMI secundaria** (LLR-HMI-07/08). Todos los HLR quedan con LLR asociado y todos los LLR con test. |
+| 0.4 | 2026-07-05 | Diagramas de **estados** del ciclo de vida (§2.4) y de **despliegue** (§2.5). Cierra los refinamientos de arquitectura de D-3. |

@@ -1,6 +1,6 @@
 # Gap Analysis — DO-278A / ED-109A
 
-**Versión:** 0.9. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
+**Versión:** 1.0. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
 
 > Estado por objetivo: ✅ Cumplido · ⚠️ Parcial · ❌ Ausente. La columna *Evidencia* apunta a lo que
 > existe hoy en el repositorio. Los objetivos se agrupan por proceso DO-278A. La numeración es
@@ -13,13 +13,13 @@
 | Proceso | Objetivos | ✅ | ⚠️ | ❌ | % cobertura aprox. |
 |---------|-----------|----|----|----|--------------------|
 | Planificación | 5 | 4 | 1 | 0 | 90% |
-| Desarrollo (requisitos/diseño/código) | 6 | 5 | 1 | 0 | 92% |
+| Desarrollo (requisitos/diseño/código) | 6 | 6 | 0 | 0 | 100% |
 | Verificación | 7 | 4 | 2 | 1 | 70% |
-| Gestión de configuración (SCM) | 4 | 2 | 2 | 0 | 75% |
+| Gestión de configuración (SCM) | 4 | 2 | 2 | 0 | 78% |
 | Aseguramiento de calidad (SQA) | 3 | 3 | 0 | 0 | 100% |
 | Enlace con autoridad | 2 | 0 | 1 | 1 | 15% |
-| Análisis de seguridad | 3 | 1 | 2 | 0 | 67% |
-| **Total** | **30** | **19** | **9** | **2** | **~78%** |
+| Análisis de seguridad | 3 | 1 | 2 | 0 | 75% |
+| **Total** | **30** | **20** | **8** | **2** | **~80%** |
 
 Conclusión: **la capa de evidencia de proceso está sustancialmente construida** (planes, FHA, SRS con
 57 HLR, matriz de trazabilidad, CI con cobertura de decisiones al 88.5 % sobre módulos SWAL 2,
@@ -51,7 +51,7 @@ hacia SOI-2.
 |-----|-------------|--------|--------------------|
 | D-1 | Requisitos de alto nivel (HLR) | ✅ | [07_SRS.md](07_SRS.md) — 57 HLR trazados a FHA/specs |
 | D-2 | Requisitos de bajo nivel (LLR) | ✅ | [SDD §3-10](15_SDD.md): **todo HLR del SRS tiene ≥1 LLR** (LIF/COR/STC/APW/MSA, HMI, DEC/GEO, AUD/ROL, PRF), trazado a HLR y test; refinamientos por categoría/diagramas de estados pendientes ([SDD §13](15_SDD.md)) |
-| D-3 | Arquitectura de software | ⚠️ | [SDD (doc 15)](15_SDD.md) formaliza capas, flujo, **diagramas de secuencia** y decisiones DD-1..5; faltan diagramas de estados/despliegue |
+| D-3 | Arquitectura de software | ✅ | [SDD (doc 15)](15_SDD.md) v0.4: capas, flujo, decisiones DD-1..5 y diagramas de **secuencia (§2.3), estados (§2.4) y despliegue (§2.5)** |
 | D-4 | Código fuente conforme a estándares | ✅ | Estándar formal en [13](13_estandar_codificacion.md); módulos SWAL 2 revisados (RR-01..05) y **linter automatizado en CI** (`tools/lint_swal2.py`, prohibiciones EC-5/6/7) |
 | D-5 | Trazabilidad requisitos↔diseño↔test | ✅ | [04_matriz_trazabilidad.md](04_matriz_trazabilidad.md) — sin huecos de test |
 | D-6 | Determinismo / reproducibilidad | ✅ | Ciclo de vida por ToD; `time.time()` vedado (`lifecycle.py`) |
@@ -74,7 +74,7 @@ hacia SOI-2.
 |-----|-------------|--------|--------------------|
 | C-1 | Identificación de la configuración | ✅ | Baselines etiquetados `v0.1.0-soi1` … `v0.4.0`; lockfile y checksums |
 | C-2 | Control de cambios / problem reporting | ⚠️ | Commits convencionales + tabla de RNCs (SQAP §5.3); falta herramienta formal de seguimiento |
-| C-3 | Integridad del árbol de fuentes | ⚠️ | `.gitignore` endurecido; falta **purgar del histórico** los binarios ya versionados (registrado como RNC-010 en [doc 17 §3](17_registros_auditoria_SQA.md)) |
+| C-3 | Integridad del árbol de fuentes | ⚠️ | `.gitignore` endurecido; purga del histórico **con procedimiento listo para ejecutar** ([doc 18](18_procedimiento_purga_RNC010.md), RNC-010) — requiere decisión del responsable (destructivo) |
 | C-4 | Control de entornos de build | ✅ | Runtime documentado; `requirements.txt`/`-linux`/`.lock`; CI reproducible en Linux |
 
 ## 5. Aseguramiento de Calidad (SQA)
@@ -98,7 +98,7 @@ hacia SOI-2.
 |-----|-------------|--------|--------------------|
 | S-1 | FHA (Functional Hazard Assessment) | ✅ | [06_FHA.md](06_FHA.md) — condiciones de falla, SSR y clasificación de severidad |
 | S-2 | PSSA / SSA | ⚠️ | [16_PSSA_SSA.md](16_PSSA_SSA.md): estrategia de arquitectura (SA-1..4), CCA, asignación FC→SSR→diseño→SWAL y verificación SSA de 11 SSR; falta validación EANA/ANAC |
-| S-3 | Safety case / argumento de seguridad | ⚠️ | [16 §7](16_PSSA_SSA.md): argumento C0..C4 con evidencia; SSA-A1/A3/A7 cerradas (11/11 SSR); falta validar supuestos H-AS-1..6 (FHA-A1/A2, externo) y SSA-A2/A4 |
+| S-3 | Safety case / argumento de seguridad | ⚠️ | [16 §7](16_PSSA_SSA.md): argumento C0..C4 con evidencia; **todas las acciones técnicas SSA-A1..A4/A7 cerradas** (11/11 SSR, sin residual interno); falta solo validar supuestos H-AS-1..6 con EANA/ANAC (externo) |
 
 ### Hallazgos de verificación (seguimiento)
 
@@ -147,10 +147,10 @@ campos bien tipados: `flight_level` es `float`/`None`, nunca string), sino una b
 Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0.3; SDD+LLR completos y D-2 en v0.4-0.6):
 
 1. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC.
-2. **Validar el análisis de seguridad** con EANA/ANAC: PSSA/SSA y safety case ya redactados ([doc 16](16_PSSA_SSA.md)); restan validar supuestos H-AS-1..6 (FHA-A1/A2) y cerrar SSA-A1..4. *(STCA-1 cerrado vía HLR-STCA-06.)*
-3. **Higiene de configuración**: purgar binarios del histórico git (C-3 / RNC-010, [doc 17 §3](17_registros_auditoria_SQA.md)).
-4. **Enlace con la autoridad** (A-1): coordinar SOI-1 con ANAC sobre el paquete ya construido.
-5. **Refinamiento**: regresión visual del render (SSA-A2) y diagramas de estados/despliegue del SDD.
+2. **Validar el análisis de seguridad** con EANA/ANAC: PSSA/SSA y safety case redactados y con todas las acciones técnicas cerradas ([doc 16](16_PSSA_SSA.md)); resta solo validar supuestos H-AS-1..6 (FHA-A1/A2, externo).
+3. **Enlace con la autoridad** (A-1): coordinar SOI-1 con ANAC sobre el paquete ya construido.
+4. **Higiene de configuración**: ejecutar la purga de binarios (C-3 / RNC-010) según el [procedimiento listo](18_procedimiento_purga_RNC010.md) — requiere decisión del responsable (destructivo).
+5. **Refinamiento menor**: LLR por categoría de decodificación y contratos por función ([SDD §13](15_SDD.md)).
 
 ## 9. Registro de cambios
 
@@ -165,3 +165,4 @@ Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0
 | 0.7 | 2026-07-05 | **STCA-1 cerrado** vía HLR-STCA-06 (marco de posición único) + tests de contrato. Sin cambio de % (S-2/S-3 siguen abiertos). |
 | 0.8 | 2026-07-05 | **PSSA/SSA + safety case (doc 16)**: **S-2/S-3** ❌→⚠️. Análisis de seguridad 33 % → 67 %; cobertura total ~70 % → ~73 %. |
 | 0.9 | 2026-07-05 | Cierre de SSA-A1/A3/A7 (SSR-03/09/10 verificados, 11/11) y **registros de auditoría SQA (doc 17)**: **Q-1/Q-2/Q-3** ⚠️→✅. SQA 50 % → 100 %; total ~73 % → ~78 %. |
+| 1.0 | 2026-07-05 | Cierre de **SSA-A2** (regresión visual) y **SSA-A4** (STCA denso PCAP) — sin residual técnico interno; **D-3 ✅** (diagramas estados/despliegue, SDD v0.4); procedimiento de purga RNC-010 listo ([doc 18](18_procedimiento_purga_RNC010.md)). Desarrollo 100 %; total ~78 % → **~80 %**. |
