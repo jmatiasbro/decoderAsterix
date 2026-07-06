@@ -5,6 +5,12 @@ Verifica `STCA_Engine.evaluar_conflictos`, el motor real instanciado por
 filtros de entrada (banda FL, blancos estáticos, identidad/duplicados), fase de
 VIOLATION (separación actual) y fase de PREDICTION (CPA cinemático).
 
+Segmentación por volúmenes (HLR-STCA-01/02/07, RAAC/Doc 4444):
+- TMA  (FL030–<FL245): 3.0 NM / 800 ft.
+- Ruta (FL245–FL600):  5.0 NM / 1000 ft.
+- Transición: si una del par está ≥ FL245 → umbrales de Ruta (más conservadores).
+El mk() por defecto usa FL300 → segmento RUTA (5 NM / 1000 ft).
+
 Convenciones de unidades del motor:
 - lat_render/lon_render en grados (separación actual vía haversine).
 - x/y en metros, vx/vy en m/s (predicción de CPA).
@@ -66,22 +72,22 @@ def test_haversine_mismo_punto_es_cero():
 # --------------------------------------------------------------------------- #
 
 def test_violacion_horizontal_y_vertical(eng):
-    # 0.1° lon ≈ 6 NM (<10) y co-altitud (<900 ft) → VIOLATION
+    # 0.05° lon ≈ 3 NM (<5 en Ruta) y co-altitud (<1000 ft) → VIOLATION
     tracks = {
         "A": mk(lat_render=0.0, lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
-        "B": mk(lat_render=0.0, lon_render=0.1, mode3a="2222", mode_s="BBBBBB"),
+        "B": mk(lat_render=0.0, lon_render=0.05, mode3a="2222", mode_s="BBBBBB"),
     }
     c = eng.evaluar_conflictos(tracks)
     assert len(c) == 1
     t1, t2, estado, tiempo, dist_h, dist_v = c[0]
     assert estado == "VIOLATION"
     assert tiempo == 0
-    assert dist_h == pytest.approx(6.0, abs=0.3)
+    assert dist_h == pytest.approx(3.0, abs=0.2)
     assert dist_v == 0
 
 
 def test_sin_violacion_si_separados_verticalmente(eng):
-    # 1000 ft de separación (>=900) → sin conflicto pese a estar pegados
+    # 1000 ft de separación (>= umbral Ruta) → sin conflicto pese a estar pegados
     tracks = {
         "A": mk(lat_render=0.0, lon_render=0.0, flight_level="300", mode3a="1111", mode_s="AAAAAA"),
         "B": mk(lat_render=0.0, lon_render=0.05, flight_level="310", mode3a="2222", mode_s="BBBBBB"),
@@ -90,7 +96,7 @@ def test_sin_violacion_si_separados_verticalmente(eng):
 
 
 def test_separacion_vertical_justo_bajo_umbral_es_violacion(eng):
-    # 800 ft (<900) co-localizados horizontalmente → VIOLATION
+    # 800 ft (<1000 en Ruta) co-localizados horizontalmente → VIOLATION
     tracks = {
         "A": mk(lat_render=0.0, lon_render=0.0, flight_level="300", mode3a="1111", mode_s="AAAAAA"),
         "B": mk(lat_render=0.0, lon_render=0.05, flight_level="308", mode3a="2222", mode_s="BBBBBB"),
@@ -102,33 +108,111 @@ def test_separacion_vertical_justo_bajo_umbral_es_violacion(eng):
 
 
 # --------------------------------------------------------------------------- #
-# Filtro de banda de niveles de vuelo (fl_min=245, fl_max=450)
+# Filtro de banda de niveles de vuelo (banda global FL030–FL600)
 # --------------------------------------------------------------------------- #
 
 def test_fuera_de_banda_inferior_se_excluye(eng):
+    # Bajo el piso operativo del TMA (FL030): tráfico de superficie/circuito
     tracks = {
-        "A": mk(flight_level="200", lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
-        "B": mk(flight_level="205", lon_render=0.05, mode3a="2222", mode_s="BBBBBB"),
+        "A": mk(flight_level="20", lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
+        "B": mk(flight_level="25", lon_render=0.02, mode3a="2222", mode_s="BBBBBB"),
     }
     assert eng.evaluar_conflictos(tracks) == []
 
 
 def test_fuera_de_banda_superior_se_excluye(eng):
     tracks = {
-        "A": mk(flight_level="460", lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
-        "B": mk(flight_level="465", lon_render=0.05, mode3a="2222", mode_s="BBBBBB"),
+        "A": mk(flight_level="610", lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
+        "B": mk(flight_level="620", lon_render=0.05, mode3a="2222", mode_s="BBBBBB"),
     }
     assert eng.evaluar_conflictos(tracks) == []
 
 
 def test_limite_inferior_de_banda_incluido(eng):
-    # FL245 = fl_min → dentro de banda
+    # FL245 = piso de Ruta → dentro de banda con umbrales de Ruta
     tracks = {
         "A": mk(flight_level="245", lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
         "B": mk(flight_level="245", lon_render=0.05, mode3a="2222", mode_s="BBBBBB"),
     }
     c = eng.evaluar_conflictos(tracks)
     assert len(c) == 1 and c[0][2] == "VIOLATION"
+
+
+# --------------------------------------------------------------------------- #
+# Segmentación TMA / Ruta y transición (HLR-STCA-01/02/07)
+# --------------------------------------------------------------------------- #
+
+def test_tma_violacion_a_3nm(eng):
+    # TMA (FL100): 2.5 NM (<3) co-altitud → VIOLATION. El TMA queda protegido.
+    tracks = {
+        "A": mk(flight_level="100", lat_render=0.0, lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
+        "B": mk(flight_level="100", lat_render=0.0, lon_render=2.5 / 60.0, mode3a="2222", mode_s="BBBBBB"),
+    }
+    c = eng.evaluar_conflictos(tracks)
+    assert len(c) == 1 and c[0][2] == "VIOLATION"
+
+
+def test_tma_sin_alerta_entre_3_y_5_nm(eng):
+    # TMA: 4 NM (>3) co-altitud, sin convergencia → sin alerta (evita nuisance;
+    # el mismo par en Ruta sí alertaría). vx iguales → sin PREDICTION.
+    tracks = {
+        "A": mk(flight_level="100", lat_render=0.0, lon_render=0.0,
+                x=0.0, y=0.0, vx=100.0, vy=0.0, mode3a="1111", mode_s="AAAAAA"),
+        "B": mk(flight_level="100", lat_render=0.0, lon_render=4.0 / 60.0,
+                x=7408.0, y=0.0, vx=100.0, vy=0.0, mode3a="2222", mode_s="BBBBBB"),
+    }
+    assert eng.evaluar_conflictos(tracks) == []
+
+
+def test_tma_umbral_vertical_800ft(eng):
+    # TMA: co-localizados, 800 ft (= umbral) → sin alerta; 700 ft → VIOLATION
+    base = dict(lat_render=0.0, lon_render=0.0, x=0.0, y=0.0)
+    a = mk(flight_level="100", mode3a="1111", mode_s="AAAAAA", **base)
+    assert eng.evaluar_conflictos(
+        {"A": a, "B": mk(flight_level="108", lon_render=0.02, mode3a="2222", mode_s="BBBBBB")}) == []
+    c = eng.evaluar_conflictos(
+        {"A": a, "B": mk(flight_level="107", lon_render=0.02, mode3a="2222", mode_s="BBBBBB")})
+    assert len(c) == 1 and c[0][2] == "VIOLATION"
+
+
+def test_transicion_fl245_usa_umbral_ruta(eng):
+    # Par cruzando el límite (FL244 asc. / FL246): 4 NM co-altitud relativa.
+    # Con umbral TMA (3 NM) no alertaría; la transición fuerza Ruta (5 NM) → VIOLATION.
+    tracks = {
+        "A": mk(flight_level="244", lat_render=0.0, lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
+        "B": mk(flight_level="246", lat_render=0.0, lon_render=4.0 / 60.0, mode3a="2222", mode_s="BBBBBB"),
+    }
+    c = eng.evaluar_conflictos(tracks)
+    assert len(c) == 1 and c[0][2] == "VIOLATION", \
+        "En transición debe aplicarse el umbral más conservador (Ruta, 5 NM)"
+
+
+def test_fallback_seguro_uniforme():
+    # Config de emergencia: 3 NM / 1000 ft en toda la banda FL030–FL600.
+    from analysis.stca_analyzer import STCA_Engine, STCAConfig
+    eng = STCA_Engine(STCAConfig.fallback_seguro())
+    assert eng.fl_min == 30 and eng.fl_max == 600
+    # En Ruta el fallback usa 3 NM (no 5): 4 NM co-altitud → sin alerta
+    tracks = {
+        "A": mk(flight_level="300", lat_render=0.0, lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
+        "B": mk(flight_level="300", lat_render=0.0, lon_render=4.0 / 60.0,
+                vx=100.0, mode3a="2222", mode_s="BBBBBB"),
+    }
+    assert eng.evaluar_conflictos(tracks) == []
+    # Y en TMA el vertical del fallback es 1000 ft: 900 ft co-localizados → VIOLATION
+    c = eng.evaluar_conflictos({
+        "A": mk(flight_level="100", lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
+        "B": mk(flight_level="109", lon_render=0.02, mode3a="2222", mode_s="BBBBBB"),
+    })
+    assert len(c) == 1 and c[0][2] == "VIOLATION"
+
+
+def test_config_invalida_lanza():
+    from analysis.stca_analyzer import STCAConfig
+    with pytest.raises(ValueError):
+        STCAConfig.desde_dict({"tma": {"horizontal_nm": -1.0}})
+    with pytest.raises(ValueError):
+        STCAConfig.desde_dict({"tma": {"fl_piso": 300}})   # solapa con Ruta
 
 
 def test_flight_level_no_numerico_se_excluye(eng):

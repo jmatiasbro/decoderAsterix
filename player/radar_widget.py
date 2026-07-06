@@ -933,12 +933,25 @@ class RadarWidget(_RadarBase):
         self.plots_raw: List[Dict[str, Any]] = []
 
         # Inicializar STCA Engine, Diálogo y QualityManager (DQF)
-        from analysis.stca_analyzer import STCA_Engine
+        from analysis.stca_analyzer import STCA_Engine, STCAConfig
         from player.stca_dialog import STCADialog
         from player.apw_dialog import APWDialog
         from player.msaw_dialog import MSAWDialog
         from analysis.quality_manager import QualityManager
-        self.stca_engine = STCA_Engine()
+        # HLR-STCA-01/02/07: motor parametrizado por volúmenes (TMA 3 NM/800 ft,
+        # Ruta 5 NM/1000 ft). config/stca.json permite el ajuste operativo; ante
+        # un archivo ilegible o inválido se aplica el FALLBACK SEGURO del SRS
+        # (3 NM / 1000 ft, FL030–FL600): el sistema nunca queda sin red.
+        _stca_cfg_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "config", "stca.json")
+        try:
+            _stca_cfg = STCAConfig.cargar_archivo(_stca_cfg_path)
+        except Exception as _e:
+            print(f"[STCA] Config inválida ({_e}); aplicando fallback seguro "
+                  f"(3 NM / 1000 ft, FL030–FL600)")
+            _stca_cfg = STCAConfig.fallback_seguro()
+        self.stca_engine = STCA_Engine(_stca_cfg)
         self.stca_dialog = STCADialog(self)
         self.stca_habilitado = True
         self.apw_dialog = APWDialog(self)
@@ -1774,9 +1787,31 @@ class RadarWidget(_RadarBase):
                 # Sin altitud: 1 NM (estricto); con altitud: 3 NM + verificación vertical
                 max_dist_m = (3.0 if has_alt else 1.0) * 1852.0
                 t_plot = plot_time if plot_time is not None else data.get('time')
+                # Identidad del plot para vetar candidatos contradictorios
+                # (HLR-TRK-06/SSR-06: dos Mode S válidos distintos o dos squawks
+                # discretos distintos NUNCA se fusionan, ni por proximidad).
+                _plot_ms = (data.get('mode_s') or '').strip().upper()
+                if _plot_ms == '----':
+                    _plot_ms = ''
+                _m3a_p = data.get('mode3a')
+                _plot_sq = f"{_m3a_p:04o}" if isinstance(_m3a_p, int) else str(_m3a_p or '').strip()
+                if _plot_sq in ('----', '0000', '1200', '2000', '7000'):
+                    _plot_sq = ''
                 best_dist_m = float('inf')
                 best_tid = None
                 for tid, track in list(self.tracks.items()) + list(self.pending_tracks.items()):
+                    # Veto por identidad contradictoria (fusión conservadora, DD-2):
+                    # el paso E es solo para blancos SIN identidad común, no puede
+                    # unir dos aeronaves identificadas como distintas (FC-TRK-01).
+                    _t_ms = (track.mode_s or '').strip().upper()
+                    if _plot_ms and _t_ms and _t_ms != '----' and _plot_ms != _t_ms:
+                        continue
+                    _m3a_t = track.mode3a
+                    _t_sq = f"{_m3a_t:04o}" if isinstance(_m3a_t, int) else str(_m3a_t or '').strip()
+                    if _t_sq in ('----', '0000', '1200', '2000', '7000'):
+                        _t_sq = ''
+                    if _plot_sq and _t_sq and _plot_sq != _t_sq:
+                        continue
                     fl_t = track.flight_level
                     alt_t = track.altitude_ft
                     alt_t_val = fl_t * 100.0 if fl_t is not None else alt_t

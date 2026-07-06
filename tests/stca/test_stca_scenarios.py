@@ -66,24 +66,24 @@ def _hay_violacion(w):
 # ── Escenario 1: conflicto real cercano → VIOLATION (verificación STCA-1) ──────
 
 def test_conflicto_cercano_coaltitud_dispara_violacion(w):
-    """Dos aeronaves a <10 NM y misma altitud (FL300) → VIOLATION.
+    """Dos aeronaves a <5 NM (umbral Ruta) y misma altitud (FL300) → VIOLATION.
 
     Núcleo del hallazgo STCA-1: la separación actual se resuelve con la posición
     cruda (lat_render), por lo que el conflicto se detecta sin depender del x/y.
     """
     w.on_new_plot_batch([
         _plot("AAAAAA", d_norte_nm=0.0, fl=300),
-        _plot("BBBBBB", d_norte_nm=5.0, fl=300),
+        _plot("BBBBBB", d_norte_nm=4.0, fl=300),
     ])
     w.evaluar_stca()
-    assert _hay_violacion(w), "Conflicto real <10 NM co-altitud debe disparar VIOLATION"
+    assert _hay_violacion(w), "Conflicto real <5 NM co-altitud en Ruta debe disparar VIOLATION"
     assert frozenset(("AAAAAA", "BBBBBB")) in _pares_en_alerta(w)
 
 
 # ── Escenario 2: separación vertical suficiente → sin alerta ───────────────────
 
 def test_separacion_vertical_no_alerta(w):
-    """<10 NM horizontal pero ≥900 ft de separación vertical → sin conflicto."""
+    """<5 NM horizontal pero ≥1000 ft de separación vertical → sin conflicto."""
     w.on_new_plot_batch([
         _plot("AAAAAA", d_norte_nm=0.0, fl=300),
         _plot("BBBBBB", d_norte_nm=5.0, fl=320),   # 2000 ft de separación
@@ -131,10 +131,38 @@ def test_blancos_estaticos_excluidos(w):
 # ── Escenario 6: fuera de la banda de FL evaluada → sin alerta ─────────────────
 
 def test_fuera_de_banda_fl_no_alerta(w):
-    """Conflicto geométrico pero por debajo de FL245 → fuera de alcance STCA."""
+    """Conflicto geométrico pero por debajo del piso FL030 (tráfico de circuito/
+    superficie) → fuera de alcance STCA."""
+    w.on_new_plot_batch([
+        _plot("AAAAAA", d_norte_nm=0.0, fl=20),
+        _plot("BBBBBB", d_norte_nm=2.0, fl=20),
+    ])
+    w.evaluar_stca()
+    assert frozenset(("AAAAAA", "BBBBBB")) not in _pares_en_alerta(w)
+
+
+# ── Escenario 6b: TMA protegido (HLR-STCA-01 segmento inferior) ────────────────
+
+def test_tma_conflicto_dispara_violacion(w):
+    """FL100 (TMA) a 2 NM co-altitud → VIOLATION con umbral terminal (3 NM).
+
+    Regresión de la brecha operativa original: con el motor hardcodeado en
+    FL245-450, el espacio inferior de SACO quedaba sin protección STCA.
+    """
     w.on_new_plot_batch([
         _plot("AAAAAA", d_norte_nm=0.0, fl=100),
-        _plot("BBBBBB", d_norte_nm=5.0, fl=100),
+        _plot("BBBBBB", d_norte_nm=2.0, fl=100),
+    ])
+    w.evaluar_stca()
+    assert _hay_violacion(w), "El TMA (bajo FL245) debe estar protegido por STCA"
+    assert frozenset(("AAAAAA", "BBBBBB")) in _pares_en_alerta(w)
+
+
+def test_tma_separacion_4nm_no_molesta(w):
+    """FL100 (TMA) a 4 NM (>3) sin convergencia → sin alerta (evita nuisance)."""
+    w.on_new_plot_batch([
+        _plot("AAAAAA", d_norte_nm=0.0, fl=100, track_angle=90.0),
+        _plot("BBBBBB", d_norte_nm=4.0, fl=100, track_angle=90.0),
     ])
     w.evaluar_stca()
     assert frozenset(("AAAAAA", "BBBBBB")) not in _pares_en_alerta(w)

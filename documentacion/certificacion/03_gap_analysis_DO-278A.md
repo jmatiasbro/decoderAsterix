@@ -1,6 +1,6 @@
 # Gap Analysis — DO-278A / ED-109A
 
-**Versión:** 1.0. **Fecha:** 2026-07-05. **SWAL de referencia:** 2 (núcleo, provisional).
+**Versión:** 1.1. **Fecha:** 2026-07-06. **SWAL de referencia:** 2 (núcleo, provisional).
 
 > Estado por objetivo: ✅ Cumplido · ⚠️ Parcial · ❌ Ausente. La columna *Evidencia* apunta a lo que
 > existe hoy en el repositorio. Los objetivos se agrupan por proceso DO-278A. La numeración es
@@ -102,7 +102,22 @@ hacia SOI-2.
 
 ### Hallazgos de verificación (seguimiento)
 
-> Estado al 2026-07-05: **STCA-1 cerrado** (requisito HLR-STCA-06 + tests de contrato); **ROB-1 mitigado**.
+> Estado al 2026-07-06: **STCA-1 cerrado** (HLR-STCA-06 + tests de contrato); **ROB-1 mitigado**;
+> **TRK-1 cerrado** (ver abajo); **STCA-2 cerrado** (segmentación TMA/Ruta, HLR-STCA-01/02/07/08).
+
+**TRK-1 — Fusión errónea por proximidad en el paso E** (severidad: **ALTA** — FC-TRK-01/SWAL 2; estado: **CERRADO** 2026-07-06, RNC-011).
+El gate de proximidad del matching (paso E) fusionaba dos aeronaves con **Mode S válidos distintos**
+a <3 NM co-altitud, violando HLR-TRK-06/SSR-06: una de las dos desaparecía de pantalla y el **STCA
+quedaba suprimido exactamente en la geometría de conflicto**. Detectado al construir el escenario de
+verificación TMA del STCA segmentado (el test e2e falló revelando la fusión). *Cierre:* veto de
+identidad contradictoria antes de fusionar por cercanía (LLR-COR-08, coherente con DD-2 «fusión
+conservadora»); verificado unitario (`test_matching.py`) y e2e (`test_stca_scenarios.py`).
+
+**STCA-2 — Banda y umbrales STCA hardcodeados** (severidad: MEDIA — operativa; estado: **CERRADO** 2026-07-06).
+El motor fijaba FL245–450 / 10 NM / 900 ft sin configuración: el TMA quedaba **sin protección STCA** y
+la implementación no trazaba a HLR-STCA-01/02. *Cierre:* segmentación por volúmenes RAAC/Doc 4444
+(TMA 3 NM/800 ft, Ruta 5 NM/1000 ft, transición conservadora, fallback seguro) — HLR-STCA-01/02/07/08
+y LLR-STC-01..09, con banco de pruebas de segmentación.
 
 **STCA-1 — Doble marco de coordenadas en el motor STCA** (severidad: BAJA; estado: **CERRADO** 2026-07-05).
 `STCA_Engine.evaluar_conflictos` resuelve la **separación actual** con haversine sobre
@@ -166,3 +181,4 @@ Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0
 | 0.8 | 2026-07-05 | **PSSA/SSA + safety case (doc 16)**: **S-2/S-3** ❌→⚠️. Análisis de seguridad 33 % → 67 %; cobertura total ~70 % → ~73 %. |
 | 0.9 | 2026-07-05 | Cierre de SSA-A1/A3/A7 (SSR-03/09/10 verificados, 11/11) y **registros de auditoría SQA (doc 17)**: **Q-1/Q-2/Q-3** ⚠️→✅. SQA 50 % → 100 %; total ~73 % → ~78 %. |
 | 1.0 | 2026-07-05 | Cierre de **SSA-A2** (regresión visual) y **SSA-A4** (STCA denso PCAP) — sin residual técnico interno; **D-3 ✅** (diagramas estados/despliegue, SDD v0.4); procedimiento de purga RNC-010 listo ([doc 18](18_procedimiento_purga_RNC010.md)). Desarrollo 100 %; total ~78 % → **~80 %**. |
+| 1.1 | 2026-07-06 | **STCA segmentado TMA/Ruta** (cierra hallazgo STCA-2: el TMA quedaba sin protección) y **TRK-1/RNC-011 cerrado**: fusión errónea por proximidad con Mode S distintos (FC-TRK-01, detectada por el nuevo escenario TMA y corregida con veto de identidad en paso E). |

@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **Norma:** EUROCAE ED-109A / RTCA DO-278A — diseño de software (D-3) y requisitos de bajo nivel (D-2).
-**Versión:** 0.4 (borrador). **Fecha:** 2026-07-05. **Estado:** PROPUESTO — no aprobado por ANAC.
+**Versión:** 0.5 (borrador). **Fecha:** 2026-07-06. **Estado:** PROPUESTO — no aprobado por ANAC.
 
 > Formaliza la **arquitectura** y los **Requisitos de Bajo Nivel (LLR)** del software. Los LLR derivan
 > de los HLR del [SRS (doc 07)](07_SRS.md) y de la arquitectura, redactados conforme al
@@ -178,6 +178,7 @@ worker de red y el de persistencia no toman decisiones de seguridad ([ED-1/ED-2]
 | LLR-COR-05 | Con identidades no contradictorias, dos tracks **DEBEN** considerarse la misma aeronave si su distancia extrapolada ≤ `gate_estricto_nm` (0.7 NM). | HLR-TRK-05, HLR-FUS-02 |
 | LLR-COR-06 | Una asociación aprendida squawk↔Mode S **DEBE** mantener la fusión hasta `gate_asociado_nm` (5 NM) solo mientras su antigüedad ≤ `assoc_ttl_s` (300 s), medida con `now_fn`. | HLR-FUS-02 |
 | LLR-COR-07 | La velocidad **DEBE** tomarse de `_smooth_vx/_smooth_vy` si existe; en su defecto derivarse de `ground_speed`·(convención x=Este=sin, y=Norte=cos) solo si `1.0 ≤ v ≤ vel_fallback_max_mps` (600 m/s); si no, `(0,0)`. | HLR-FUS-03 |
+| LLR-COR-08 | El gate de proximidad del matching (paso E, `radar_widget`) **DEBE** vetar todo candidato con **identidad contradictoria** con el plot (Mode S válidos distintos, o squawks discretos distintos) antes de fusionar por cercanía: la fusión por proximidad es solo para blancos sin identidad común. *(Corrige FC-TRK-01: sin el veto, dos aeronaves reales a <3 NM co-altitud se colapsaban y el STCA quedaba suprimido en la geometría de conflicto.)* | HLR-TRK-05/06, [SSR-06], DD-2 |
 
 ## 5. LLR — STCA (`analysis/stca_analyzer.py`)
 
@@ -186,13 +187,15 @@ worker de red y el de persistencia no toman decisiones de seguridad ([ED-1/ED-2]
 
 | LLR | Enunciado | HLR |
 |-----|-----------|-----|
-| LLR-STC-01 | Un track con `speed_kt` conocido < 40 kt **DEBE** excluirse de la evaluación (blancos estáticos: calibración, reflectores). | HLR-STCA-01 |
-| LLR-STC-02 | Solo **DEBEN** evaluarse tracks con `flight_level` entero dentro de `[fl_min, fl_max]` (245..450); un FL no numérico **DEBE** excluir el track. | HLR-STCA-01 |
+| LLR-STC-01 | Un track con `speed_kt` conocido < `velocidad_min_kt` (40 kt) **DEBE** excluirse de la evaluación (blancos estáticos: calibración, reflectores). | HLR-STCA-01 |
+| LLR-STC-02 | Solo **DEBEN** evaluarse tracks con `flight_level` entero dentro de la banda global `[fl_min, fl_max]` (FL030..FL600, unión de segmentos); un FL no numérico **DEBE** excluir el track. | HLR-STCA-01 |
 | LLR-STC-03 | Un par **DEBE** suprimirse (misma aeronave) si comparten Modo 3/A no genérico o el mismo Mode S. | HLR-STCA-01, [SSR-06] |
-| LLR-STC-04 | Un par con separación vertical `|ΔFL|·100 ≥ min_vertical_ft` (900 ft) **NO DEBE** generar alerta. | HLR-STCA-02 |
-| LLR-STC-05 | La **fase de violación** **DEBE** usar la distancia haversine sobre `lat_render/lon_render` (posición cruda): si < `min_horizontal_nm` (10 NM) → `VIOLATION` con tiempo 0. Esta fase **NO DEBE** depender de `x/y` suavizados. | HLR-STCA-01, DD-4 |
-| LLR-STC-06 | Un par co-ubicado (`dist_actual < 0.5 NM` y `ΔFL·100 < 200 ft`) **DEBE** suprimirse como duplicado del mismo blanco (dos aeronaves distintas nunca vuelan a < 0.5 NM co-altitud → no oculta STCA real). | HLR-STCA-01, DD-2 |
-| LLR-STC-07 | La **fase de predicción** **DEBE** calcular `t_cpa` a partir de posición/velocidad relativas cartesianas y, solo si `0 < t_cpa ≤ 120 s` y la distancia proyectada en el CPA < `min_horizontal_nm`, emitir `PREDICTION` con `t_cpa` redondeado. | HLR-STCA-01/05 |
+| LLR-STC-04 | Un par con separación vertical `|ΔFL|·100 ≥ vertical_ft` del **segmento aplicable** (TMA: 800 ft; Ruta: 1000 ft) **NO DEBE** generar alerta. | HLR-STCA-02 |
+| LLR-STC-05 | La **fase de violación** **DEBE** usar la distancia haversine sobre `lat_render/lon_render` (posición cruda): si < `horizontal_nm` del segmento (TMA: 3 NM; Ruta: 5 NM) → `VIOLATION` con tiempo 0. Esta fase **NO DEBE** depender de `x/y` suavizados. | HLR-STCA-01/06, DD-4 |
+| LLR-STC-06 | Un par co-ubicado (`dist_actual < DUP_SUPRESION_NM` (0.5) y `ΔFL·100 < DUP_SUPRESION_FT` (200)) **DEBE** suprimirse como duplicado del mismo blanco (dos aeronaves distintas nunca vuelan a < 0.5 NM co-altitud → no oculta STCA real). | HLR-STCA-01, DD-2 |
+| LLR-STC-07 | La **fase de predicción** **DEBE** calcular `t_cpa` a partir de posición/velocidad relativas cartesianas y, solo si `0 < t_cpa ≤ lookahead_s` (120 s) y la distancia proyectada en el CPA < `horizontal_nm` del segmento, emitir `PREDICTION` con `t_cpa` redondeado. | HLR-STCA-01/05 |
+| LLR-STC-08 | El segmento aplicable a un par **DEBE** resolverse con `_umbrales_par(fl1, fl2)`: si `max(fl1, fl2) ≥ ruta.fl_piso` (FL245) → umbrales de **Ruta** (los más conservadores); si no → TMA. Función pura del par de FL (sin estado): elimina el parpadeo de umbral en cruces de FL245. | HLR-STCA-07 |
+| LLR-STC-09 | La configuración (`STCAConfig`) **DEBE** validarse en construcción (`validar()`: bandas coherentes sin solape, horizontal ∈ (0, 20], vertical ∈ (0, 5000]) y cargarse de `config/stca.json` si existe; ante archivo ilegible/inválido el caller **DEBE** aplicar `STCAConfig.fallback_seguro()` (3 NM / 1000 ft, FL030–FL600) y notificar — nunca operar sin red. | HLR-STCA-08, [EC-8] |
 
 ## 6. LLR — APW y MSAW (`player/areas/apw.py`, `player/msaw/engine.py`)
 
@@ -278,8 +281,8 @@ worker de red y el de persistencia no toman decisiones de seguridad ([ED-1/ED-2]
 | Módulo | LLR | Test de verificación |
 |--------|-----|----------------------|
 | `tracking/lifecycle.py` | LLR-LIF-01..07 | `tests/tracking/test_lifecycle*.py` |
-| `fusion/correlator.py` | LLR-COR-01..07 | `tests/tracking/test_matching.py`, `tests/**/test_correlator.py` |
-| `analysis/stca_analyzer.py` | LLR-STC-01..07 | `tests/stca/test_stca_engine.py`, `test_stca_scenarios.py` |
+| `fusion/correlator.py` + paso E (`radar_widget`) | LLR-COR-01..08 | `tests/tracking/test_matching.py` (incl. veto de identidad), `tests/**/test_correlator.py` |
+| `analysis/stca_analyzer.py` | LLR-STC-01..09 | `tests/stca/test_stca_engine.py` (segmentación/fallback), `test_stca_scenarios.py` (TMA protegido) |
 | `areas/apw.py` | LLR-APW-01..04 | `tests/areas/test_apw.py` |
 | `msaw/engine.py` | LLR-MSA-01..04 | `tests/msaw/test_engine.py`, `test_suppression.py` |
 | `player/radar_widget.py` | LLR-HMI-01..06 | `tests/tracking/test_hmi.py`, `tests/tracking/test_safety_state.py`, `tests/msaw/test_render.py` |
@@ -325,3 +328,4 @@ de secuencia (§2.3), estados (§2.4) y despliegue (§2.5) están incluidos. Res
 | 0.2 | 2026-07-05 | Añadidos LLR de **HMI/PPI** (LLR-HMI-01..06), **decodificación/proyección** (LLR-DEC/GEO), **persistencia/auditoría** (LLR-AUD) y **roles** (LLR-ROL); diagramas de secuencia (§2.3). |
 | 0.3 | 2026-07-05 | Completados LLR de **robustez de decodificación** (LLR-DEC-04..06: troceo por LEN, excepción acotada, ADEXP), **altimetría** (LLR-GEO-04: TL/A-F, + test nuevo), **prestaciones** (LLR-PRF-01..05, §10) y **HMI secundaria** (LLR-HMI-07/08). Todos los HLR quedan con LLR asociado y todos los LLR con test. |
 | 0.4 | 2026-07-05 | Diagramas de **estados** del ciclo de vida (§2.4) y de **despliegue** (§2.5). Cierra los refinamientos de arquitectura de D-3. |
+| 0.5 | 2026-07-06 | **STCA segmentado** (LLR-STC actualizados + LLR-STC-08/09: transición y config/fallback, HLR-STCA-07/08) y **LLR-COR-08**: veto de identidad contradictoria en el paso E del matching (corrige FC-TRK-01 detectado por el escenario TMA). |

@@ -28,7 +28,7 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | 04 | [Matriz de Trazabilidad](04_matriz_trazabilidad.md) | Requisitos ↔ diseño ↔ código ↔ test | Inicial/parcial |
 | 05 | [Hoja de Ruta de Certificación](05_hoja_de_ruta.md) | Planificación de cierre de brecha | Borrador |
 | 06 | [FHA — Functional Hazard Assessment](06_FHA.md) | Análisis de peligros; confirma SWAL; deriva SSR | Borrador v0.1 |
-| 07 | [SRS — Software Requirements Specification](07_SRS.md) | 57 HLR formalizados (incl. HLR-STCA-06); 11 HLR-SSR del FHA; trazabilidad HLR↔test | Borrador v0.2 |
+| 07 | [SRS — Software Requirements Specification](07_SRS.md) | 59 HLR formalizados (incl. STCA segmentado TMA/Ruta, HLR-STCA-06/07/08); 11 HLR-SSR del FHA; trazabilidad HLR↔test | Borrador v0.3 |
 | 08 | [SDP — Software Development Plan](08_SDP.md) | Entorno, estándares de codificación, proceso de desarrollo, SOUP | Borrador v0.1 |
 | 09 | [SVP — Software Verification Plan](09_SVP.md) | Métodos, niveles de prueba, cobertura, trazabilidad HLR↔test | Borrador v0.1 |
 | 10 | [SCMP — Software Configuration Management Plan](10_SCMP.md) | Git como SCM, SCI, baseline, lockfile, archivo de resultados | Borrador v0.1 |
@@ -36,7 +36,7 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | 12 | [Registros de Revisión de Código](12_registros_revision_codigo.md) | Revisión por inspección de los 5 módulos SWAL 2 (RR-01..05) | Borrador v0.1 |
 | 13 | [Estándar de Codificación y Diseño](13_estandar_codificacion.md) | Reglas EC/ED verificables + linter en CI (cierra D-4); base de la revisión de código | Borrador v0.2 |
 | 14 | [Estándar de Requisitos](14_estandar_requisitos.md) | Reglas ER/RR/CJ/VF/LR + checklist QR (cierra P-5) | Borrador v0.1 |
-| 15 | [SDD — Software Design Description](15_SDD.md) | Arquitectura (capas/flujo/secuencia/decisiones) + LLR de todas las capas — todo HLR con LLR (cierra D-2) | Borrador v0.3 |
+| 15 | [SDD — Software Design Description](15_SDD.md) | Arquitectura (capas/flujo/secuencia/estados/despliegue) + LLR de todas las capas — todo HLR con LLR (cierra D-2) | Borrador v0.5 |
 | 16 | [PSSA / SSA](16_PSSA_SSA.md) | Evaluación de seguridad del SW: arquitectura, FC→SSR→diseño→SWAL, verificación SSA (11/11), safety case (avanza S-2/S-3) | Borrador v0.3 |
 | 17 | [Registros de Auditoría SQA](17_registros_auditoria_SQA.md) | Ejecución de auditorías de proceso/producto/transición por baseline (cierra Q-1/Q-2/Q-3) | Borrador v0.1 |
 | 18 | [Procedimiento de Purga RNC-010](18_procedimiento_purga_RNC010.md) | Purga de binarios del histórico git (fases A/B, inventario real) — **no ejecutado** | Propuesto v0.1 |

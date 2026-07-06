@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **Norma de referencia:** EUROCAE ED-109A / RTCA DO-278A; EUROCONTROL ASTERIX Specs Ed. 1.x por categoría.
-**Versión:** 0.2 (borrador). **Fecha:** 2026-07-05.
+**Versión:** 0.3 (borrador). **Fecha:** 2026-07-06.
 **Estado:** PROPUESTO — requiere revisión técnica interna y aprobación de ANAC en SOI-2.
 
 > Este SRS formaliza los **Requisitos de Alto Nivel (HLR)** del software. Los HLR se derivan de:  
@@ -177,11 +177,18 @@ El sistema **DEBE** ofrecer una vista alternativa con cartografía satelital/vec
 
 > SWAL 3. La función es red de respaldo, no medio primario de separación.
 
-### HLR-STCA-01 — Detección de conflicto CPA `[REQ-SN-1]` `[SSR-07]` `SWAL 3`
-Cuando STCA esté habilitada, el sistema **DEBE** calcular el Closest Point of Approach (CPA) para todos los pares de tracks activos con velocidad conocida y generar una alerta cuando la distancia horizontal proyectada en el CPA sea < `stca_horizontal_nm` (configurable, por defecto 3 NM) y el tiempo al CPA sea < `stca_lookahead_s` (por defecto 120 s).
+### HLR-STCA-01 — Detección de conflicto por segmento de espacio aéreo `[REQ-SN-1]` `[SSR-07]` `SWAL 3`
+Cuando STCA esté habilitada, el sistema **DEBE** evaluar la separación actual (haversine sobre posición cruda) y la proyectada en el CPA (para pares con velocidad conocida, con tiempo al CPA < `lookahead_s`, por defecto 120 s) y generar una alerta cuando la distancia horizontal sea inferior al umbral del **segmento aplicable** (RAAC / OACI Doc 4444):
+
+| Segmento | Banda | `horizontal_nm` | `vertical_ft` |
+|----------|-------|-----------------|---------------|
+| TMA / espacio inferior | FL030 ≤ FL < FL245 | **3.0 NM** | **800 ft** |
+| Ruta / espacio superior | FL245 ≤ FL ≤ FL600 | **5.0 NM** | **1000 ft** |
+
+Los umbrales y bandas **DEBEN** ser configurables (`config/stca.json`, ver HLR-STCA-08); los valores de la tabla son los por defecto normativos. Tracks fuera de la banda global FL030–FL600 **NO DEBEN** evaluarse (excluye tráfico de superficie/circuito y espacio no controlado superior).
 
 ### HLR-STCA-02 — Separación vertical en STCA `SWAL 3`
-Cuando ambos tracks tengan FL conocido, el sistema **NO DEBE** generar alerta STCA si la diferencia de FL es ≥ `stca_vertical_fl` (configurable, por defecto 10 FL = 1000 ft).
+Cuando ambos tracks tengan FL conocido, el sistema **NO DEBE** generar alerta STCA si la diferencia vertical es ≥ el `vertical_ft` del segmento aplicable (HLR-STCA-01): 800 ft en TMA (alerta temprana ante la pérdida del mínimo de 1000 ft bajo FL290), 1000 ft en Ruta (intrusión en bloques RVSM).
 
 ### HLR-STCA-03 — Inhibición explícita de pares `SWAL 3`
 El operador o la configuración **DEBE** poder definir pares de tracks inhibidos para STCA (p.ej. formaciones). Un par inhibido **NO DEBE** generar alerta.
@@ -191,6 +198,12 @@ Ver HLR-HMI-05.
 
 ### HLR-STCA-05 — Ausencia de alerta fuera del umbral `SWAL 3`
 El sistema **NO DEBE** generar alertas STCA para pares de tracks cuya distancia horizontal en CPA sea ≥ `stca_horizontal_nm` + margen de histéresis (`stca_hysteresis_nm`, por defecto 0.5 NM) para evitar alarm flicker.
+
+### HLR-STCA-07 — Transición entre segmentos sin parpadeo `[SSR-07]` `SWAL 3`
+Para un par de tracks cuyos niveles caigan en segmentos distintos (aeronave cruzando FL245 en ascenso/descenso), el sistema **DEBE** aplicar los umbrales del segmento **más conservador** (Ruta: 5.0 NM / 1000 ft) mientras al menos una de las aeronaves esté en o por encima del piso de Ruta. Esta regla **DEBE** ser determinista (función pura del par de FL) para evitar el parpadeo de alertas en la transición.
+
+### HLR-STCA-08 — Configuración con fallback seguro `[SSR-07]` `SWAL 3`
+Los parámetros del motor STCA **DEBEN** cargarse desde la configuración operativa (`config/stca.json`) validando bandas y rangos en carga. Ante configuración ausente, el sistema **DEBE** usar los valores normativos por defecto (tabla de HLR-STCA-01). Ante configuración **ilegible o inválida**, el sistema **DEBE** aplicar el fallback seguro — 3.0 NM / 1000 ft en toda la banda FL030–FL600 — y notificarlo; el sistema **NO DEBE** quedar sin función STCA por un error de configuración.
 
 ### HLR-STCA-06 — Marco de posición único y consistente `[SSR-07]` `SWAL 3`
 El origen de datos del motor STCA (el caller) **DEBE** suministrar a ambas fases —separación actual (VIOLATION) y predicción de CPA (PREDICTION)— la **misma posición de la aeronave expresada en marcos consistentes**: las coordenadas cartesianas `x/y` (metros) **DEBEN** ser la proyección local de las coordenadas `lat_render/lon_render` (grados) usadas por la fase de violación. El motor **NO DEBE** mezclar dos linajes de posición distintos (p. ej. posición cruda para la violación y posición suavizada para la predicción) sin garantizar esa consistencia. En todo caso, la fase de VIOLATION **DEBE** decidirse sobre la posición cruda reportada, de modo que un `x/y` inconsistente **NO PUEDA** ocultar una violación de separación real. *(Cierra el hallazgo de verificación STCA-1.)*
@@ -377,9 +390,11 @@ Los parámetros de cada sensor (SAC, SIC, lat, lon, nombre, rango máximo) **DEB
 | HLR-HMI-06 | — | SSR-05 | FC-HMI-04 | ❌ pendiente |
 | HLR-HMI-07 | REQ-HMI-2 | — | — | `test_declutter.py` |
 | HLR-HMI-08 | REQ-HMI-4 | — | — | `tests/firmap/` |
-| HLR-STCA-01 | REQ-SN-1 | SSR-07 | FC-STCA-01 | `test_stca_engine.py` |
-| HLR-STCA-02..05 | REQ-SN-1 | — | FC-STCA-02/03 | `test_stca_engine.py` (parcial) |
+| HLR-STCA-01 | REQ-SN-1 | SSR-07 | FC-STCA-01 | `test_stca_engine.py` (segmentos TMA/Ruta), `test_stca_scenarios.py` (TMA protegido) |
+| HLR-STCA-02..05 | REQ-SN-1 | — | FC-STCA-02/03 | `test_stca_engine.py` (vertical por segmento; banda global) |
 | HLR-STCA-06 | REQ-SN-1 | SSR-07 | FC-STCA-01 | `test_stca_engine.py::test_contrato_*` (marco único + residual acotado) |
+| HLR-STCA-07 | REQ-SN-1 | SSR-07 | FC-STCA-01 | `test_stca_engine.py::test_transicion_fl245_usa_umbral_ruta` |
+| HLR-STCA-08 | REQ-SN-1 | SSR-07 | FC-STCA-03 | `test_stca_engine.py::test_fallback_seguro_uniforme`, `test_config_invalida_lanza` |
 | HLR-APW-01..04 | REQ-SN-2 | SSR-09 | FC-APW-01/03 | `test_apw.py` |
 | HLR-MSAW-01..05 | REQ-SN-3/4 | SSR-08/09 | FC-MSAW-01..04 | `test_engine.py`, `test_suppression.py` |
 | HLR-FUS-01..04 | REQ-FUS-1/2 | — | FC-FUS-01/02 | `test_correlator.py` |
@@ -408,3 +423,4 @@ Los parámetros de cada sensor (SAC, SIC, lat, lon, nombre, rango máximo) **DEB
 |-----|-------|--------|
 | 0.1 | 2026-07-01 | Primera edición. 56 HLR formalizados sobre 12 subsistemas. 11 HLR-SSR derivados del FHA. Matriz de trazabilidad HLR↔REQ↔SSR↔test. 5 brechas críticas identificadas. |
 | 0.2 | 2026-07-05 | Añadido **HLR-STCA-06** (marco de posición único y consistente) que formaliza el contrato del motor STCA y **cierra el hallazgo STCA-1**; trazado a `test_stca_engine.py::test_contrato_*`. |
+| 0.3 | 2026-07-06 | **STCA segmentado por volúmenes** (RAAC/Doc 4444): HLR-STCA-01/02 reescritos (TMA 3 NM/800 ft FL030-<245; Ruta 5 NM/1000 ft FL245-600); nuevos **HLR-STCA-07** (transición conservadora sin parpadeo) y **HLR-STCA-08** (config con fallback seguro). Cierra la brecha operativa: el TMA quedaba sin protección STCA con la banda hardcodeada FL245-450. |

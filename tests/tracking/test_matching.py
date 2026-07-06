@@ -266,6 +266,24 @@ class TestMatchingProximidad:
         # ΔFL = 15000 ft >> 1500 ft → no match por E
         assert t1 != t2
 
+    def test_mode_s_distintos_no_fusiona_por_proximidad(self, w):
+        """HLR-TRK-06/SSR-06: dos Mode S válidos distintos NUNCA se fusionan,
+        ni siquiera co-ubicados dentro del gate de proximidad del paso E.
+
+        Regresión de FC-TRK-01: sin el veto de identidad, dos aeronaves reales
+        a <3 NM co-altitud se colapsaban en un track y el STCA quedaba suprimido
+        justo en la geometría de conflicto."""
+        t1 = proc(w, plot(cat=21, mode_s='AAAAAA', x=0, y=0, fl=100, time=1000.0))
+        t2 = proc(w, plot(cat=21, mode_s='BBBBBB', x=2 * NM, y=0, fl=100, time=1001.0))
+        assert t1 != t2, "Mode S distintos fusionados por proximidad (FC-TRK-01)"
+        assert len(w.tracks) + len(w.pending_tracks) == 2
+
+    def test_squawks_discretos_distintos_no_fusiona_por_proximidad(self, w):
+        """Dos squawks discretos distintos (sin Mode S) tampoco se fusionan por E."""
+        t1 = proc(w, plot(cat=48, mode_s=None, mode3a=0o1111, x=0, y=0, fl=100, time=1000.0))
+        t2 = proc(w, plot(cat=48, mode_s=None, mode3a=0o2222, x=2 * NM, y=0, fl=100, time=1001.0))
+        assert t1 != t2, "Squawks discretos distintos fusionados por proximidad"
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # CAT062: System Tracks (clave TRK_{tn}_{sensor_id})
