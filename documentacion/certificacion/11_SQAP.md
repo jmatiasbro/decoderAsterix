@@ -139,7 +139,7 @@ referencia al artefacto de evidencia.
 | RNC-007 | C | Cobertura de decisiones no medida en módulos SWAL 2 | **CERRADA** — medida con `pytest-cov` (branch), línea base **88.5 %** ≥ objetivo 80 %; automatizada en CI (`.github/workflows/tests.yml`). Ver SVP §4.4 |
 | RNC-008 | B | Sin registros de revisión de código para módulos SWAL 2 | **CERRADA** — [12_registros_revision_codigo.md](12_registros_revision_codigo.md) (RR-01..05, 5 módulos). Independencia sigue como RNC-006 |
 | RNC-009 | C | Descarte silencioso de plots en `_process_plot_data` (brecha de observabilidad, ver gap analysis ROB-1) | **CERRADA** — contador + logging con throttle; `tests/tracking/test_plot_descarte.py` (3 casos) |
-| RNC-010 | C | Binarios (`.pcap`/`.duckdb`/`.venv`) versionados en el histórico git (integridad del árbol, gap C-3) | Abierta — **procedimiento de purga listo para ejecutar** ([doc 18](18_procedimiento_purga_RNC010.md), inventario real: ~10 capturas en HEAD + blobs de 1.1 GB en histórico); requiere decisión del responsable |
+| RNC-010 | C | Binarios (`.pcap`/`.duckdb`/`.venv`) versionados en el histórico git (integridad del árbol, gap C-3) | **Fase A ejecutada** (2026-07-05): destrackeadas 10 `.pcap` + 3 `.S4RD` de HEAD ([doc 18 §2](18_procedimiento_purga_RNC010.md)). Fase B (purga del histórico, 1.1 GB) pendiente de decisión del responsable |
 
 > **Nota de estado (2026-07-05):** de las seis RNC iniciales, cuatro (001/002/003/005) quedaron cerradas
 > con evidencia versionada. Se incorporan RNC-007 y RNC-008 para trazar las brechas de cobertura y revisión,

@@ -49,6 +49,8 @@ logs/
 *.S4RD
 *.kmz
 *.dat
+# Excepción: fixtures de test vendorizados con la extensión C (pequeños, deterministas)
+!asterix_decoder-0.7.4/**/*.pcap
 
 # SQLite local (auth, etc.)
 *.sqlite

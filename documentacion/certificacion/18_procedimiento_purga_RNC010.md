@@ -44,9 +44,15 @@
 
 ---
 
-## 2. Fase A — Destrackear de HEAD (NO destructiva, commit normal)
+## 2. Fase A — Destrackear de HEAD (NO destructiva, commit normal) — ✅ EJECUTADA 2026-07-05
 
 Quita las capturas operativas del índice sin borrarlas del disco. Reversible; no reescribe historia.
+
+> **Ejecutada el 2026-07-05:** se destrackearon 10 `.pcap` + 3 `.S4RD` de la raíz (`git rm --cached`);
+> los archivos locales quedaron intactos y `baires.pcap` sigue disponible para el stress test. Los
+> fixtures vendorizados (`asterix_decoder-0.7.4/**`) se conservan, con excepción explícita en
+> `.gitignore`. Los clones nuevos ya no descargan ~250 MB de capturas en el checkout de HEAD.
+> **La Fase B (purga del histórico) sigue pendiente de decisión.**
 
 ```bash
 git rm --cached baires.pcap captura_260130.pcap Martescordoba_radar2.pcap \
