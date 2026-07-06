@@ -2680,6 +2680,17 @@ class RadarWidget(_RadarBase):
                     f"Cadena safety-nets sin respuesta > {elapsed:.0f} s "
                     "— función de alerta DEGRADADA")
 
+    def estado_redes_seguridad(self) -> dict:
+        """Estado habilitado/inhibido de cada red de seguridad (SSR-10 / HLR-HMI-05).
+
+        Fuente única de verdad para el indicador HMI siempre visible: el estado no
+        debe requerir abrir un menú para consultarse. True = habilitada."""
+        return {
+            "STCA": bool(getattr(self, "stca_habilitado", True)),
+            "APW": bool(getattr(self, "apw_habilitado", True)),
+            "MSAW": bool(getattr(self, "msaw_habilitado", True)),
+        }
+
     def evaluar_stca(self):
         """
         Evalúa conflictos STCA con lógica de inhibición multisensor (Regla de Oro de la FASE 3).
@@ -4144,6 +4155,28 @@ class RadarWidget(_RadarBase):
                 painter.setPen(QColor("#00FF00")) # Verde Radar aeronáutico
                 painter.setFont(QFont("Monospace", 9, QFont.Weight.Bold))
                 painter.drawText(rect_destino, Qt.AlignmentFlag.AlignCenter, self.cursor_geo_text)
+                painter.restore()
+            except Exception:
+                pass
+
+            # ---- 8b. INDICADOR DE ESTADO DE REDES DE SEGURIDAD (SSR-10) ----
+            # Siempre visible, sin requerir abrir un menú: cada red en verde
+            # (habilitada) o rojo con "INH" (inhibida). Esquina superior izquierda.
+            try:
+                painter.save()
+                estado_sn = self.estado_redes_seguridad()
+                painter.setFont(QFont("Monospace", 9, QFont.Weight.Bold))
+                painter.setBrush(QBrush(QColor(11, 14, 20, 220)))
+                painter.setPen(QPen(QColor("#3A3F4B"), 1.0))
+                rect_sn = QRectF(10, 10, 150, 20)
+                painter.drawRect(rect_sn)
+                x_txt = 16.0
+                for nombre in ("STCA", "APW", "MSAW"):
+                    on = estado_sn.get(nombre, True)
+                    painter.setPen(QColor("#00FF00") if on else QColor("#FF3B30"))
+                    etiqueta = nombre if on else f"{nombre}·INH"
+                    painter.drawText(QPointF(x_txt, 24.0), etiqueta)
+                    x_txt += (len(etiqueta) * 7.0) + 6.0
                 painter.restore()
             except Exception:
                 pass

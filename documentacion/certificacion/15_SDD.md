@@ -172,7 +172,7 @@ _watchdog_timer (2 s)  →  _check_safety_watchdog()  →  si elapsed > 5 s: sys
 | LLR-HMI-03 | Un track `degradada` (DQF) o `is_reflection` **DEBE** excluirse de la evaluación de las redes de seguridad (STCA/APW/MSAW), pero **DEBE** seguir siendo visible en el PPI con simbología diferenciada. | HLR-HMI-04, DD-2 |
 | LLR-HMI-04 | La cadena de seguridad **DEBE** registrar su instante de finalización (éxito o error) en `_safety_wall_last` dentro de un bloque `finally`. | HLR-HMI-06, [SSR-05] |
 | LLR-HMI-05 | Un temporizador de 2 s **DEBE** comprobar que la cadena completó en los últimos **5 s** habiendo tracks activos; si `elapsed > 5 s`, **DEBE** inyectarse un evento `CRITICAL/WATCHDOG` en el bus del sistema (una sola vez hasta la recuperación). | HLR-HMI-06, [SSR-05] |
-| LLR-HMI-06 | El estado habilitado/inhibido de cada red de seguridad **DEBE** estar reflejado en la HMI en todo momento sin acción del operador. | HLR-HMI-05, [SSR-10] |
+| LLR-HMI-06 | El estado habilitado/inhibido de cada red de seguridad **DEBE** estar reflejado en la HMI en todo momento sin acción del operador, mediante `estado_redes_seguridad()` y un indicador HUD siempre visible (no requiere abrir menú). | HLR-HMI-05, [SSR-10] |
 | LLR-HMI-07 | El nivel de detalle de la etiqueta (declutter, en `player/ods/`) **DEBE** ser seleccionable por el operador (mínimo: símbolo + Modo 3/A; completo: FDB con callsign/FL/velocidad); el cambio de nivel **NO DEBE** hacer desaparecer tracks activos. | HLR-HMI-07 |
 | LLR-HMI-08 | La vista FIR satelital (`player/firmap/`) **DEBE** ofrecerse como presentación alternativa superponible con los tracks activos, sin sustituir el PPI operativo. | HLR-HMI-08 |
 
@@ -231,7 +231,7 @@ _watchdog_timer (2 s)  →  _check_safety_watchdog()  →  si elapsed > 5 s: sys
 | `analysis/stca_analyzer.py` | LLR-STC-01..07 | `tests/stca/test_stca_engine.py`, `test_stca_scenarios.py` |
 | `areas/apw.py` | LLR-APW-01..04 | `tests/areas/test_apw.py` |
 | `msaw/engine.py` | LLR-MSA-01..04 | `tests/msaw/test_engine.py`, `test_suppression.py` |
-| `player/radar_widget.py` | LLR-HMI-01..06 | `tests/tracking/test_hmi.py`, `tests/msaw/test_render.py` |
+| `player/radar_widget.py` | LLR-HMI-01..06 | `tests/tracking/test_hmi.py`, `tests/tracking/test_safety_state.py`, `tests/msaw/test_render.py` |
 | `decoder/sensor_registry.py` | LLR-DEC-01..03, LLR-GEO-01..03 | `tests/decoders/test_sensor_registry.py`, `tests/geo/test_stereographic.py` |
 | `storage/duckdb_repo.py` + `analysis/exporters.py` | LLR-AUD-01..04 | `tests/**/test_safety_audit.py` |
 | `player/profile_manager.py` | LLR-ROL-01..03 | `tests/**/test_profile_manager.py` |

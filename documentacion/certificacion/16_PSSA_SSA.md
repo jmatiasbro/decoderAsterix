@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **Norma:** EUROCAE ED-109A / RTCA DO-278A; método de ED-135 / ARP4761 adaptado a software de tierra CNS/ATM.
-**Versión:** 0.2 (borrador). **Fecha:** 2026-07-05. **Estado:** PROPUESTO — requiere validación con EANA/explotador y ANAC.
+**Versión:** 0.3 (borrador). **Fecha:** 2026-07-05. **Estado:** PROPUESTO — requiere validación con EANA/explotador y ANAC.
 
 > Este documento cubre la **PSSA** (asignación descendente de requisitos de seguridad al diseño) y la
 > **SSA** (verificación ascendente de que el diseño implementado los satisface), más un **argumento de
@@ -100,13 +100,12 @@ Cierre ascendente: cada SSR con su estado de verificación real.
 | SSR-07 | ✅ Verificado | Geometría CPA + escenarios end-to-end + **contrato marco único (STCA-1 cerrado)** | Escenario de tráfico denso desde PCAP real (SOI-3) |
 | SSR-08 | ✅ Verificado | Alerta + supresión MSAW | Test con datos de terreno límite |
 | SSR-09 | ✅ Verificado | Rechazo en carga: áreas (`test_store.py`) y **zonas MSAW** (`test_data_load.py`, `filtrar_zonas_validas`) | — |
-| SSR-10 | ⚠️ Revisión | Estado visible por diseño | Sin test automatizado de HMI de estado |
+| SSR-10 | ✅ Verificado | Indicador HMI **siempre visible** (`estado_redes_seguridad()` + HUD); `test_safety_state.py` | — |
 | SSR-11 | ✅ Verificado | Flush + query auditoría | — |
 
-**Resumen SSA:** **10/11 SSR verificados** por test automatizado; solo SSR-10 (estado safety-net visible)
-queda por **revisión de HMI** sin test automatizado. Ninguna brecha corresponde a un falso negativo de la
-barrera crítica (STCA/MSAW), que están verificados. El residual (SSR-10 + regresión visual de SSR-01/04)
-es de menor criticidad inmediata y con acción asignada.
+**Resumen SSA:** **11/11 SSR verificados** por test automatizado. Ninguna barrera crítica queda sin
+verificar. El único residual es la **regresión visual pixel-level** del render (SSR-01/04, FC-HMI-01/02),
+cubierta hoy a nivel de modelo/widget y mitigada por detección humana inmediata; acción SSA-A2 asignada.
 
 ---
 
@@ -119,7 +118,7 @@ es de menor criticidad inmediata y con acción asignada.
 | Regresión visual del render (FC-HMI-01/02) | Abierto (acción FHA-A5) | Cubierto a nivel de modelo/widget; falta pixel-level. Mitigado por detección humana inmediata de anomalía grosera |
 | Carga corrupta de geometría/terreno (SSR-09) | **CERRADO** (2026-07-05) | Rechazo en carga verificado: áreas (`test_store.py`) y MSAW (`filtrar_zonas_validas`, `test_data_load.py`) |
 | Centro de proyección fuera de rango (SSR-03) | **CERRADO** (2026-07-05) | `_build_proj` rechaza con ValueError; caller lo trata como sensor no configurado (`test_projection_range.py`) |
-| Estado safety-net visible (SSR-10) | Abierto | Verificado por diseño/revisión; sin test automatizado de HMI de estado |
+| Estado safety-net visible (SSR-10) | **CERRADO** (2026-07-05) | Indicador HUD siempre visible (esquina superior izquierda) desde `estado_redes_seguridad()`; `test_safety_state.py` |
 
 **Riesgo residual global:** las barreras críticas de seguridad (no omitir tráfico, no fusionar aeronaves
 distintas, generar STCA/MSAW ante conflicto real) están **verificadas**. El riesgo residual se concentra
@@ -180,7 +179,7 @@ EANA (acciones FHA-A1/A2) antes de la aprobación.
 | SSA-A4 | Escenario STCA de tráfico denso desde PCAP real (refuerza SSR-07) | §4 | Pendiente (SOI-3) |
 | SSA-A5 | Validar H-AS-1..6 con EANA y registrar en acta (habilita el safety case) | §7 | Pendiente (externo) |
 | SSA-A6 | Presentar PSSA/SSA a ANAC en SOI-1/2 | §7 | Pendiente (externo) |
-| SSA-A7 | Test automatizado de HMI de estado de safety-nets (cierra SSR-10) | §4 | Pendiente |
+| SSA-A7 | Test automatizado de HMI de estado de safety-nets (cierra SSR-10) | §4 | ✅ Hecho (`test_safety_state.py` + HUD siempre visible) |
 
 ---
 
@@ -190,3 +189,4 @@ EANA (acciones FHA-A1/A2) antes de la aprobación.
 |-----|-------|--------|
 | 0.1 | 2026-07-05 | Emisión inicial: estrategia de arquitectura (SA-1..4), CCA, PSSA (FC→SSR→diseño→SWAL), SSA (verificación de 11 SSR), riesgo residual, requisitos derivados y argumento de seguridad (C0..C4). |
 | 0.2 | 2026-07-05 | Cerradas acciones **SSA-A1** (rechazo de zonas MSAW corruptas en carga) y **SSA-A3** (rechazo de centro de proyección fuera de rango). SSR-03/09 ⚠️→✅ (10/11 verificados). |
+| 0.3 | 2026-07-05 | Cerrada **SSA-A7**: indicador HUD de estado de safety-nets siempre visible (`estado_redes_seguridad()`) + `test_safety_state.py`. **SSR-10 ✅ → 11/11 SSR verificados.** |
