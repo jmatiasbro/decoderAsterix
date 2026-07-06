@@ -37,7 +37,8 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | 13 | [Estándar de Codificación y Diseño](13_estandar_codificacion.md) | Reglas EC/ED verificables + linter en CI (cierra D-4); base de la revisión de código | Borrador v0.2 |
 | 14 | [Estándar de Requisitos](14_estandar_requisitos.md) | Reglas ER/RR/CJ/VF/LR + checklist QR (cierra P-5) | Borrador v0.1 |
 | 15 | [SDD — Software Design Description](15_SDD.md) | Arquitectura (capas/flujo/secuencia/decisiones) + LLR de todas las capas — todo HLR con LLR (cierra D-2) | Borrador v0.3 |
-| 16 | [PSSA / SSA](16_PSSA_SSA.md) | Evaluación de seguridad del SW: arquitectura, FC→SSR→diseño→SWAL, verificación SSA, safety case (avanza S-2/S-3) | Borrador v0.1 |
+| 16 | [PSSA / SSA](16_PSSA_SSA.md) | Evaluación de seguridad del SW: arquitectura, FC→SSR→diseño→SWAL, verificación SSA (11/11), safety case (avanza S-2/S-3) | Borrador v0.3 |
+| 17 | [Registros de Auditoría SQA](17_registros_auditoria_SQA.md) | Ejecución de auditorías de proceso/producto/transición por baseline (cierra Q-1/Q-2/Q-3) | Borrador v0.1 |
 
 ## 3. Cómo leer el paquete
 
