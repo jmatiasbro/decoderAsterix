@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 from typing import Dict, Optional, Tuple, Any
 from pyproj import Geod
@@ -100,11 +101,22 @@ class TargetProcessor:
                 if sensor_lat is not None and sensor_lon is not None:
                     # ¡CRÍTICO! Esto convierte al primer radar detectado en el centro X=0, Y=0
                     if getattr(self.projection_system, 'center_lat', None) is None:
-                        if hasattr(self.projection_system, 'set_radar_center'):
-                            self.projection_system.set_radar_center(sensor_lat, sensor_lon)
-                        elif hasattr(self.projection_system, 'set_center'):
-                            self.projection_system.set_center(sensor_lat, sensor_lon)
-                        print(f"📡 Proyección centrada dinámicamente en el Radar {record.sac}/{proj_sic} ({sensor_lat}, {sensor_lon})")
+                        # SSR-03: un centro fuera de rango lo rechaza la proyección con
+                        # ValueError; se trata como sensor no configurado (no se centra,
+                        # valid_position quedará False) en vez de romper el pipeline.
+                        try:
+                            if hasattr(self.projection_system, 'set_radar_center'):
+                                self.projection_system.set_radar_center(sensor_lat, sensor_lon)
+                            elif hasattr(self.projection_system, 'set_center'):
+                                self.projection_system.set_center(sensor_lat, sensor_lon)
+                            print(f"📡 Proyección centrada dinámicamente en el Radar {record.sac}/{proj_sic} ({sensor_lat}, {sensor_lon})")
+                        except (ValueError, TypeError) as e:
+                            sensor_key = (record.sac, proj_sic)
+                            if sensor_key not in self._warned_sensors:
+                                print(f"⚠️ [AVISO] Sensor {record.sac}/{proj_sic} con centro "
+                                      f"de proyección inválido ({sensor_lat}, {sensor_lon}): {e}",
+                                      file=sys.stderr)
+                                self._warned_sensors.add(sensor_key)
                 else:
                     sensor_key = (record.sac, proj_sic)
                     if sensor_key not in self._warned_sensors:

@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **Norma:** EUROCAE ED-109A / RTCA DO-278A; método de ED-135 / ARP4761 adaptado a software de tierra CNS/ATM.
-**Versión:** 0.1 (borrador). **Fecha:** 2026-07-05. **Estado:** PROPUESTO — requiere validación con EANA/explotador y ANAC.
+**Versión:** 0.2 (borrador). **Fecha:** 2026-07-05. **Estado:** PROPUESTO — requiere validación con EANA/explotador y ANAC.
 
 > Este documento cubre la **PSSA** (asignación descendente de requisitos de seguridad al diseño) y la
 > **SSA** (verificación ascendente de que el diseño implementado los satisface), más un **argumento de
@@ -93,20 +93,20 @@ Cierre ascendente: cada SSR con su estado de verificación real.
 |-----|--------|-----------|----------|
 | SSR-01 | ✅ Verificado (unitario) | Parsing fiel CAT048/062; altimetría A/F | Falta test de propagación al render (regresión visual) — ver FHA-A5 |
 | SSR-02 | ✅ Verificado | `valid_position=False` sin sensor | — |
-| SSR-03 | ⚠️ Parcial | Roundtrip de proyección | Falta test de parámetros fuera de rango (LLR-GEO-03) |
+| SSR-03 | ✅ Verificado | Roundtrip + **rechazo de centro fuera de rango** (`test_projection_range.py`); caller trata el sensor como no configurado | — |
 | SSR-04 | ✅ Verificado | Completitud de tracks vivos + timeout por ToD | Regresión visual pendiente (FHA-A5) |
 | SSR-05 | ✅ Verificado | Watchdog 5 s → evento CRITICAL | — |
 | SSR-06 | ✅ Verificado | No fusión de Mode S distintos (31 casos matching) | — |
 | SSR-07 | ✅ Verificado | Geometría CPA + escenarios end-to-end + **contrato marco único (STCA-1 cerrado)** | Escenario de tráfico denso desde PCAP real (SOI-3) |
 | SSR-08 | ✅ Verificado | Alerta + supresión MSAW | Test con datos de terreno límite |
-| SSR-09 | ⚠️ Parcial | Validación de banda/geometría en evaluación | Falta test de **carga corrupta** de geometría/terreno |
+| SSR-09 | ✅ Verificado | Rechazo en carga: áreas (`test_store.py`) y **zonas MSAW** (`test_data_load.py`, `filtrar_zonas_validas`) | — |
 | SSR-10 | ⚠️ Revisión | Estado visible por diseño | Sin test automatizado de HMI de estado |
 | SSR-11 | ✅ Verificado | Flush + query auditoría | — |
 
-**Resumen SSA:** 8/11 SSR verificados por test automatizado; 3 parciales con brecha acotada y test
-propuesto. Ninguna brecha corresponde a un falso negativo de la barrera crítica (STCA/MSAW), que están
-verificados. Las brechas son de **robustez de carga de datos** (SSR-09) y **regresión visual/estado**
-(SSR-01/04/10), de menor criticidad inmediata y con acción asignada.
+**Resumen SSA:** **10/11 SSR verificados** por test automatizado; solo SSR-10 (estado safety-net visible)
+queda por **revisión de HMI** sin test automatizado. Ninguna brecha corresponde a un falso negativo de la
+barrera crítica (STCA/MSAW), que están verificados. El residual (SSR-10 + regresión visual de SSR-01/04)
+es de menor criticidad inmediata y con acción asignada.
 
 ---
 
@@ -117,7 +117,9 @@ verificados. Las brechas son de **robustez de carga de datos** (SSR-09) y **regr
 | **STCA-1** — doble marco de coordenadas | **CERRADO** (2026-07-05) | Formalizado por HLR-STCA-06 (marco único); VIOLATION siempre sobre posición cruda; verificado por `test_contrato_*`. Residual acotado a precisión de PREDICTION, nunca conflicto omitido |
 | **ROB-1** — descarte silencioso de plots | **MITIGADO** | Contador + log (LLR-HMI de observabilidad); no es defecto activo (campos bien tipados); `test_plot_descarte.py` |
 | Regresión visual del render (FC-HMI-01/02) | Abierto (acción FHA-A5) | Cubierto a nivel de modelo/widget; falta pixel-level. Mitigado por detección humana inmediata de anomalía grosera |
-| Carga corrupta de geometría/terreno (SSR-09) | Abierto | Validación existe en el motor; falta test de rechazo en carga. Mitigado por auditoría pre-operacional (FHA) |
+| Carga corrupta de geometría/terreno (SSR-09) | **CERRADO** (2026-07-05) | Rechazo en carga verificado: áreas (`test_store.py`) y MSAW (`filtrar_zonas_validas`, `test_data_load.py`) |
+| Centro de proyección fuera de rango (SSR-03) | **CERRADO** (2026-07-05) | `_build_proj` rechaza con ValueError; caller lo trata como sensor no configurado (`test_projection_range.py`) |
+| Estado safety-net visible (SSR-10) | Abierto | Verificado por diseño/revisión; sin test automatizado de HMI de estado |
 
 **Riesgo residual global:** las barreras críticas de seguridad (no omitir tráfico, no fusionar aeronaves
 distintas, generar STCA/MSAW ante conflicto real) están **verificadas**. El riesgo residual se concentra
@@ -170,14 +172,15 @@ EANA (acciones FHA-A1/A2) antes de la aprobación.
 
 ## 8. Acciones de cierre hacia SOI-2
 
-| # | Acción | Deriva de |
-|---|--------|-----------|
-| SSA-A1 | Test de rechazo de geometría/terreno corrupto en carga (cierra SSR-09) | §4 |
-| SSA-A2 | Test de regresión visual del render ODS (cierra residual FC-HMI-01/02) | §5, FHA-A5 |
-| SSA-A3 | Test de parámetros de proyección fuera de rango (cierra SSR-03) | §4 |
-| SSA-A4 | Escenario STCA de tráfico denso desde PCAP real (refuerza SSR-07) | §4 |
-| SSA-A5 | Validar H-AS-1..6 con EANA y registrar en acta (habilita el safety case) | §7 |
-| SSA-A6 | Presentar PSSA/SSA a ANAC en SOI-1/2 | §7 |
+| # | Acción | Deriva de | Estado |
+|---|--------|-----------|--------|
+| SSA-A1 | Test de rechazo de geometría/terreno corrupto en carga (cierra SSR-09) | §4 | ✅ Hecho (`test_store.py`, `test_data_load.py`) |
+| SSA-A2 | Test de regresión visual del render ODS (cierra residual FC-HMI-01/02) | §5, FHA-A5 | Pendiente (pixel-level) |
+| SSA-A3 | Test de parámetros de proyección fuera de rango (cierra SSR-03) | §4 | ✅ Hecho (`test_projection_range.py`) |
+| SSA-A4 | Escenario STCA de tráfico denso desde PCAP real (refuerza SSR-07) | §4 | Pendiente (SOI-3) |
+| SSA-A5 | Validar H-AS-1..6 con EANA y registrar en acta (habilita el safety case) | §7 | Pendiente (externo) |
+| SSA-A6 | Presentar PSSA/SSA a ANAC en SOI-1/2 | §7 | Pendiente (externo) |
+| SSA-A7 | Test automatizado de HMI de estado de safety-nets (cierra SSR-10) | §4 | Pendiente |
 
 ---
 
@@ -186,3 +189,4 @@ EANA (acciones FHA-A1/A2) antes de la aprobación.
 | Ver | Fecha | Cambio |
 |-----|-------|--------|
 | 0.1 | 2026-07-05 | Emisión inicial: estrategia de arquitectura (SA-1..4), CCA, PSSA (FC→SSR→diseño→SWAL), SSA (verificación de 11 SSR), riesgo residual, requisitos derivados y argumento de seguridad (C0..C4). |
+| 0.2 | 2026-07-05 | Cerradas acciones **SSA-A1** (rechazo de zonas MSAW corruptas en carga) y **SSA-A3** (rechazo de centro de proyección fuera de rango). SSR-03/09 ⚠️→✅ (10/11 verificados). |
