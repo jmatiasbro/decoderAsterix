@@ -116,15 +116,27 @@ referencia al artefacto de evidencia.
 
 ### 5.2 Proceso de no conformidad
 
-1. **Detección**: por auditoría SQA, revisión de código, o análisis de resultados de test.
-2. **Registro**: RNC con identificador, clase, descripción, HLR afectado, fecha de apertura.
+1. **Detección**: por auditoría SQA, revisión de código, análisis de resultados de test, o hallazgo de
+   seguridad (registrado además en el [safety case §5](16_PSSA_SSA.md)).
+2. **Registro**: RNC con identificador, clase, descripción, HLR/FC afectado, fecha de apertura.
 3. **Análisis de causa raíz**: ¿defecto en código, en requisito, en test, en proceso?
 4. **Acción correctiva**: implementación de la corrección.
 5. **Verificación de cierre**: nueva ejecución del test o nueva auditoría.
-6. **Cierre**: RNC marcada como CERRADA con referencia al commit de corrección.
+6. **Cierre**: RNC marcada como CERRADA con referencia al commit/PR de corrección.
 
-> **Brecha:** No existe sistema de seguimiento de RNCs. Se propone usar issues del repositorio Git
-> con etiquetas `RNC-A`, `RNC-B`, `RNC-C` como mecanismo mínimo hasta disponer de herramienta formal.
+**Herramienta y registro (C-2).** El seguimiento de problemas se realiza con un mecanismo establecido:
+
+- **Registro autoritativo (living record):** la tabla de RNC de la §5.3 — estado, clase y evidencia de
+  cierre por RNC. Es la fuente de verdad y se versiona con el resto del paquete.
+- **Seguimiento operativo:** *issues* de GitHub con etiquetas `RNC-A` / `RNC-B` / `RNC-C` por clase; cada
+  issue enlaza a la fila de la §5.3 y al PR de corrección.
+- **Vehículo de cambio:** toda corrección entra por **Pull Request** (revisión + CI verde), con commits
+  en Conventional Commits que **referencian el identificador de RNC/hallazgo** en el mensaje.
+- **Trazabilidad de cierre:** el commit/PR de corrección y el/los test(s) de regresión quedan citados en
+  la fila de la §5.3 (y en el safety case si es un hallazgo de seguridad).
+
+> Este proceso cubre el objetivo **C-2** (problem reporting / control de cambios). Su **independencia**
+> respecto del desarrollo sigue limitada por el equipo unipersonal (RNC-006, externo).
 
 ### 5.3 No conformidades conocidas al momento de este documento
 

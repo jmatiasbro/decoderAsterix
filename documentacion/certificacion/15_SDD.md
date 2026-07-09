@@ -182,20 +182,23 @@ worker de red y el de persistencia no toman decisiones de seguridad ([ED-1/ED-2]
 
 ## 5. LLR — STCA (`analysis/stca_analyzer.py`)
 
-> Implementa HLR-STCA-01/02/05. Clase `STCA_Engine`. Doble fase (violación cruda + predicción CPA).
-> Parámetros: `min_horizontal_nm=10`, `min_vertical_ft=900`, banda `fl_min=245`..`fl_max=450`.
+> Implementa HLR-STCA-01/02/05/07/08/09. Clase `STCA_Engine`. Doble fase (violación cruda + predicción
+> CPA), con umbrales **segmentados por volumen** (`STCAConfig`): TMA 3.0 NM / 800 ft (FL030–<245), Ruta
+> 5.0 NM / 800 ft (FL245–600), banda global FL030–FL600. El vertical va bajo el mínimo RVSM (1000 ft)
+> por anti-nuisance. Exclusión de blancos no válidos (parrots por identidad, reflexiones, PSR, degradados).
 
 | LLR | Enunciado | HLR |
 |-----|-----------|-----|
 | LLR-STC-01 | Un track con `speed_kt` conocido < `velocidad_min_kt` (40 kt) **DEBE** excluirse de la evaluación (blancos estáticos: calibración, reflectores). | HLR-STCA-01 |
 | LLR-STC-02 | Solo **DEBEN** evaluarse tracks con `flight_level` entero dentro de la banda global `[fl_min, fl_max]` (FL030..FL600, unión de segmentos); un FL no numérico **DEBE** excluir el track. | HLR-STCA-01 |
 | LLR-STC-03 | Un par **DEBE** suprimirse (misma aeronave) si comparten Modo 3/A no genérico o el mismo Mode S. | HLR-STCA-01, [SSR-06] |
-| LLR-STC-04 | Un par con separación vertical `|ΔFL|·100 ≥ vertical_ft` del **segmento aplicable** (TMA: 800 ft; Ruta: 1000 ft) **NO DEBE** generar alerta. | HLR-STCA-02 |
+| LLR-STC-04 | Un par con separación vertical `|ΔFL|·100 ≥ vertical_ft` del **segmento aplicable** (TMA: 800 ft; Ruta: 800 ft — bajo el mínimo RVSM de 1000 ft, anti-nuisance por cuantización Mode C) **NO DEBE** generar alerta. | HLR-STCA-02 |
 | LLR-STC-05 | La **fase de violación** **DEBE** usar la distancia haversine sobre `lat_render/lon_render` (posición cruda): si < `horizontal_nm` del segmento (TMA: 3 NM; Ruta: 5 NM) → `VIOLATION` con tiempo 0. Esta fase **NO DEBE** depender de `x/y` suavizados. | HLR-STCA-01/06, DD-4 |
 | LLR-STC-06 | Un par co-ubicado (`dist_actual < DUP_SUPRESION_NM` (0.5) y `ΔFL·100 < DUP_SUPRESION_FT` (200)) **DEBE** suprimirse como duplicado del mismo blanco (dos aeronaves distintas nunca vuelan a < 0.5 NM co-altitud → no oculta STCA real). | HLR-STCA-01, DD-2 |
 | LLR-STC-07 | La **fase de predicción** **DEBE** calcular `t_cpa` a partir de posición/velocidad relativas cartesianas y, solo si `0 < t_cpa ≤ lookahead_s` (120 s) y la distancia proyectada en el CPA < `horizontal_nm` del segmento, emitir `PREDICTION` con `t_cpa` redondeado. | HLR-STCA-01/05 |
 | LLR-STC-08 | El segmento aplicable a un par **DEBE** resolverse con `_umbrales_par(fl1, fl2)`: si `max(fl1, fl2) ≥ ruta.fl_piso` (FL245) → umbrales de **Ruta** (los más conservadores); si no → TMA. Función pura del par de FL (sin estado): elimina el parpadeo de umbral en cruces de FL245. | HLR-STCA-07 |
 | LLR-STC-09 | La configuración (`STCAConfig`) **DEBE** validarse en construcción (`validar()`: bandas coherentes sin solape, horizontal ∈ (0, 20], vertical ∈ (0, 5000]) y cargarse de `config/stca.json` si existe; ante archivo ilegible/inválido el caller **DEBE** aplicar `STCAConfig.fallback_seguro()` (3 NM / 1000 ft, FL030–FL600) y notificar — nunca operar sin red. | HLR-STCA-08, [EC-8] |
+| LLR-STC-10 | Un track cuyo Squawk crudo sea **0000** (parrot / transpondedor de calibración) **DEBE** excluirse de la evaluación por **identidad** (`is_parrot`, capturado en `_process_plot_data` **antes** de la normalización del squawk a `''`), con independencia de la velocidad. Igualmente **DEBEN** excluirse reflexiones (`is_reflection`), plots solo-PSR sin identidad y tracks degradados (DQF). Esto permite fijar `velocidad_min_kt = 0` sin desproteger tráfico lento real (helicóptero en estacionario) ni reintroducir *nuisance* de calibración. | HLR-STCA-09 |
 
 ## 6. LLR — APW y MSAW (`player/areas/apw.py`, `player/msaw/engine.py`)
 
@@ -215,9 +218,11 @@ worker de red y el de persistencia no toman decisiones de seguridad ([ED-1/ED-2]
 
 ## 7. LLR — Presentación HMI / PPI (`player/radar_widget.py`)
 
-> Implementa HLR-HMI-01..06. Capa Qt; los LLR describen el **contrato observable** de render y
+> Implementa HLR-HMI-01..10. Capa Qt; los LLR describen el **contrato observable** de render y
 > supervisión, no el detalle de pintado. El watchdog es la única función de seguridad que usa reloj de
-> pared (`time.time()`), admitido por [EC-7] al ser un watchdog de UI, no lógica de decisión.
+> pared (`time.time()`), admitido por [EC-7] al ser un watchdog de UI, no lógica de decisión. Las
+> herramientas de asistencia (vector de velocidad, RBL) son ayudas de presentación (SWAL 4), sin efecto
+> sobre las redes de seguridad.
 
 | LLR | Enunciado | HLR |
 |-----|-----------|-----|
@@ -229,6 +234,8 @@ worker de red y el de persistencia no toman decisiones de seguridad ([ED-1/ED-2]
 | LLR-HMI-06 | El estado habilitado/inhibido de cada red de seguridad **DEBE** estar reflejado en la HMI en todo momento sin acción del operador, mediante `estado_redes_seguridad()` y un indicador HUD siempre visible (no requiere abrir menú). | HLR-HMI-05, [SSR-10] |
 | LLR-HMI-07 | El nivel de detalle de la etiqueta (declutter, en `player/ods/`) **DEBE** ser seleccionable por el operador (mínimo: símbolo + Modo 3/A; completo: FDB con callsign/FL/velocidad); el cambio de nivel **NO DEBE** hacer desaparecer tracks activos. | HLR-HMI-07 |
 | LLR-HMI-08 | La vista FIR satelital (`player/firmap/`) **DEBE** ofrecerse como presentación alternativa superponible con los tracks activos, sin sustituir el PPI operativo. | HLR-HMI-08 |
+| LLR-HMI-09 | El vector de velocidad de una pista **DEBE** proyectarse a **escala real del mapa** (la punta cae en la posición futura, vía `_puntos_prediccion_mundo` + `_world_to_screen`), con una marca por minuto hasta el horizonte configurado (`vector_tiempo_minutos`, 1/2/3). El módulo usa `ground_speed` (tope 600 kt) y la dirección la velocidad suavizada (`_smooth_vx/_smooth_vy`) con fallback a `track_angle`; solo se dibuja con velocidad > 10 kt. | HLR-HMI-09 |
+| LLR-HMI-10 | La RBL (Range & Bearing Line) **DEBE** mostrar rumbo magnético (B) y distancia actual (R) entre dos extremos (aeronaves o punto fijo) y, mientras converjan, el tiempo a la distancia mínima (E) y esa distancia mínima (X) por CPA (`_rbl_cpa`), usando la **velocidad suavizada** de los extremos (`_anchor_velocity_nm_h`) para evitar el flip ~180° del `track_angle` crudo; E/X **DEBEN** ocultarse al dejar de converger (`t_cpa ≤ 0`). | HLR-HMI-10 |
 
 ## 8. LLR — Decodificación y proyección (`decoder/`)
 
@@ -282,10 +289,10 @@ worker de red y el de persistencia no toman decisiones de seguridad ([ED-1/ED-2]
 |--------|-----|----------------------|
 | `tracking/lifecycle.py` | LLR-LIF-01..07 | `tests/tracking/test_lifecycle*.py` |
 | `fusion/correlator.py` + paso E (`radar_widget`) | LLR-COR-01..08 | `tests/tracking/test_matching.py` (incl. veto de identidad), `tests/**/test_correlator.py` |
-| `analysis/stca_analyzer.py` | LLR-STC-01..09 | `tests/stca/test_stca_engine.py` (segmentación/fallback), `test_stca_scenarios.py` (TMA protegido) |
+| `analysis/stca_analyzer.py` + builder (`radar_widget`) | LLR-STC-01..10 | `tests/stca/test_stca_engine.py` (segmentación/fallback), `test_stca_scenarios.py` (TMA protegido, parrots por identidad, tráfico lento protegido) |
 | `areas/apw.py` | LLR-APW-01..04 | `tests/areas/test_apw.py` |
 | `msaw/engine.py` | LLR-MSA-01..04 | `tests/msaw/test_engine.py`, `test_suppression.py` |
-| `player/radar_widget.py` | LLR-HMI-01..06 | `tests/tracking/test_hmi.py`, `tests/tracking/test_safety_state.py`, `tests/msaw/test_render.py` |
+| `player/radar_widget.py` | LLR-HMI-01..10 | `tests/tracking/test_hmi.py`, `tests/tracking/test_safety_state.py`, `tests/msaw/test_render.py`, `tests/ui/test_vector_prediccion.py`, `tests/ui/test_rbl_cpa.py` |
 | `decoder/sensor_registry.py` | LLR-DEC-01..03, LLR-GEO-01..03 | `tests/decoders/test_sensor_registry.py`, `tests/geo/test_stereographic.py` |
 | `storage/duckdb_repo.py` + `analysis/exporters.py` | LLR-AUD-01..04 | `tests/**/test_safety_audit.py` |
 | `player/profile_manager.py` | LLR-ROL-01..03 | `tests/**/test_profile_manager.py` |
@@ -329,3 +336,4 @@ de secuencia (§2.3), estados (§2.4) y despliegue (§2.5) están incluidos. Res
 | 0.3 | 2026-07-05 | Completados LLR de **robustez de decodificación** (LLR-DEC-04..06: troceo por LEN, excepción acotada, ADEXP), **altimetría** (LLR-GEO-04: TL/A-F, + test nuevo), **prestaciones** (LLR-PRF-01..05, §10) y **HMI secundaria** (LLR-HMI-07/08). Todos los HLR quedan con LLR asociado y todos los LLR con test. |
 | 0.4 | 2026-07-05 | Diagramas de **estados** del ciclo de vida (§2.4) y de **despliegue** (§2.5). Cierra los refinamientos de arquitectura de D-3. |
 | 0.5 | 2026-07-06 | **STCA segmentado** (LLR-STC actualizados + LLR-STC-08/09: transición y config/fallback, HLR-STCA-07/08) y **LLR-COR-08**: veto de identidad contradictoria en el paso E del matching (corrige FC-TRK-01 detectado por el escenario TMA). |
+| 0.6 | 2026-07-09 | **LLR-STC-10** (exclusión de parrots por identidad `is_parrot`, HLR-STCA-09) y **LLR-STC-04** actualizado (vertical de Ruta 1000→800 ft, anti-nuisance RVSM); corregida la nota obsoleta de §5. **LLR-HMI-09/10** (predictor del vector de velocidad y CPA del RBL, HLR-HMI-09/10). Trazabilidad de §11 actualizada con los tests nuevos. |

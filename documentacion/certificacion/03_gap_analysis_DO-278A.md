@@ -14,12 +14,12 @@
 |---------|-----------|----|----|----|--------------------|
 | Planificación | 5 | 4 | 1 | 0 | 90% |
 | Desarrollo (requisitos/diseño/código) | 6 | 6 | 0 | 0 | 100% |
-| Verificación | 7 | 4 | 2 | 1 | 70% |
-| Gestión de configuración (SCM) | 4 | 3 | 1 | 0 | 88% |
+| Verificación | 7 | 6 | 0 | 1 | 86% |
+| Gestión de configuración (SCM) | 4 | 4 | 0 | 0 | 100% |
 | Aseguramiento de calidad (SQA) | 3 | 3 | 0 | 0 | 100% |
-| Enlace con autoridad | 2 | 0 | 1 | 1 | 15% |
+| Enlace con autoridad | 2 | 0 | 2 | 0 | 40% |
 | Análisis de seguridad | 3 | 1 | 2 | 0 | 75% |
-| **Total** | **30** | **21** | **7** | **2** | **~82%** |
+| **Total** | **30** | **24** | **5** | **1** | **~88%** |
 
 Conclusión: **la capa de evidencia de proceso está sustancialmente construida** (planes, FHA, SRS con
 57 HLR, matriz de trazabilidad, CI con cobertura de decisiones al 88.5 % sobre módulos SWAL 2,
@@ -60,8 +60,8 @@ coherente para presentar SOI-1 y avanzar hacia SOI-2.
 
 | Obj | Descripción | Estado | Evidencia / Brecha |
 |-----|-------------|--------|--------------------|
-| V-1 | Revisión de requisitos | ⚠️ | SRS existe; auditoría de revisión definida en SQAP §3.2, sin registro firmado |
-| V-2 | Revisión de diseño | ⚠️ | Arquitectura documentada; revisión de diseño no registrada formalmente |
+| V-1 | Revisión de requisitos | ✅ | Acta **RR-REQ-01** ([doc 20](20_registros_revision_req_diseno.md)): SRS revisado contra QR-1..8. Independencia (firma) sigue como RNC-006 |
+| V-2 | Revisión de diseño | ✅ | Acta **RR-DIS-01** ([doc 20](20_registros_revision_req_diseno.md)): SDD revisado (arquitectura + LLR↔HLR↔test). Independencia sigue como RNC-006 |
 | V-3 | Revisión/análisis de código | ✅ | [12_registros_revision_codigo.md](12_registros_revision_codigo.md) (RR-01..05, 5 módulos SWAL 2) |
 | V-4 | Pruebas basadas en requisitos | ✅ | 536 tests; trazabilidad HLR↔test completa ([04](04_matriz_trazabilidad.md)) |
 | V-5 | Cobertura estructural acorde a SWAL | ✅ | Cobertura de decisiones (branch) **88.5 %** en módulos SWAL 2, gate ≥80 % en CI ([SVP §4.4](09_SVP.md)) |
@@ -73,7 +73,7 @@ coherente para presentar SOI-1 y avanzar hacia SOI-2.
 | Obj | Descripción | Estado | Evidencia / Brecha |
 |-----|-------------|--------|--------------------|
 | C-1 | Identificación de la configuración | ✅ | Baselines etiquetados `v0.1.0-soi1` … `v0.4.0`; lockfile y checksums |
-| C-2 | Control de cambios / problem reporting | ⚠️ | Commits convencionales + tabla de RNCs (SQAP §5.3); falta herramienta formal de seguimiento |
+| C-2 | Control de cambios / problem reporting | ✅ | Proceso formalizado ([SQAP §5.2](11_SQAP.md)): registro autoritativo (tabla RNC §5.3) + issues GitHub etiquetados + PR/Conventional Commits con referencia a RNC + trazabilidad de cierre. Independencia = RNC-006 |
 | C-3 | Integridad del árbol de fuentes | ✅ | `.gitignore` endurecido; **purga del histórico ejecutada** (RNC-010 CERRADA, 2026-07-09): `git filter-repo`, remoto 114 MB → 25 MB, sin pérdida de commits/refs y árbol de la app completo ([doc 18](18_procedimiento_purga_RNC010.md), tabla de hashes en [SCMP §5.4](10_SCMP.md)) |
 | C-4 | Control de entornos de build | ✅ | Runtime documentado; `requirements.txt`/`-linux`/`.lock`; CI reproducible en Linux |
 
@@ -90,7 +90,7 @@ coherente para presentar SOI-1 y avanzar hacia SOI-2.
 | Obj | Descripción | Estado | Evidencia / Brecha |
 |-----|-------------|--------|--------------------|
 | A-1 | Acuerdo del PSAC y puntos de revisión (SOI) | ⚠️ | PSAC borrador; sin coordinación ANAC |
-| A-2 | Presentación del cierre (SAS/Accomplishment Summary) | ❌ | No existe (corresponde a SOI-4) |
+| A-2 | Presentación del cierre (SAS/Accomplishment Summary) | ⚠️ | Borrador emitido ([doc 19](19_SAS.md)); la firma/aprobación formal corresponde a SOI-4 |
 
 ## 7. Análisis de seguridad (transversal, exigido por marco ATM)
 
@@ -159,13 +159,13 @@ campos bien tipados: `flight_level` es `float`/`None`, nunca string), sino una b
 
 ## 8. Prioridades de cierre (top 5)
 
-Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0.3; SDD+LLR completos y D-2 en v0.4-0.6):
+Al estado actual, las brechas restantes son **casi enteramente externas** (ANAC/EANA):
 
-1. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC.
-2. **Validar el análisis de seguridad** con EANA/ANAC: PSSA/SSA y safety case redactados y con todas las acciones técnicas cerradas ([doc 16](16_PSSA_SSA.md)); resta solo validar supuestos H-AS-1..6 (FHA-A1/A2, externo).
+1. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC. *Es la única RNC abierta y afecta la firma de V-1/V-2/V-3, PR.2 y las auditorías SQA.*
+2. **Validar el análisis de seguridad** con EANA/ANAC: PSSA/SSA y safety case con todas las acciones técnicas cerradas ([doc 16](16_PSSA_SSA.md)); resta validar supuestos H-AS-1..6 (FHA-A1/A2, externo).
 3. **Enlace con la autoridad** (A-1): coordinar SOI-1 con ANAC sobre el paquete ya construido.
-4. ✅ **Higiene de configuración** (C-3 / RNC-010): purga del histórico **ejecutada** (2026-07-09) — CERRADA.
-5. **Refinamiento menor**: LLR por categoría de decodificación y contratos por función ([SDD §13](15_SDD.md)).
+4. **Refinamiento menor** (interno, no bloqueante): LLR por categoría de decodificación ([SDD §13](15_SDD.md)); homogeneizar a español los logs heredados (P-01.7); etiquetar el baseline post-purga tras el merge.
+5. **Cierres internos ya hechos** (referencia): C-3/RNC-010 (purga), V-1/V-2 (actas [doc 20](20_registros_revision_req_diseno.md)), C-2 (problem reporting [SQAP §5.2](11_SQAP.md)), A-2 (borrador SAS [doc 19](19_SAS.md)).
 
 ## 9. Registro de cambios
 
@@ -183,3 +183,4 @@ Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0
 | 1.0 | 2026-07-05 | Cierre de **SSA-A2** (regresión visual) y **SSA-A4** (STCA denso PCAP) — sin residual técnico interno; **D-3 ✅** (diagramas estados/despliegue, SDD v0.4); procedimiento de purga RNC-010 listo ([doc 18](18_procedimiento_purga_RNC010.md)). Desarrollo 100 %; total ~78 % → **~80 %**. |
 | 1.1 | 2026-07-06 | **STCA segmentado TMA/Ruta** (cierra hallazgo STCA-2: el TMA quedaba sin protección) y **TRK-1/RNC-011 cerrado**: fusión errónea por proximidad con Mode S distintos (FC-TRK-01, detectada por el nuevo escenario TMA y corregida con veto de identidad en paso E). |
 | 1.2 | 2026-07-09 | **RNC-010 CERRADA** — purga del histórico ejecutada (fase B): **C-3 ⚠️→✅**; SCM 78 % → 88 %; total ~80 % → **~82 %**. Cero RNC clase C abiertas; solo resta RNC-006 (independencia, externa). |
+| 1.3 | 2026-07-09 | **STCA parrots por identidad** (HLR-STCA-09) y **vertical de Ruta 800 ft** sincronizados en SDD/matriz/safety case (STCA-3/4 cerrados). Cierres de proceso: **V-1/V-2 ✅** (actas [doc 20](20_registros_revision_req_diseno.md)), **C-2 ✅** ([SQAP §5.2](11_SQAP.md)), **A-2 ⚠️** (borrador SAS [doc 19](19_SAS.md)). Verificación 70 % → 86 %; SCM 88 % → 100 %; total ~82 % → **~88 %**. Las brechas restantes son externas (RNC-006, S-2/S-3, A-1). |
