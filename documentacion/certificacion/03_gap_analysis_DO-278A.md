@@ -66,7 +66,7 @@ coherente para presentar SOI-1 y avanzar hacia SOI-2.
 | V-4 | Pruebas basadas en requisitos | ✅ | 536 tests; trazabilidad HLR↔test completa ([04](04_matriz_trazabilidad.md)) |
 | V-5 | Cobertura estructural acorde a SWAL | ✅ | Cobertura de decisiones (branch) **88.5 %** en módulos SWAL 2, gate ≥80 % en CI ([SVP §4.4](09_SVP.md)) |
 | V-6 | Pruebas de integración del sistema | ✅ | `tests/integration/test_pcap_e2e.py` + escenarios STCA end-to-end; CI ejecuta la suite en cada push |
-| V-7 | Independencia de la verificación | ❌ | Equipo unipersonal (RNC-006); requiere revisor externo o acuerdo ANAC |
+| V-7 | Independencia de la verificación | ❌ | Equipo unipersonal (RNC-006); **plan de independencia + acta de acuerdo listos** ([doc 22](22_plan_independencia_verificacion.md)); requiere revisor externo o acuerdo ANAC (externo) |
 
 ## 4. Gestión de Configuración (SCM)
 
@@ -89,7 +89,7 @@ coherente para presentar SOI-1 y avanzar hacia SOI-2.
 
 | Obj | Descripción | Estado | Evidencia / Brecha |
 |-----|-------------|--------|--------------------|
-| A-1 | Acuerdo del PSAC y puntos de revisión (SOI) | ⚠️ | PSAC borrador; sin coordinación ANAC |
+| A-1 | Acuerdo del PSAC y puntos de revisión (SOI) | ⚠️ | **PSAC v1.0** + **dossier de entrada a SOI-1** ([doc 21](21_dossier_SOI1.md)) listos; resta la **coordinación/reunión con ANAC** (externo) |
 | A-2 | Presentación del cierre (SAS/Accomplishment Summary) | ⚠️ | Borrador emitido ([doc 19](19_SAS.md)); la firma/aprobación formal corresponde a SOI-4 |
 
 ## 7. Análisis de seguridad (transversal, exigido por marco ATM)
@@ -97,8 +97,8 @@ coherente para presentar SOI-1 y avanzar hacia SOI-2.
 | Obj | Descripción | Estado | Evidencia / Brecha |
 |-----|-------------|--------|--------------------|
 | S-1 | FHA (Functional Hazard Assessment) | ✅ | [06_FHA.md](06_FHA.md) — condiciones de falla, SSR y clasificación de severidad |
-| S-2 | PSSA / SSA | ⚠️ | [16_PSSA_SSA.md](16_PSSA_SSA.md): estrategia de arquitectura (SA-1..4), CCA, asignación FC→SSR→diseño→SWAL y verificación SSA de 11 SSR; falta validación EANA/ANAC |
-| S-3 | Safety case / argumento de seguridad | ⚠️ | [16 §7](16_PSSA_SSA.md): argumento C0..C4 con evidencia; **todas las acciones técnicas SSA-A1..A4/A7 cerradas** (11/11 SSR, sin residual interno); falta solo validar supuestos H-AS-1..6 con EANA/ANAC (externo) |
+| S-2 | PSSA / SSA | ⚠️ | [16_PSSA_SSA.md](16_PSSA_SSA.md): estrategia de arquitectura (SA-1..4), CCA, asignación FC→SSR→diseño→SWAL y verificación SSA de 11 SSR; **protocolo de validación con EANA listo** ([doc 23](23_protocolo_validacion_eana.md)); resta la sesión con EANA/ANAC (externo) |
+| S-3 | Safety case / argumento de seguridad | ⚠️ | [16 §7](16_PSSA_SSA.md): argumento C0..C4 con evidencia; **todas las acciones técnicas cerradas** (11/11 SSR, sin residual interno); la validación de supuestos H-AS-1..6 tiene **protocolo y acta preparados** ([doc 23](23_protocolo_validacion_eana.md)) — resta ejecutarla con EANA (externo) |
 
 ### Hallazgos de verificación (seguimiento)
 
