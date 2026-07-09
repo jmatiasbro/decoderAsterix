@@ -30,6 +30,12 @@ def w(app):
     widget.reset_origin_for_new_file(LAT0, LON0, 226, 210, "TEST")
     widget.modo_integrado = True
     widget.stca_habilitado = True
+    # Aislar del config/stca.json operativo si existe en el árbol: estos escenarios
+    # verifican el CONTRATO por defecto del motor (TMA 3 NM/800 ft, Ruta 5 NM/1000 ft,
+    # exclusión de estáticos <40 kt). Un archivo ambiental cambiaría los umbrales y
+    # rompería la reproducibilidad de la verificación (SVP — resultados deterministas).
+    from analysis.stca_analyzer import STCA_Engine, STCAConfig
+    widget.stca_engine = STCA_Engine(STCAConfig())
     # Desactivar el filtro DQF de pistas inmaduras: aquí se verifica el STCA, no el
     # DQF. Con un solo plot por aeronave, el DQF las marcaría inmaduras (<2 barridos)
     # y el builder de STCA las excluiría. El DQF tiene su propio banco de pruebas.
