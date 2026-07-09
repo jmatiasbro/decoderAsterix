@@ -31,7 +31,7 @@ def w(app):
     widget.modo_integrado = True
     widget.stca_habilitado = True
     # Aislar del config/stca.json operativo si existe en el árbol: estos escenarios
-    # verifican el CONTRATO por defecto del motor (TMA 3 NM/800 ft, Ruta 5 NM/1000 ft,
+    # verifican el CONTRATO por defecto del motor (TMA 3 NM/800 ft, Ruta 5 NM/800 ft,
     # exclusión de estáticos <40 kt). Un archivo ambiental cambiaría los umbrales y
     # rompería la reproducibilidad de la verificación (SVP — resultados deterministas).
     from analysis.stca_analyzer import STCA_Engine, STCAConfig
