@@ -43,6 +43,24 @@ def w(app):
     return widget
 
 
+@pytest.fixture
+def w0(app):
+    """Como `w` pero con la config operativa velocidad_min_kt=0 (los parrots se
+    excluyen por identidad, no por velocidad): valida que el tráfico lento real
+    quede protegido por STCA."""
+    from player.radar_widget import RadarWidget
+    from analysis.stca_analyzer import STCA_Engine, STCAConfig
+    widget = RadarWidget()
+    widget.sensores_visibles = None
+    widget.limpiar_pantalla()
+    widget.reset_origin_for_new_file(LAT0, LON0, 226, 210, "TEST")
+    widget.modo_integrado = True
+    widget.stca_habilitado = True
+    widget.stca_engine = STCA_Engine(STCAConfig(velocidad_min_kt=0.0))
+    widget.quality_manager.filtro_inmaduras_activo = False
+    return widget
+
+
 def _plot(mode_s, d_norte_nm, fl, speed=400.0, track_angle=90.0, mode3a=None, t=1000.0):
     """Plot ADS-B (CAT21) a `d_norte_nm` NM al norte del origen, a nivel `fl`.
 
@@ -134,6 +152,18 @@ def test_blancos_estaticos_excluidos(w):
     assert frozenset(("AAAAAA", "BBBBBB")) not in _pares_en_alerta(w)
 
 
+def test_parrots_excluidos_por_identidad(w):
+    """Squawk 0000 (parrot / calibración) → excluido del STCA por IDENTIDAD, no por
+    velocidad (aunque vayan rápido). Geometría de VIOLATION que dispararía sin la
+    exclusión (2 NM co-altitud en TMA)."""
+    w.on_new_plot_batch([
+        _plot("AAAAAA", d_norte_nm=0.0, fl=100, mode3a="0000"),
+        _plot("BBBBBB", d_norte_nm=2.0, fl=100, mode3a="0000"),
+    ])
+    w.evaluar_stca()
+    assert frozenset(("AAAAAA", "BBBBBB")) not in _pares_en_alerta(w)
+
+
 # ── Escenario 6: fuera de la banda de FL evaluada → sin alerta ─────────────────
 
 def test_fuera_de_banda_fl_no_alerta(w):
@@ -172,6 +202,31 @@ def test_tma_separacion_4nm_no_molesta(w):
     ])
     w.evaluar_stca()
     assert frozenset(("AAAAAA", "BBBBBB")) not in _pares_en_alerta(w)
+
+
+# ── Escenario 6c: config operativa velocidad_min_kt=0 (parrots por identidad) ──
+
+def test_trafico_lento_real_protegido_con_velocidad_min_0(w0):
+    """Con velocidad_min_kt=0, un par lento REAL (helicóptero en estacionario,
+    squawk válido) a 2 NM co-altitud en TMA SÍ dispara STCA: no queda desprotegido
+    por ser lento (lo que sí ocurriría con el filtro de velocidad en 40 kt)."""
+    w0.on_new_plot_batch([
+        _plot("AAAAAA", d_norte_nm=0.0, fl=100, speed=5.0, mode3a="1234"),
+        _plot("BBBBBB", d_norte_nm=2.0, fl=100, speed=5.0, mode3a="1235"),
+    ])
+    w0.evaluar_stca()
+    assert frozenset(("AAAAAA", "BBBBBB")) in _pares_en_alerta(w0)
+
+
+def test_parrots_excluidos_aun_con_velocidad_min_0(w0):
+    """Con velocidad_min_kt=0, el parrot (Sqwk 0000) IGUAL se excluye por identidad:
+    es la barrera que hace segura la config operativa (sin nuisance de calibración)."""
+    w0.on_new_plot_batch([
+        _plot("AAAAAA", d_norte_nm=0.0, fl=100, speed=5.0, mode3a="0000"),
+        _plot("BBBBBB", d_norte_nm=2.0, fl=100, speed=5.0, mode3a="0000"),
+    ])
+    w0.evaluar_stca()
+    assert frozenset(("AAAAAA", "BBBBBB")) not in _pares_en_alerta(w0)
 
 
 # ── Escenario 7: STCA inhibido → no evalúa ─────────────────────────────────────

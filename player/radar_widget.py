@@ -353,7 +353,10 @@ class RadarPlot:
                  '_last_fl_time', '_last_gs_time', 'vx', 'vy',
                  # Tasa vertical (ft/min) que el motor MSAW lee del track; sin esto
                  # la asignación en evaluar_msaw lanzaba AttributeError por __slots__.
-                 'vertical_rate')
+                 'vertical_rate',
+                 # Parrot (Squawk 0000): capturado del squawk crudo antes de que
+                 # _filter_mode3a lo colapse a '' → permite excluirlo por identidad.
+                 'is_parrot')
 
     def __init__(self, x: float, y: float, sac_sic: str, category: int,
                  timestamp: float, mode3a: str, callsign: str,
@@ -382,6 +385,7 @@ class RadarPlot:
         self.category = category
         self.timestamp = timestamp
         self.mode3a = mode3a
+        self.is_parrot = False
         self.callsign = callsign
         self.flight_level = flight_level
         self.is_track = is_track
@@ -672,6 +676,19 @@ def _filter_mode3a(value):
     if m3a_str == '0000':
         return ''
     return value
+
+
+def _es_parrot_sqwk(value) -> bool:
+    """True si el Squawk crudo es 0000 (parrot / transpondedor de calibración).
+
+    Se evalúa ANTES de la normalización de `_filter_mode3a` (que colapsa 0000 → ''),
+    para poder excluir el parrot por IDENTIDAD aguas abajo (p. ej. del STCA) sin
+    depender de la velocidad ni confundirlo con una aeronave real sin Modo A.
+    """
+    if value is None or value == '' or value == '----':
+        return False
+    m3a_str = f"{value:04o}" if isinstance(value, int) else str(value).strip()
+    return m3a_str == '0000'
 
 
 class RadarWidget(_RadarBase):
@@ -2006,6 +2023,9 @@ class RadarWidget(_RadarBase):
                     m3a_str = f"{m3a:04o}" if isinstance(m3a, int) else str(m3a).strip()
                     if m3a is not None and m3a not in ('', '----') and m3a_str != '0000':
                         track.mode3a = m3a
+                        track.is_parrot = False   # código válido → no es parrot
+                    elif m3a_str == '0000':
+                        track.is_parrot = True    # Squawk 0000 → parrot (calibración)
                     
                     try:
                         if data.get('flight_level') is not None:
@@ -2173,6 +2193,7 @@ class RadarWidget(_RadarBase):
                     reporting_sensors={sensor_id}
                 )
                 plot.widget_ref = self
+                plot.is_parrot = _es_parrot_sqwk(data.get('mode3a'))
                 plot.set_highlight_filter(self.squawk_filter)
                 if bypass_pending:
                     self.tracks[target_id] = plot
@@ -2797,8 +2818,11 @@ class RadarWidget(_RadarBase):
                 m3a = track.mode3a
                 m3a_str = f"{m3a:04o}" if isinstance(m3a, int) else str(m3a).strip()
                 # Parrots (Sqwk 0000): transpondedor de calibración / código no asignado.
-                # No son tránsito válido → excluir de la evaluación STCA.
-                if m3a_str == '0000':
+                # No son tránsito válido → excluir de la evaluación STCA. Se excluyen por
+                # IDENTIDAD (flag capturado del squawk crudo), no por velocidad: así el
+                # filtro de estáticos puede relajarse (velocidad_min_kt=0) sin dejar sin
+                # protección a tráfico lento real (p. ej. helicóptero en estacionario).
+                if getattr(track, 'is_parrot', False) or m3a_str == '0000':
                     continue
                 tracks_for_stca[tid] = {
                     'flight_level': fl_str,
