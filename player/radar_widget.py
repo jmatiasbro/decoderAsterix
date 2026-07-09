@@ -5527,6 +5527,22 @@ class RadarWidget(_RadarBase):
         y = (vp_cy + self.pan_y - sy) / z
         return x, y
 
+    @staticmethod
+    def _puntos_prediccion_mundo(x, y, gs_kt, heading_deg, minutos):
+        """Posiciones (x, y) del mundo donde estará la pista a 1..`minutos` minutos.
+
+        Predictor a escala real del vector de velocidad: módulo = `gs_kt` (nudos, tope
+        600), dirección = `heading_deg` (0° = Norte, +x Este, +y Norte). Devuelve una
+        lista de tuplas en coords del mundo (metros), una por minuto entero.
+        """
+        gs = min(float(gs_kt), 600.0)
+        gs_mps = gs * (METERS_PER_NM / 3600.0)  # nudos -> m/s en coords del mundo
+        ang = math.radians(heading_deg)
+        v_east = gs_mps * math.sin(ang)
+        v_north = gs_mps * math.cos(ang)
+        n = max(1, int(round(minutos)))
+        return [(x + v_east * (m * 60.0), y + v_north * (m * 60.0)) for m in range(1, n + 1)]
+
     def _snap_to_target(self, mouse_pos) -> Tuple[float, float, Optional[str], dict]:
         """
         Busca si la posición del mouse en pantalla está cerca de algún radar o aeronave (o sus etiquetas).
@@ -6074,26 +6090,19 @@ class RadarWidget(_RadarBase):
 
             if es_pista and target_gs is not None and target_heading is not None and target_gs > 10:
                 try:
-                    # Tope anti-inflación: la velocidad estimada puede dispararse por los
-                    # saltos de posición entre radares; ningún avión civil supera ~600 kt.
-                    gs_clamp = min(float(target_gs), 600.0)
-                    gs_mps = gs_clamp * (METERS_PER_NM / 3600.0)  # m/s en coords del mundo
-
-                    # Componentes de velocidad en el mundo (0° = Norte, +x Este, +y Norte).
-                    ang = math.radians(target_heading)
-                    v_east = gs_mps * math.sin(ang)
-                    v_north = gs_mps * math.cos(ang)
-
+                    # Tope anti-inflación (600 kt) y proyección a escala real: posiciones
+                    # del mundo por minuto donde estará la pista (helper puro, testeable).
                     minutos = max(1, int(round(getattr(self, 'vector_tiempo_minutos', 2))))
+                    puntos_mundo = self._puntos_prediccion_mundo(
+                        plot.x, plot.y, target_gs, target_heading, minutos)
                     sp0 = self._world_to_screen(plot.x, plot.y)
                     if sp0 is not None:
                         painter.save()
                         painter.resetTransform()  # dibujar en píxeles de pantalla, a escala real
                         painter.setPen(QPen(base_color, 1.5, Qt.PenStyle.SolidLine))
                         prev = sp0
-                        for m in range(1, minutos + 1):
-                            t = m * 60.0  # segundos
-                            spm = self._world_to_screen(plot.x + v_east * t, plot.y + v_north * t)
+                        for (wx, wy) in puntos_mundo:
+                            spm = self._world_to_screen(wx, wy)
                             if spm is None:
                                 break
                             painter.drawLine(prev, spm)
