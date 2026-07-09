@@ -1,11 +1,11 @@
 # Matriz de Trazabilidad — Requisitos ↔ Diseño ↔ Código ↔ Verificación
 
-**Versión:** 0.2 (parcial). **Fecha:** 2026-07-04.
+**Versión:** 0.3 (parcial). **Fecha:** 2026-07-09.
 
 > Trazabilidad bidireccional exigida por DO-278A (requisito → diseño → código → caso de prueba, y a la
-> inversa). Esta versión es un **punto de partida**: aún **no existe un SRS**, por lo que los
-> "requisitos" listados son **derivados** (reconstruidos a partir de las specs ASTERIX, el CONOPS
-> implícito y la suite de tests existente). Deben formalizarse en un SRS antes de usarse como evidencia.
+> inversa). El **SRS ya existe** ([07_SRS.md](07_SRS.md)) con HLR formalizados y su propia matriz
+> HLR↔SSR↔test (§17); esta tabla mantiene la vista **REQ derivado → código → verificación** como índice
+> complementario por subsistema. Los HLR se referencian donde aplica.
 
 ---
 
@@ -28,7 +28,7 @@
 | REQ-GEO-2 | Declinación magnética offline | `player/` (capa isogónica) | `tests/geo/test_isogonic*.py`, `test_magnetic_cascade.py` | ✅ |
 | REQ-TRK-1 | Ciclo de vida monoradar determinista (ToD) | `player/tracking/lifecycle.py` | `tests/tracking/test_lifecycle.py` | ✅ |
 | REQ-TRK-2 | Matching/reconciliación de tracks | `player/radar_widget.py` (`_process_plot_data`, pasos A–E) | `tests/tracking/test_matching.py` (31 casos) | ✅ |
-| REQ-SN-1 | STCA — alerta de conflicto a corto plazo | `analysis/stca_analyzer.py` (`STCA_Engine`), cadena safety en `radar_widget` | `tests/stca/test_stca_engine.py` (27 casos) | ✅ |
+| REQ-SN-1 | STCA — alerta de conflicto a corto plazo (HLR-STCA-01..09: segmentación TMA/Ruta, vertical anti-nuisance RVSM 800 ft, exclusión de parrots por identidad) | `analysis/stca_analyzer.py` (`STCA_Engine`), builder + `is_parrot` en `radar_widget` | `tests/stca/test_stca_engine.py`, `test_stca_scenarios.py` (parrots por identidad, tráfico lento protegido) | ✅ |
 | REQ-SN-2 | APW — alerta de penetración de área | `player/areas/` | `tests/areas/test_apw.py`, `test_integration.py` | ✅ |
 | REQ-SN-3 | MSAW — alerta de altitud mínima de seguridad | `player/msaw/` | `tests/msaw/test_engine.py`, `test_suppression.py`, etc. | ✅ |
 | REQ-SN-4 | Supresión MSAW en aproximación | `player/msaw/` | `tests/msaw/test_suppression.py` | ✅ |
@@ -36,6 +36,8 @@
 | REQ-HMI-2 | Declutter / niveles de información | `player/ods/` | `tests/ods/test_declutter.py` | ✅ |
 | REQ-HMI-3 | Estado de track (símbolo según calidad) | `player/ods/` | `tests/ods/test_track_state.py` | ✅ |
 | REQ-HMI-4 | Vista FIR satelital | `player/firmap/` | `tests/firmap/` | ✅ |
+| REQ-HMI-8 | Vector de velocidad (predictor a escala real, marca por minuto 1/2/3) — HLR-HMI-09 | `radar_widget.py` (`_puntos_prediccion_mundo`) | `tests/ui/test_vector_prediccion.py` (7 casos) | ✅ |
+| REQ-HMI-9 | RBL — marcación y distancia con CPA (B/R/E/X; aeronave↔punto fijo) — HLR-HMI-10 | `radar_widget.py` (`_rbl_cpa`, `_anchor_velocity_nm_h`) | `tests/ui/test_rbl_cpa.py` (9 casos) | ✅ |
 | REQ-HMI-5 | Completitud de presentación (ningún track activo omitido) y fidelidad de etiqueta (callsign/Mode3A/FL) | `radar_widget.py` (`_draw_oaci_track`, `is_alive`) | `tests/tracking/test_hmi.py` (17 casos, HLR-HMI-01/02/03) | ✅ |
 | REQ-HMI-6 | Estado de track por calidad (coasting / Mode-S / ADS-B) | `radar_widget.py` (`RadarPlot.is_coasting`), `player/ods/track_state.py` | `tests/tracking/test_track_state.py` (12 casos, HLR-HMI-04) | ✅ |
 | REQ-HMI-7 | Watchdog de cadena de safety-nets (alerta si sin salida > 5 s) | `radar_widget.py` (`_check_safety_watchdog`, `_watchdog_timer`) | `tests/tracking/test_safety_watchdog.py` (5 casos, HLR-HMI-06) | ✅ |
@@ -63,12 +65,12 @@
 | ~~Rendimiento sin verificación (HLR-PERF-01..05)~~ | ✅ **Cerrado** | `tests/tracking/test_perf.py` (6 casos) + verificación manual SVP §5.4 (800 PPS) |
 | ~~Integración end-to-end PCAP sin test~~ | ✅ **Cerrado** | `tests/integration/test_pcap_e2e.py` (6 casos: decode→proyección→matching→safety sobre `cat_034_048.pcap`) |
 | ~~Escenarios end-to-end STCA (hallazgo STCA-1)~~ | ✅ **Cerrado** | `tests/stca/test_stca_scenarios.py` (7 escenarios por el pipeline: VIOLATION, sep. vertical/horizontal, misma aeronave, estáticos, banda FL, inhibición). Documenta que un conflicto real <10 NM siempre dispara |
-| **Scripts ad-hoc en raíz** | Media — no son la suite | Migrar lo válido a `tests/`, descartar el resto |
+| ~~Scripts ad-hoc en raíz~~ | ✅ **Cerrado** | 22 scripts `test_*.py` legacy eliminados; suite única en `tests/` |
 
 ## 4. Cobertura agregada (estimación cualitativa)
 
 - **Bien cubierto:** STCA, MSAW, APW, ODS/HMI, firmap, geo-declinación, ATM-DB, FDP/ADEXP, stats, centro técnico, ciclo de vida, decodificadores CAT001/002/021/034/048/062, matching A–E, correlación multi-radar, auditoría safety, completitud/fidelidad HMI + watchdog (HLR-HMI-01..06), rendimiento del motor + capacidad de ingesta verificada (HLR-PERF-01..05).
-- **Sin cubrir:** purga de binarios del histórico git.
+- **Sin cubrir:** — (la purga de binarios del histórico git, RNC-010, quedó **ejecutada** el 2026-07-09).
 
 > Tras cerrar STCA, la prioridad #1 de verificación restante son los **decodificadores ASTERIX por
 > categoría** (núcleo SWAL 2 sin tests) y el **matching/reconciliación de tracks**.

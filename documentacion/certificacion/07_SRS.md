@@ -171,6 +171,12 @@ El operador **DEBE** poder seleccionar el nivel de información mostrado (mínim
 ### HLR-HMI-08 — Vista FIR satelital `[REQ-HMI-4]` `SWAL 4`
 El sistema **DEBE** ofrecer una vista alternativa con cartografía satelital/vectorial del FIR, superponible con los tracks activos.
 
+### HLR-HMI-09 — Vector de velocidad (predictor) `[REQ-HMI-2]` `SWAL 4`
+El sistema **DEBE** dibujar, para cada pista con velocidad significativa, un **vector de velocidad a escala real del mapa** cuya punta indique la posición proyectada de la aeronave, con una marca por cada minuto hasta un horizonte seleccionable por el operador (1, 2 o 3 min). El módulo **DEBE** derivarse de la velocidad de la pista y la dirección de una estimación estable (velocidad suavizada, con respaldo en el rumbo reportado). Es una **ayuda de presentación** (SWAL 4): no interviene en las redes de seguridad.
+
+### HLR-HMI-10 — Regla de marcación y distancia (RBL) `[REQ-HMI-2]` `SWAL 4`
+El sistema **DEBE** ofrecer una herramienta de **marcación y distancia (RBL)** entre dos extremos (dos aeronaves, o una aeronave y un punto fijo) que muestre rumbo magnético (B) y distancia actual (R); y, **mientras los extremos converjan**, el tiempo estimado a la distancia mínima (E) y la distancia mínima pronosticada (X), calculados por CPA a partir de la velocidad y el rumbo actuales. E/X **DEBEN** desaparecer al alcanzar la distancia mínima y comenzar a alejarse. Es una **ayuda de presentación** (SWAL 4).
+
 ---
 
 ## 8. Requisitos STCA (HLR-STCA)
@@ -395,6 +401,8 @@ Los parámetros de cada sensor (SAC, SIC, lat, lon, nombre, rango máximo) **DEB
 | HLR-HMI-06 | — | SSR-05 | FC-HMI-04 | ❌ pendiente |
 | HLR-HMI-07 | REQ-HMI-2 | — | — | `test_declutter.py` |
 | HLR-HMI-08 | REQ-HMI-4 | — | — | `tests/firmap/` |
+| HLR-HMI-09 | REQ-HMI-2 | — | — | `tests/ui/test_vector_prediccion.py` |
+| HLR-HMI-10 | REQ-HMI-2 | — | — | `tests/ui/test_rbl_cpa.py` |
 | HLR-STCA-01 | REQ-SN-1 | SSR-07 | FC-STCA-01 | `test_stca_engine.py` (segmentos TMA/Ruta), `test_stca_scenarios.py` (TMA protegido) |
 | HLR-STCA-02..05 | REQ-SN-1 | — | FC-STCA-02/03 | `test_stca_engine.py` (vertical por segmento; banda global) |
 | HLR-STCA-06 | REQ-SN-1 | SSR-07 | FC-STCA-01 | `test_stca_engine.py::test_contrato_*` (marco único + residual acotado) |
