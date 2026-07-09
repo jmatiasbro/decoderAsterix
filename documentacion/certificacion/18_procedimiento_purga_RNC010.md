@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **RNC:** [RNC-010](11_SQAP.md) (clase C) — integridad del árbol de fuentes (gap **C-3**).
-**Versión:** 0.1. **Fecha:** 2026-07-05. **Estado:** PROCEDIMIENTO PROPUESTO — **NO EJECUTADO**.
+**Versión:** 0.2. **Fecha:** 2026-07-09. **Estado:** **EJECUTADO** (fases A y B) — RNC-010 CERRADA.
 
 > ⚠️ **Este procedimiento reescribe el histórico git (destructivo e irreversible sobre el remoto).**
 > No debe ejecutarse sin: (a) decisión explícita del responsable del repositorio, (b) respaldo
@@ -52,7 +52,7 @@ Quita las capturas operativas del índice sin borrarlas del disco. Reversible; n
 > los archivos locales quedaron intactos y `baires.pcap` sigue disponible para el stress test. Los
 > fixtures vendorizados (`asterix_decoder-0.7.4/**`) se conservan, con excepción explícita en
 > `.gitignore`. Los clones nuevos ya no descargan ~250 MB de capturas en el checkout de HEAD.
-> **La Fase B (purga del histórico) sigue pendiente de decisión.**
+> **La Fase B (purga del histórico) fue ejecutada el 2026-07-09 — ver §3.**
 
 ```bash
 git rm --cached baires.pcap captura_260130.pcap Martescordoba_radar2.pcap \
@@ -69,7 +69,32 @@ git commit -m "chore(scm): destrackea capturas operativas del árbol (RNC-010 fa
 **Efecto:** los clones nuevos ya no descargan ~200 MB de capturas; `baires.pcap` sigue disponible
 localmente para el stress test (integridad por checksum, SCMP).
 
-## 3. Fase B — Purga del histórico (DESTRUCTIVA — requiere OK explícito)
+## 3. Fase B — Purga del histórico (DESTRUCTIVA) — ✅ EJECUTADA 2026-07-09
+
+> **Ejecutada el 2026-07-09** con `git-filter-repo` 2.47.0 sobre un clon espejo del remoto, con
+> respaldo espejo pre-purga conservado (`respaldo-remoto-pre-purga.git`) y verificación de
+> precondiciones. Resultado: histórico remoto **114 MB → 25 MB**, sin pérdida de commits ni refs
+> (main 219, feature/monoradar 273, feature/msaw 173 commits preservados), **0 blobs purgados
+> alcanzables** y **árbol de la aplicación completo** (1794 → 1791 archivos: solo se quitaron 2
+> artefactos basura + 1 PDF suelto en `PASS/`, no referenciado por el código). La rama de trabajo se
+> reconcilió por rebase sobre el histórico purgado y se pusheó como fast-forward. Nota: el remoto real
+> pesaba 114 MB (no 1.1 GB); el 1.1 GB era cruft **local** reclamable con re-clone.
+>
+> **Tabla de equivalencia de hashes (viejo → nuevo)** — registrada también en [SCMP §5.4](10_SCMP.md):
+>
+> | Ref | Viejo | Nuevo |
+> |-----|-------|-------|
+> | v0.1.0-soi1 | 1304854 | f8513b4 |
+> | v0.2.0-perf | 454ff42 | 85d34fa |
+> | v0.3.0 | 087baea | 8724ab1 |
+> | v0.4.0 | e66089c | b1d8574 |
+> | main | d92ecd2 | 5580428 |
+> | feature/monoradar-track-lifecycle | 95e426e | 0029cdd |
+> | feature/msaw-zonas-poligonales | c81b09c | 98eca29 |
+>
+> **Pendiente menor (local, no remoto):** las ramas locales `feature/atsep-monitor` y
+> `feature/cartografia-base` aún referencian el histórico viejo; no pushearlas tal cual (reintroducirían
+> los blobs). El procedimiento documentado abajo es el que se ejecutó.
 
 ### 3.1 Precondiciones (checklist de ejecución)
 
@@ -128,3 +153,4 @@ git push --force --tags
 | Ver | Fecha | Cambio |
 |-----|-------|--------|
 | 0.1 | 2026-07-05 | Procedimiento inicial con inventario real medido (HEAD + histórico, 1.1 GB). Fases A (destrackeo, no destructiva) y B (filter-repo, destructiva). **No ejecutado.** |
+| 0.2 | 2026-07-09 | **Fase B EJECUTADA** — RNC-010 CERRADA. Registro de resultado, verificación y tabla de equivalencia de hashes (§3). |

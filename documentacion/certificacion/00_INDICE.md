@@ -39,7 +39,7 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | 15 | [SDD — Software Design Description](15_SDD.md) | Arquitectura (capas/flujo/secuencia/estados/despliegue) + LLR de todas las capas — todo HLR con LLR (cierra D-2) | Borrador v0.5 |
 | 16 | [PSSA / SSA](16_PSSA_SSA.md) | Evaluación de seguridad del SW: arquitectura, FC→SSR→diseño→SWAL, verificación SSA (11/11), safety case (avanza S-2/S-3) | Borrador v0.3 |
 | 17 | [Registros de Auditoría SQA](17_registros_auditoria_SQA.md) | Ejecución de auditorías de proceso/producto/transición por baseline (cierra Q-1/Q-2/Q-3) | Borrador v0.1 |
-| 18 | [Procedimiento de Purga RNC-010](18_procedimiento_purga_RNC010.md) | Purga de binarios del histórico git (fases A/B, inventario real) — **no ejecutado** | Propuesto v0.1 |
+| 18 | [Procedimiento de Purga RNC-010](18_procedimiento_purga_RNC010.md) | Purga de binarios del histórico git (fases A/B) — **EJECUTADO**, RNC-010 cerrada | v0.2 |
 
 ## 3. Cómo leer el paquete
 
@@ -68,4 +68,4 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 - ✅ `requirements.txt`/`-linux`/`.lock` con lockfile; baselines etiquetados.
 - ⚠️ Plan de aseguramiento **aún no aprobado por ANAC** (borrador coherente para SOI-1).
 - ⚠️ Conviven scripts de prueba ad-hoc en la raíz con la suite estructurada `tests/`.
-- ⚠️ Falta **purgar del histórico** los binarios (`.pcap`, `.duckdb`, `.venv`) ya versionados (C-3).
+- ✅ **Histórico purgado** (RNC-010 cerrada, 2026-07-09): `git filter-repo`, remoto 114 MB → 25 MB, árbol de la app completo ([doc 18](18_procedimiento_purga_RNC010.md)).
