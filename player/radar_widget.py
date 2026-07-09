@@ -723,6 +723,11 @@ class RadarWidget(_RadarBase):
         #   'color': QColor }
         self.rbl_lines = []
         self._rbl_color = QColor("#FFD700")  # Color único para todos los RBLs
+        # Interacción con el texto del RBL: clic corto = borrar, arrastre = mover a lo
+        # largo de la línea. _press_idx marca el RBL bajo el cursor al presionar.
+        self._rbl_label_press_idx = None
+        self._rbl_label_press_pos = None
+        self._rbl_label_moved = False
         self.focused_target_id = None
         self.rbl_drag_origin_anchor = None
         self.mouse_press_pos = None
@@ -2791,6 +2796,10 @@ class RadarWidget(_RadarBase):
 
                 m3a = track.mode3a
                 m3a_str = f"{m3a:04o}" if isinstance(m3a, int) else str(m3a).strip()
+                # Parrots (Sqwk 0000): transpondedor de calibración / código no asignado.
+                # No son tránsito válido → excluir de la evaluación STCA.
+                if m3a_str == '0000':
+                    continue
                 tracks_for_stca[tid] = {
                     'flight_level': fl_str,
                     'lat_render': lat,
@@ -4295,48 +4304,57 @@ class RadarWidget(_RadarBase):
                                 painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, "RBL")
                                 painter.restore()
 
-                    # Calcular métricas — declinación magnética dinámica (WMM) en el
-                    # centroide de la línea, cacheada por celda para no recalcular por frame.
+                    # Métricas del RBL — B = rumbo magnético, R = distancia (NM).
+                    # E (tiempo a la distancia mínima) y X (distancia mínima pronosticada)
+                    # se muestran mientras el RBL se acorta (convergen): dos aeronaves, o
+                    # una aeronave y un punto fijo. `_rbl_cpa` devuelve None si divergen o
+                    # ya pasaron el CPA (equivalente a "la distancia deja de disminuir").
                     dist = calcular_distancia_nm(olat, olon, dlat, dlon)
                     decl = self.magnetic_compensator.obtener_declinacion(
                         (olat + dlat) / 2.0, (olon + dlon) / 2.0
                     )
                     rumbo = calcular_rumbo_magnetico(olat, olon, dlat, dlon, decl)
-                    info_text = f"{rumbo:03.0f}\u00b0 M | {dist:.1f} NM"
-                    if orig_lbl and dest_lbl:
-                        label_text = f"{orig_lbl} -> {dest_lbl}\n{info_text}"
-                    elif orig_lbl:
-                        label_text = f"{orig_lbl} -> {info_text}"
-                    elif dest_lbl:
-                        label_text = f"{info_text} -> {dest_lbl}"
-                    else:
-                        label_text = info_text
+                    lines_t = [f"B {rumbo:5.1f}", f"R {dist:6.1f}"]
+                    hay_ac = ((o_anchor and o_anchor.get("type") == "aircraft")
+                              or (d_anchor and d_anchor.get("type") == "aircraft"))
+                    if hay_ac:
+                        t_cpa, sep_cpa = self._rbl_cpa(olat, olon, o_anchor, dlat, dlon, d_anchor)
+                        if t_cpa is not None:
+                            _m = int(t_cpa // 60)
+                            _s = int(round(t_cpa - _m * 60))
+                            if _s == 60:
+                                _m += 1
+                                _s = 0
+                            lines_t.append(f"E {_m}'{_s:02d}")
+                            lines_t.append(f"X {sep_cpa:.2f}")
 
-                    mid_x = (p_origen.x() + p_destino.x()) / 2.0
-                    mid_y = (p_origen.y() + p_destino.y()) / 2.0
+                    # Solo texto (sin recuadro), a lo largo de la línea (label_t, arrastrable)
+                    # con un desplazamiento perpendicular para no taparla.
+                    t_pos = rbl_entry.get('label_t', 0.5) if rbl_entry is not None else 0.5
+                    mid_x = p_origen.x() + t_pos * (p_destino.x() - p_origen.x())
+                    mid_y = p_origen.y() + t_pos * (p_destino.y() - p_origen.y())
+                    seg_dx = p_destino.x() - p_origen.x()
+                    seg_dy = p_destino.y() - p_origen.y()
+                    seg_len = math.hypot(seg_dx, seg_dy) or 1.0
+                    nx, ny = -seg_dy / seg_len, seg_dx / seg_len
+                    if ny > 0:  # empujar el texto hacia arriba en pantalla
+                        nx, ny = -nx, -ny
 
                     font = QFont("Consolas", 9, QFont.Weight.Bold)
                     painter.setFont(font)
-                    lines_t = label_text.split('\n')
                     fm = painter.fontMetrics()
-                    rect_w = max(fm.horizontalAdvance(line) for line in lines_t) + 16
-                    rect_h = fm.height() * len(lines_t) + 8
-                    text_rect = QRectF(mid_x - rect_w / 2.0, mid_y - rect_h / 2.0, rect_w, rect_h)
+                    rect_w = max(fm.horizontalAdvance(line) for line in lines_t) + 12
+                    rect_h = fm.height() * len(lines_t) + 6
+                    perp = rect_h / 2.0 + 12.0
+                    cx = mid_x + nx * perp
+                    cy = mid_y + ny * perp
+                    text_rect = QRectF(cx - rect_w / 2.0, cy - rect_h / 2.0, rect_w, rect_h)
 
-                    if ods:
-                        # ODS: texto sin caja, en el color de la herramienta
-                        painter.setPen(QColor(rbl_color))
-                    else:
-                        # Técnico: borde del color del RBL, fondo negro
-                        painter.setPen(QPen(rbl_color, 1.5))
-                        painter.setBrush(QBrush(QColor("#000000")))
-                        painter.drawRoundedRect(text_rect, 4, 4)
-                        painter.setPen(QColor("#FFFFFF"))
+                    # Texto en el color de la herramienta (ODS) o blanco (técnico).
+                    painter.setPen(QColor(rbl_color) if ods else QColor("#FFFFFF"))
                     for i, line in enumerate(lines_t):
-                        line_y = text_rect.top() + fm.ascent() + 4 + i * fm.height()
-                        line_w = fm.horizontalAdvance(line)
-                        line_x = text_rect.left() + (rect_w - line_w) / 2.0
-                        painter.drawText(QPointF(line_x, line_y), line)
+                        line_y = text_rect.top() + fm.ascent() + 3 + i * fm.height()
+                        painter.drawText(QPointF(text_rect.left() + 6, line_y), line)
 
                     painter.restore()
                     return text_rect, p_origen, p_destino
@@ -4550,6 +4568,53 @@ class RadarWidget(_RadarBase):
     # MOUSE — DRAG PAN
     # ================================================================
 
+    def _anchor_velocity_nm_h(self, anchor):
+        """(v_este, v_norte) en NM/h del blanco del anchor; (0,0) si no es aeronave viva o sin velocidad.
+
+        Usa la velocidad SUAVIZADA (`_smooth_vx/_smooth_vy`, la misma del vector de
+        tendencia) para evitar el ruido y el flip ~180° del `track_angle` crudo entre
+        radares, que desestabilizaba el CPA (E/X). Fallback a ground_speed/track_angle.
+        """
+        if not anchor or anchor.get("type") != "aircraft":
+            return 0.0, 0.0
+        pid = anchor.get("plot_id")
+        trk = self.tracks.get(pid) if pid else None
+        if trk is None or not trk.is_alive():
+            return 0.0, 0.0
+        svx = getattr(trk, "_smooth_vx", None)
+        svy = getattr(trk, "_smooth_vy", None)
+        if svx is not None and svy is not None and math.hypot(svx, svy) > 2.5:  # ~5 kt
+            conv = 3600.0 / METERS_PER_NM  # m/s (coords proyectadas) -> NM/h
+            return svx * conv, svy * conv
+        gs = getattr(trk, "ground_speed", None)
+        ta = getattr(trk, "track_angle", None)
+        if gs is None or ta is None:
+            return 0.0, 0.0
+        rad = math.radians(ta)
+        return gs * math.sin(rad), gs * math.cos(rad)
+
+    def _rbl_cpa(self, olat, olon, o_anchor, dlat, dlon, d_anchor):
+        """CPA (punto de máxima aproximación) entre los dos extremos del RBL.
+
+        Devuelve (t_cpa_seg, sep_cpa_nm), o (None, None) si no hay aproximación futura
+        o ningún extremo tiene velocidad. Marco ENU local en NM alrededor del punto medio.
+        """
+        v1e, v1n = self._anchor_velocity_nm_h(o_anchor)
+        v2e, v2n = self._anchor_velocity_nm_h(d_anchor)
+        dve, dvn = v2e - v1e, v2n - v1n
+        dv2 = dve * dve + dvn * dvn
+        if dv2 <= 1e-6:
+            return None, None  # sin movimiento relativo
+        cos0 = math.cos(math.radians((olat + dlat) / 2.0))
+        re = (dlon - olon) * cos0 * 60.0   # posición destino-origen (este, NM)
+        rn = (dlat - olat) * 60.0          # (norte, NM)
+        t_h = -(re * dve + rn * dvn) / dv2  # horas hasta CPA
+        if t_h <= 0:
+            return None, None               # divergiendo o CPA ya pasado
+        ce = re + dve * t_h
+        cn = rn + dvn * t_h
+        return t_h * 3600.0, math.hypot(ce, cn)
+
     def _rbl_point_near_segment(self, p, a, b, tol=10.0):
         """Devuelve True si el punto p está a menos de tol píxeles del segmento a-b."""
         if a is None or b is None:
@@ -4585,18 +4650,27 @@ class RadarWidget(_RadarBase):
                     return
 
             # ── Comprobar si el clic elimina algún RBL persistente ──
-            clic = event.position()
-            idx_to_remove = None
-            for i, rbl in enumerate(self.rbl_lines):
-                hit_label = rbl.get('label_hitbox') and rbl['label_hitbox'].contains(clic)
-                hit_line  = self._rbl_point_near_segment(clic, rbl.get('p_origen'), rbl.get('p_destino'))
-                if hit_label or hit_line:
-                    idx_to_remove = i
-                    break
-            if idx_to_remove is not None:
-                self.rbl_lines.pop(idx_to_remove)
-                self.update()
-                return
+            # Solo en clic izquierdo simple (sin Shift ni botón central): así Shift+clic
+            # o clic central pueden arrancar un RBL nuevo desde un punto ya usado como
+            # extremo de otro RBL sin borrarlo (reuso del mismo punto).
+            is_middle_btn = event.button() == Qt.MouseButton.MiddleButton
+            if event.button() == Qt.MouseButton.LeftButton and not is_shift and not is_middle_btn:
+                clic = event.position()
+                # Etiqueta del RBL: arranca posible arrastre. En el release se decide:
+                # clic corto = borrar, arrastre = mover a lo largo de la línea.
+                # (Shift+clic / clic central arrancan RBL nuevo y no entran acá.)
+                for i, rbl in enumerate(self.rbl_lines):
+                    if rbl.get('label_hitbox') and rbl['label_hitbox'].contains(clic):
+                        self._rbl_label_press_idx = i
+                        self._rbl_label_press_pos = clic
+                        self._rbl_label_moved = False
+                        return
+                # Clic sobre la línea (fuera de la etiqueta) → eliminar el RBL.
+                for i, rbl in enumerate(self.rbl_lines):
+                    if self._rbl_point_near_segment(clic, rbl.get('p_origen'), rbl.get('p_destino')):
+                        self.rbl_lines.pop(i)
+                        self.update()
+                        return
 
             # Activación de herramienta RBL: Shift + Clic Izquierdo O Clic Central (Middle Button)
             is_shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
@@ -4761,6 +4835,27 @@ class RadarWidget(_RadarBase):
 
     def mouseMoveEvent(self, event):
         try:
+            # Arrastre del texto de un RBL a lo largo de su línea (tras superar el umbral)
+            if self._rbl_label_press_idx is not None and (event.buttons() & Qt.MouseButton.LeftButton):
+                idx = self._rbl_label_press_idx
+                if 0 <= idx < len(self.rbl_lines):
+                    pos = event.position()
+                    pp = self._rbl_label_press_pos
+                    if pp is not None and math.hypot(pos.x() - pp.x(), pos.y() - pp.y()) > 4.0:
+                        rbl = self.rbl_lines[idx]
+                        a, b = rbl.get('p_origen'), rbl.get('p_destino')
+                        if a is not None and b is not None:
+                            ab = b - a
+                            ab_len_sq = ab.x()**2 + ab.y()**2
+                            if ab_len_sq > 0:
+                                ap = pos - a
+                                t = (ap.x()*ab.x() + ap.y()*ab.y()) / ab_len_sq
+                                rbl['label_t'] = max(0.0, min(1.0, t))
+                                self._rbl_label_moved = True
+                                self.update()
+                    return
+                self._rbl_label_press_idx = None
+
             # Dragging label logic (FASE 2)
             all_plots = list(self.tracks.values()) + list(self.pending_tracks.values())
             dragging_plot = None
@@ -4870,6 +4965,18 @@ class RadarWidget(_RadarBase):
 
     def mouseReleaseEvent(self, event):
         try:
+            # Fin de interacción con el texto de un RBL: clic corto = borrar, arrastre = mover.
+            if self._rbl_label_press_idx is not None:
+                idx = self._rbl_label_press_idx
+                moved = self._rbl_label_moved
+                self._rbl_label_press_idx = None
+                self._rbl_label_press_pos = None
+                self._rbl_label_moved = False
+                if not moved and 0 <= idx < len(self.rbl_lines):
+                    self.rbl_lines.pop(idx)
+                self.update()
+                return
+
             # Release label drag state (FASE 2)
             all_plots = list(self.tracks.values()) + list(self.pending_tracks.values())
             released_any = False
@@ -5947,10 +6054,12 @@ class RadarWidget(_RadarBase):
                 except Exception:
                     pass
 
-            # 5. Vector de tendencia (Predictive speed vector in screen pixels - FASE 1)
+            # 5. Vector de velocidad (predictor): a ESCALA REAL del mapa, la punta cae
+            # exactamente donde estará la aeronave; una marca por cada minuto hasta el
+            # horizonte elegido (menú Ver → Vector Velocidad, 1/2/3 min).
             es_pista = plot.is_track or is_fused
 
-            # MÓDULO (largo) = velocidad del blanco; DIRECCIÓN = velocidad suavizada
+            # MÓDULO = velocidad del blanco; DIRECCIÓN = velocidad suavizada
             # (evita oscilación ~180° entre radares), con fallback al track_angle crudo.
             target_gs = plot.ground_speed
             target_heading = plot.track_angle
@@ -5968,28 +6077,36 @@ class RadarWidget(_RadarBase):
                     # Tope anti-inflación: la velocidad estimada puede dispararse por los
                     # saltos de posición entre radares; ningún avión civil supera ~600 kt.
                     gs_clamp = min(float(target_gs), 600.0)
+                    gs_mps = gs_clamp * (METERS_PER_NM / 3600.0)  # m/s en coords del mundo
 
-                    painter.save()
-                    painter.translate(x, y)
-                    painter.scale(inv_z, -inv_z)  # espacio de PÍXELES de pantalla
-
-                    # Largo FIJO en pantalla, proporcional a la velocidad (no escala con el
-                    # zoom): así siempre es visible y nunca cruza la pantalla. PX_POR_NM es
-                    # una escala visual fija (no representa distancia real en el mapa).
-                    PX_POR_NM = 5.0
-                    distancia_vector_nm = (gs_clamp / 60.0) * self.vector_tiempo_minutos
-                    longitud_px = distancia_vector_nm * PX_POR_NM
-
-                    # 0° apunta al Norte (el scale(-inv_z) ya invierte el eje Y).
+                    # Componentes de velocidad en el mundo (0° = Norte, +x Este, +y Norte).
                     ang = math.radians(target_heading)
-                    dx_vector = longitud_px * math.sin(ang)
-                    dy_vector = -longitud_px * math.cos(ang)
+                    v_east = gs_mps * math.sin(ang)
+                    v_north = gs_mps * math.cos(ang)
 
-                    pen_v = QPen(base_color, 1.5, Qt.PenStyle.SolidLine)
-                    painter.setPen(pen_v)
-                    painter.drawLine(QPointF(0, 0), QPointF(dx_vector, dy_vector))
-
-                    painter.restore()
+                    minutos = max(1, int(round(getattr(self, 'vector_tiempo_minutos', 2))))
+                    sp0 = self._world_to_screen(plot.x, plot.y)
+                    if sp0 is not None:
+                        painter.save()
+                        painter.resetTransform()  # dibujar en píxeles de pantalla, a escala real
+                        painter.setPen(QPen(base_color, 1.5, Qt.PenStyle.SolidLine))
+                        prev = sp0
+                        for m in range(1, minutos + 1):
+                            t = m * 60.0  # segundos
+                            spm = self._world_to_screen(plot.x + v_east * t, plot.y + v_north * t)
+                            if spm is None:
+                                break
+                            painter.drawLine(prev, spm)
+                            # Marca de minuto: tick perpendicular de largo fijo en pantalla.
+                            dxp, dyp = spm.x() - prev.x(), spm.y() - prev.y()
+                            seg = math.hypot(dxp, dyp)
+                            if seg > 1e-3:
+                                nx, ny = -dyp / seg, dxp / seg
+                                tl = 3.0
+                                painter.drawLine(QPointF(spm.x() - nx * tl, spm.y() - ny * tl),
+                                                 QPointF(spm.x() + nx * tl, spm.y() + ny * tl))
+                            prev = spm
+                        painter.restore()
                 except Exception:
                     pass
 
