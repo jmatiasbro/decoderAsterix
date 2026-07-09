@@ -1,0 +1,6 @@
+{
+  "tma":  {"fl_piso": 30,  "fl_techo": 244, "horizontal_nm": 5.0,  "vertical_ft": 800},
+  "ruta": {"fl_piso": 245, "fl_techo": 600, "horizontal_nm": 10.0, "vertical_ft": 800},
+  "velocidad_min_kt": 0.0,
+  "lookahead_s": 120.0
+}

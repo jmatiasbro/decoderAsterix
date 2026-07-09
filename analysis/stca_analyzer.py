@@ -5,8 +5,10 @@ según los mínimos de separación radar de RAAC / OACI Doc 4444:
 
   - TMA / espacio inferior  (FL030 ≤ FL < FL245): 3.0 NM / 800 ft
     (mínimo radar terminal 5 NM reducible a 3 NM; alerta antes de perder 1000 ft).
-  - Ruta / espacio superior (FL245 ≤ FL ≤ FL600): 5.0 NM / 1000 ft
-    (mínimo radar en ruta; detección de intrusión en bloques RVSM).
+  - Ruta / espacio superior (FL245 ≤ FL ≤ FL600): 5.0 NM / 800 ft
+    (mínimo radar en ruta; vertical BAJO el mínimo RVSM de 1000 ft: con umbral
+    = 1000 ft el tráfico correctamente separado dispararía STCA por el ruido de
+    altimetría / cuantización Mode C — 800 ft alerta solo ante pérdida real).
 
 Transición (HLR-STCA-07): si al menos una aeronave del par está en o por encima
 del piso de Ruta, se aplican los umbrales de Ruta (los más conservadores) — evita
@@ -44,7 +46,7 @@ class STCASegmento:
 class STCAConfig:
     """Configuración operativa del motor (RAAC / Doc 4444 por defecto)."""
     tma: STCASegmento = STCASegmento("TMA", 30, 244, 3.0, 800)
-    ruta: STCASegmento = STCASegmento("RUTA", 245, 600, 5.0, 1000)
+    ruta: STCASegmento = STCASegmento("RUTA", 245, 600, 5.0, 800)
     velocidad_min_kt: float = 40.0   # blancos más lentos se excluyen (estáticos)
     lookahead_s: float = 120.0       # horizonte de predicción de CPA
 

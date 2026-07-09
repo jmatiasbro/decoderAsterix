@@ -2401,7 +2401,8 @@ class MainWindow(QMainWindow):
             for store in (getattr(self.radar, 'tracks', {}),
                           getattr(self.radar, 'pending_tracks', {})):
                 muertos = [tid for tid, trk in store.items()
-                           if str(getattr(trk, 'mode3a', '') or '').strip() == "0000"]
+                           if getattr(trk, 'is_parrot', False)
+                           or str(getattr(trk, 'mode3a', '') or '').strip() == "0000"]
                 for tid in muertos:
                     store.pop(tid, None)
         self.radar.update()

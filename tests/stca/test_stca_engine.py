@@ -7,9 +7,9 @@ VIOLATION (separación actual) y fase de PREDICTION (CPA cinemático).
 
 Segmentación por volúmenes (HLR-STCA-01/02/07, RAAC/Doc 4444):
 - TMA  (FL030–<FL245): 3.0 NM / 800 ft.
-- Ruta (FL245–FL600):  5.0 NM / 1000 ft.
+- Ruta (FL245–FL600):  5.0 NM / 800 ft (vertical bajo el mínimo RVSM 1000 ft, anti-nuisance).
 - Transición: si una del par está ≥ FL245 → umbrales de Ruta (más conservadores).
-El mk() por defecto usa FL300 → segmento RUTA (5 NM / 1000 ft).
+El mk() por defecto usa FL300 → segmento RUTA (5 NM / 800 ft).
 
 Convenciones de unidades del motor:
 - lat_render/lon_render en grados (separación actual vía haversine).
@@ -72,7 +72,7 @@ def test_haversine_mismo_punto_es_cero():
 # --------------------------------------------------------------------------- #
 
 def test_violacion_horizontal_y_vertical(eng):
-    # 0.05° lon ≈ 3 NM (<5 en Ruta) y co-altitud (<1000 ft) → VIOLATION
+    # 0.05° lon ≈ 3 NM (<5 en Ruta) y co-altitud (<800 ft) → VIOLATION
     tracks = {
         "A": mk(lat_render=0.0, lon_render=0.0, mode3a="1111", mode_s="AAAAAA"),
         "B": mk(lat_render=0.0, lon_render=0.05, mode3a="2222", mode_s="BBBBBB"),
@@ -87,24 +87,24 @@ def test_violacion_horizontal_y_vertical(eng):
 
 
 def test_sin_violacion_si_separados_verticalmente(eng):
-    # 1000 ft de separación (>= umbral Ruta) → sin conflicto pese a estar pegados
+    # 800 ft = umbral Ruta (condición ≥) → sin conflicto pese a estar pegados
     tracks = {
         "A": mk(lat_render=0.0, lon_render=0.0, flight_level="300", mode3a="1111", mode_s="AAAAAA"),
-        "B": mk(lat_render=0.0, lon_render=0.05, flight_level="310", mode3a="2222", mode_s="BBBBBB"),
+        "B": mk(lat_render=0.0, lon_render=0.05, flight_level="308", mode3a="2222", mode_s="BBBBBB"),
     }
     assert eng.evaluar_conflictos(tracks) == []
 
 
 def test_separacion_vertical_justo_bajo_umbral_es_violacion(eng):
-    # 800 ft (<1000 en Ruta) co-localizados horizontalmente → VIOLATION
+    # 700 ft (<800 en Ruta) co-localizados horizontalmente → VIOLATION
     tracks = {
         "A": mk(lat_render=0.0, lon_render=0.0, flight_level="300", mode3a="1111", mode_s="AAAAAA"),
-        "B": mk(lat_render=0.0, lon_render=0.05, flight_level="308", mode3a="2222", mode_s="BBBBBB"),
+        "B": mk(lat_render=0.0, lon_render=0.05, flight_level="307", mode3a="2222", mode_s="BBBBBB"),
     }
     c = eng.evaluar_conflictos(tracks)
     assert len(c) == 1
     assert c[0][2] == "VIOLATION"
-    assert c[0][5] == 800
+    assert c[0][5] == 700
 
 
 # --------------------------------------------------------------------------- #

@@ -183,12 +183,12 @@ Cuando STCA esté habilitada, el sistema **DEBE** evaluar la separación actual 
 | Segmento | Banda | `horizontal_nm` | `vertical_ft` |
 |----------|-------|-----------------|---------------|
 | TMA / espacio inferior | FL030 ≤ FL < FL245 | **3.0 NM** | **800 ft** |
-| Ruta / espacio superior | FL245 ≤ FL ≤ FL600 | **5.0 NM** | **1000 ft** |
+| Ruta / espacio superior | FL245 ≤ FL ≤ FL600 | **5.0 NM** | **800 ft** |
 
 Los umbrales y bandas **DEBEN** ser configurables (`config/stca.json`, ver HLR-STCA-08); los valores de la tabla son los por defecto normativos. Tracks fuera de la banda global FL030–FL600 **NO DEBEN** evaluarse (excluye tráfico de superficie/circuito y espacio no controlado superior).
 
 ### HLR-STCA-02 — Separación vertical en STCA `SWAL 3`
-Cuando ambos tracks tengan FL conocido, el sistema **NO DEBE** generar alerta STCA si la diferencia vertical es ≥ el `vertical_ft` del segmento aplicable (HLR-STCA-01): 800 ft en TMA (alerta temprana ante la pérdida del mínimo de 1000 ft bajo FL290), 1000 ft en Ruta (intrusión en bloques RVSM).
+Cuando ambos tracks tengan FL conocido, el sistema **NO DEBE** generar alerta STCA si la diferencia vertical es ≥ el `vertical_ft` del segmento aplicable (HLR-STCA-01): **800 ft** en TMA y Ruta. El umbral **DEBE** fijarse por debajo del mínimo de separación (1000 ft en Ruta RVSM, 1000 ft bajo FL290 en TMA): con umbral = 1000 ft el tráfico **correctamente separado** dispararía STCA por el ruido de altimetría / cuantización Mode C (100 ft) — un margen de 200 ft (2 FL) evita la nuisance sistemática y alerta **solo ante una pérdida real** de separación.
 
 ### HLR-STCA-03 — Inhibición explícita de pares `SWAL 3`
 El operador o la configuración **DEBE** poder definir pares de tracks inhibidos para STCA (p.ej. formaciones). Un par inhibido **NO DEBE** generar alerta.
@@ -200,10 +200,15 @@ Ver HLR-HMI-05.
 El sistema **NO DEBE** generar alertas STCA para pares de tracks cuya distancia horizontal en CPA sea ≥ `stca_horizontal_nm` + margen de histéresis (`stca_hysteresis_nm`, por defecto 0.5 NM) para evitar alarm flicker.
 
 ### HLR-STCA-07 — Transición entre segmentos sin parpadeo `[SSR-07]` `SWAL 3`
-Para un par de tracks cuyos niveles caigan en segmentos distintos (aeronave cruzando FL245 en ascenso/descenso), el sistema **DEBE** aplicar los umbrales del segmento **más conservador** (Ruta: 5.0 NM / 1000 ft) mientras al menos una de las aeronaves esté en o por encima del piso de Ruta. Esta regla **DEBE** ser determinista (función pura del par de FL) para evitar el parpadeo de alertas en la transición.
+Para un par de tracks cuyos niveles caigan en segmentos distintos (aeronave cruzando FL245 en ascenso/descenso), el sistema **DEBE** aplicar los umbrales del segmento **más conservador** (Ruta: 5.0 NM / 800 ft) mientras al menos una de las aeronaves esté en o por encima del piso de Ruta. Esta regla **DEBE** ser determinista (función pura del par de FL) para evitar el parpadeo de alertas en la transición.
 
 ### HLR-STCA-08 — Configuración con fallback seguro `[SSR-07]` `SWAL 3`
 Los parámetros del motor STCA **DEBEN** cargarse desde la configuración operativa (`config/stca.json`) validando bandas y rangos en carga. Ante configuración ausente, el sistema **DEBE** usar los valores normativos por defecto (tabla de HLR-STCA-01). Ante configuración **ilegible o inválida**, el sistema **DEBE** aplicar el fallback seguro — 3.0 NM / 1000 ft en toda la banda FL030–FL600 — y notificarlo; el sistema **NO DEBE** quedar sin función STCA por un error de configuración.
+
+> **Config operativa desplegada** (`config/stca.json`, bajo SCM desde 2026-07-09): TMA 5.0 NM / 800 ft, Ruta 10.0 NM / 800 ft, `velocidad_min_kt = 0`, `lookahead_s = 120`. Respecto de los valores normativos por defecto (HLR-STCA-01), sólo difieren los umbrales **horizontales** (más conservadores → aviso más temprano) y `velocidad_min_kt = 0`; el vertical (800 ft) coincide con el default (justificación anti-nuisance RVSM en HLR-STCA-02). `velocidad_min_kt = 0` es **seguro** porque los parrots se excluyen por identidad (HLR-STCA-09), no por velocidad — así se protege el tráfico lento real (helicóptero en estacionario) sin reintroducir *nuisance* de calibración. *(Config validada por el responsable, 2026-07-09.)*
+
+### HLR-STCA-09 — Exclusión de blancos no válidos del STCA `[SSR-07]` `SWAL 3`
+El motor STCA **NO DEBE** evaluar como conflicto a blancos que no representan tránsito controlado válido. El builder de entrada **DEBE** excluir: (a) **parrots** (Squawk 0000, transpondedores de calibración) por **identidad** —capturada del squawk crudo (`is_parrot`) **antes** de su normalización a `''`, no por velocidad—; (b) **reflexiones / multipath** (`is_reflection`); (c) plots **solo-PSR** sin identidad confiable; (d) tracks **degradados** (DQF); y (e) opcionalmente, blancos por debajo de `velocidad_min_kt` (estáticos). La exclusión de parrots por identidad **DEBE** ser independiente de la velocidad, de modo que `velocidad_min_kt` pueda fijarse en 0 **sin** dejar sin protección STCA a tráfico lento real ni reintroducir *nuisance* de calibración. *(Corrige el hallazgo: el chequeo previo `mode3a == '0000'` era inefectivo porque el squawk 0000 ya se había normalizado a `''` — el parrot quedaba sin excluir.)*
 
 ### HLR-STCA-06 — Marco de posición único y consistente `[SSR-07]` `SWAL 3`
 El origen de datos del motor STCA (el caller) **DEBE** suministrar a ambas fases —separación actual (VIOLATION) y predicción de CPA (PREDICTION)— la **misma posición de la aeronave expresada en marcos consistentes**: las coordenadas cartesianas `x/y` (metros) **DEBEN** ser la proyección local de las coordenadas `lat_render/lon_render` (grados) usadas por la fase de violación. El motor **NO DEBE** mezclar dos linajes de posición distintos (p. ej. posición cruda para la violación y posición suavizada para la predicción) sin garantizar esa consistencia. En todo caso, la fase de VIOLATION **DEBE** decidirse sobre la posición cruda reportada, de modo que un `x/y` inconsistente **NO PUEDA** ocultar una violación de separación real. *(Cierra el hallazgo de verificación STCA-1.)*
@@ -395,6 +400,7 @@ Los parámetros de cada sensor (SAC, SIC, lat, lon, nombre, rango máximo) **DEB
 | HLR-STCA-06 | REQ-SN-1 | SSR-07 | FC-STCA-01 | `test_stca_engine.py::test_contrato_*` (marco único + residual acotado) |
 | HLR-STCA-07 | REQ-SN-1 | SSR-07 | FC-STCA-01 | `test_stca_engine.py::test_transicion_fl245_usa_umbral_ruta` |
 | HLR-STCA-08 | REQ-SN-1 | SSR-07 | FC-STCA-03 | `test_stca_engine.py::test_fallback_seguro_uniforme`, `test_config_invalida_lanza` |
+| HLR-STCA-09 | REQ-SN-1 | SSR-07 | FC-STCA-03 | `test_stca_scenarios.py` (parrots excluidos por identidad; tráfico lento protegido con velocidad_min_kt=0) |
 | HLR-APW-01..04 | REQ-SN-2 | SSR-09 | FC-APW-01/03 | `test_apw.py` |
 | HLR-MSAW-01..05 | REQ-SN-3/4 | SSR-08/09 | FC-MSAW-01..04 | `test_engine.py`, `test_suppression.py` |
 | HLR-FUS-01..04 | REQ-FUS-1/2 | — | FC-FUS-01/02 | `test_correlator.py` |
@@ -424,3 +430,5 @@ Los parámetros de cada sensor (SAC, SIC, lat, lon, nombre, rango máximo) **DEB
 | 0.1 | 2026-07-01 | Primera edición. 56 HLR formalizados sobre 12 subsistemas. 11 HLR-SSR derivados del FHA. Matriz de trazabilidad HLR↔REQ↔SSR↔test. 5 brechas críticas identificadas. |
 | 0.2 | 2026-07-05 | Añadido **HLR-STCA-06** (marco de posición único y consistente) que formaliza el contrato del motor STCA y **cierra el hallazgo STCA-1**; trazado a `test_stca_engine.py::test_contrato_*`. |
 | 0.3 | 2026-07-06 | **STCA segmentado por volúmenes** (RAAC/Doc 4444): HLR-STCA-01/02 reescritos (TMA 3 NM/800 ft FL030-<245; Ruta 5 NM/1000 ft FL245-600); nuevos **HLR-STCA-07** (transición conservadora sin parpadeo) y **HLR-STCA-08** (config con fallback seguro). Cierra la brecha operativa: el TMA quedaba sin protección STCA con la banda hardcodeada FL245-450. |
+| 0.4 | 2026-07-09 | Nuevo **HLR-STCA-09** (exclusión de blancos no válidos por identidad). **Corrige el hallazgo**: los parrots (Sqwk 0000) no se excluían del STCA porque el squawk se normalizaba a `''` antes del chequeo `== '0000'`; ahora se excluyen por flag `is_parrot`. Documenta la config operativa desplegada (`config/stca.json`, bajo SCM). |
+| 0.5 | 2026-07-09 | **Separación vertical de Ruta 1000 → 800 ft** (HLR-STCA-01/02/07 y default del motor): el umbral debe ir **bajo** el mínimo RVSM de 1000 ft; con 1000 ft el tráfico correctamente separado dispararía STCA por cuantización Mode C. El fallback seguro se mantiene en 1000 ft (modo degradado, prioriza no omitir). |

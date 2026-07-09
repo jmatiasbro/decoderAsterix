@@ -353,7 +353,10 @@ class RadarPlot:
                  '_last_fl_time', '_last_gs_time', 'vx', 'vy',
                  # Tasa vertical (ft/min) que el motor MSAW lee del track; sin esto
                  # la asignación en evaluar_msaw lanzaba AttributeError por __slots__.
-                 'vertical_rate')
+                 'vertical_rate',
+                 # Parrot (Squawk 0000): capturado del squawk crudo antes de que
+                 # _filter_mode3a lo colapse a '' → permite excluirlo por identidad.
+                 'is_parrot')
 
     def __init__(self, x: float, y: float, sac_sic: str, category: int,
                  timestamp: float, mode3a: str, callsign: str,
@@ -382,6 +385,7 @@ class RadarPlot:
         self.category = category
         self.timestamp = timestamp
         self.mode3a = mode3a
+        self.is_parrot = False
         self.callsign = callsign
         self.flight_level = flight_level
         self.is_track = is_track
@@ -672,6 +676,19 @@ def _filter_mode3a(value):
     if m3a_str == '0000':
         return ''
     return value
+
+
+def _es_parrot_sqwk(value) -> bool:
+    """True si el Squawk crudo es 0000 (parrot / transpondedor de calibración).
+
+    Se evalúa ANTES de la normalización de `_filter_mode3a` (que colapsa 0000 → ''),
+    para poder excluir el parrot por IDENTIDAD aguas abajo (p. ej. del STCA) sin
+    depender de la velocidad ni confundirlo con una aeronave real sin Modo A.
+    """
+    if value is None or value == '' or value == '----':
+        return False
+    m3a_str = f"{value:04o}" if isinstance(value, int) else str(value).strip()
+    return m3a_str == '0000'
 
 
 class RadarWidget(_RadarBase):
@@ -2006,6 +2023,9 @@ class RadarWidget(_RadarBase):
                     m3a_str = f"{m3a:04o}" if isinstance(m3a, int) else str(m3a).strip()
                     if m3a is not None and m3a not in ('', '----') and m3a_str != '0000':
                         track.mode3a = m3a
+                        track.is_parrot = False   # código válido → no es parrot
+                    elif m3a_str == '0000':
+                        track.is_parrot = True    # Squawk 0000 → parrot (calibración)
                     
                     try:
                         if data.get('flight_level') is not None:
@@ -2173,6 +2193,7 @@ class RadarWidget(_RadarBase):
                     reporting_sensors={sensor_id}
                 )
                 plot.widget_ref = self
+                plot.is_parrot = _es_parrot_sqwk(data.get('mode3a'))
                 plot.set_highlight_filter(self.squawk_filter)
                 if bypass_pending:
                     self.tracks[target_id] = plot
@@ -2797,8 +2818,11 @@ class RadarWidget(_RadarBase):
                 m3a = track.mode3a
                 m3a_str = f"{m3a:04o}" if isinstance(m3a, int) else str(m3a).strip()
                 # Parrots (Sqwk 0000): transpondedor de calibración / código no asignado.
-                # No son tránsito válido → excluir de la evaluación STCA.
-                if m3a_str == '0000':
+                # No son tránsito válido → excluir de la evaluación STCA. Se excluyen por
+                # IDENTIDAD (flag capturado del squawk crudo), no por velocidad: así el
+                # filtro de estáticos puede relajarse (velocidad_min_kt=0) sin dejar sin
+                # protección a tráfico lento real (p. ej. helicóptero en estacionario).
+                if getattr(track, 'is_parrot', False) or m3a_str == '0000':
                     continue
                 tracks_for_stca[tid] = {
                     'flight_level': fl_str,
@@ -5527,6 +5551,22 @@ class RadarWidget(_RadarBase):
         y = (vp_cy + self.pan_y - sy) / z
         return x, y
 
+    @staticmethod
+    def _puntos_prediccion_mundo(x, y, gs_kt, heading_deg, minutos):
+        """Posiciones (x, y) del mundo donde estará la pista a 1..`minutos` minutos.
+
+        Predictor a escala real del vector de velocidad: módulo = `gs_kt` (nudos, tope
+        600), dirección = `heading_deg` (0° = Norte, +x Este, +y Norte). Devuelve una
+        lista de tuplas en coords del mundo (metros), una por minuto entero.
+        """
+        gs = min(float(gs_kt), 600.0)
+        gs_mps = gs * (METERS_PER_NM / 3600.0)  # nudos -> m/s en coords del mundo
+        ang = math.radians(heading_deg)
+        v_east = gs_mps * math.sin(ang)
+        v_north = gs_mps * math.cos(ang)
+        n = max(1, int(round(minutos)))
+        return [(x + v_east * (m * 60.0), y + v_north * (m * 60.0)) for m in range(1, n + 1)]
+
     def _snap_to_target(self, mouse_pos) -> Tuple[float, float, Optional[str], dict]:
         """
         Busca si la posición del mouse en pantalla está cerca de algún radar o aeronave (o sus etiquetas).
@@ -6074,26 +6114,19 @@ class RadarWidget(_RadarBase):
 
             if es_pista and target_gs is not None and target_heading is not None and target_gs > 10:
                 try:
-                    # Tope anti-inflación: la velocidad estimada puede dispararse por los
-                    # saltos de posición entre radares; ningún avión civil supera ~600 kt.
-                    gs_clamp = min(float(target_gs), 600.0)
-                    gs_mps = gs_clamp * (METERS_PER_NM / 3600.0)  # m/s en coords del mundo
-
-                    # Componentes de velocidad en el mundo (0° = Norte, +x Este, +y Norte).
-                    ang = math.radians(target_heading)
-                    v_east = gs_mps * math.sin(ang)
-                    v_north = gs_mps * math.cos(ang)
-
+                    # Tope anti-inflación (600 kt) y proyección a escala real: posiciones
+                    # del mundo por minuto donde estará la pista (helper puro, testeable).
                     minutos = max(1, int(round(getattr(self, 'vector_tiempo_minutos', 2))))
+                    puntos_mundo = self._puntos_prediccion_mundo(
+                        plot.x, plot.y, target_gs, target_heading, minutos)
                     sp0 = self._world_to_screen(plot.x, plot.y)
                     if sp0 is not None:
                         painter.save()
                         painter.resetTransform()  # dibujar en píxeles de pantalla, a escala real
                         painter.setPen(QPen(base_color, 1.5, Qt.PenStyle.SolidLine))
                         prev = sp0
-                        for m in range(1, minutos + 1):
-                            t = m * 60.0  # segundos
-                            spm = self._world_to_screen(plot.x + v_east * t, plot.y + v_north * t)
+                        for (wx, wy) in puntos_mundo:
+                            spm = self._world_to_screen(wx, wy)
                             if spm is None:
                                 break
                             painter.drawLine(prev, spm)

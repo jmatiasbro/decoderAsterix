@@ -139,7 +139,7 @@ referencia al artefacto de evidencia.
 | RNC-007 | C | Cobertura de decisiones no medida en módulos SWAL 2 | **CERRADA** — medida con `pytest-cov` (branch), línea base **88.5 %** ≥ objetivo 80 %; automatizada en CI (`.github/workflows/tests.yml`). Ver SVP §4.4 |
 | RNC-008 | B | Sin registros de revisión de código para módulos SWAL 2 | **CERRADA** — [12_registros_revision_codigo.md](12_registros_revision_codigo.md) (RR-01..05, 5 módulos). Independencia sigue como RNC-006 |
 | RNC-009 | C | Descarte silencioso de plots en `_process_plot_data` (brecha de observabilidad, ver gap analysis ROB-1) | **CERRADA** — contador + logging con throttle; `tests/tracking/test_plot_descarte.py` (3 casos) |
-| RNC-010 | C | Binarios (`.pcap`/`.duckdb`/`.venv`) versionados en el histórico git (integridad del árbol, gap C-3) | **Fase A ejecutada** (2026-07-05): destrackeadas 10 `.pcap` + 3 `.S4RD` de HEAD ([doc 18 §2](18_procedimiento_purga_RNC010.md)). Fase B (purga del histórico, 1.1 GB) pendiente de decisión del responsable |
+| RNC-010 | C | Binarios (`.pcap`/`.duckdb`/`.venv`) versionados en el histórico git (integridad del árbol, gap C-3) | **CERRADA** (2026-07-09) — Fase A (destrackeo de HEAD, 2026-07-05) + **Fase B ejecutada**: `git filter-repo` sobre el remoto, histórico **114 MB → 25 MB**, sin pérdida de commits/refs (verificado: 0 blobs purgados alcanzables, árbol de la app completo). Respaldo espejo pre-purga conservado y tabla de equivalencia de hashes registrada en [SCMP §5.4](10_SCMP.md). Ver [doc 18](18_procedimiento_purga_RNC010.md) |
 | RNC-011 | **A** | **Fusión errónea por proximidad (FC-TRK-01, HLR-TRK-06/SSR-06):** el paso E del matching fusionaba dos aeronaves con Mode S válidos **distintos** a <3 NM co-altitud, colapsándolas en un track y **suprimiendo el STCA** en la geometría de conflicto. Detectada al construir el escenario de verificación TMA (2026-07-06) | **CERRADA** (2026-07-06) — veto de identidad contradictoria en el paso E (`radar_widget`, LLR-COR-08); verificada por `test_matching.py::test_mode_s_distintos_no_fusiona_por_proximidad` y el escenario e2e `test_tma_conflicto_dispara_violacion` |
 
 > **Nota de estado (2026-07-05):** de las seis RNC iniciales, cuatro (001/002/003/005) quedaron cerradas
@@ -159,7 +159,7 @@ El SQA monitorea las siguientes métricas como indicadores del estado del proces
 | HLR con test asociado | ~56/56 (100 %) — HLR-PERF-04/05 por verificación manual | 100 % |
 | RNCs Clase A abiertas | 0 | 0 |
 | RNCs Clase B abiertas | 1 (RNC-006, independencia — acuerdo ANAC) | 0 |
-| RNCs Clase C abiertas | 1 (RNC-010, purga de binarios del histórico) | 0 |
+| RNCs Clase C abiertas | 0 | 0 |
 | Cobertura de decisiones (SWAL 2) | 88.5 % (medida) | ≥ 80 % (objetivo propuesto) |
 | Commits con referencia a HLR (mensajes) | ~65 % | ≥ 90 % |
 
@@ -207,3 +207,4 @@ objetivos de independencia:
 | 0.1 | 2026-07-03 | Creación del borrador inicial. |
 | 0.2 | 2026-07-05 | Cierre de RNC-001/002/003/005 con evidencia versionada; alta de RNC-007/008 (cobertura y revisiones de código); actualización de criterios SOI-1/2, métricas (526 tests, 100 % HLR con test) y baselines etiquetados. |
 | 0.3 | 2026-07-05 | Cierre de RNC-004 (requirements), RNC-007 (cobertura 88.5 % + CI), RNC-008 (registros de revisión de código, doc 12) y RNC-009 (observabilidad de descartes). Única RNC de producto/proceso abierta: RNC-006 (independencia, acuerdo ANAC). |
+| 0.4 | 2026-07-09 | Cierre de **RNC-010** (purga del histórico, fase B ejecutada). **Cero RNC clase C abiertas**; la única RNC abierta es RNC-006 (independencia, externa/ANAC). |

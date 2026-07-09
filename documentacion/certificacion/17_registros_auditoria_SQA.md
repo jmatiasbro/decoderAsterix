@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **Norma:** EUROCAE ED-109A / RTCA DO-278A — aseguramiento de la calidad (Q-1/Q-2/Q-3).
-**Versión:** 0.1. **Fecha:** 2026-07-05. **Estado:** PROPUESTO.
+**Versión:** 0.2. **Fecha:** 2026-07-09. **Estado:** PROPUESTO.
 
 > Registra la **ejecución** de las auditorías definidas en el [SQAP §3](11_SQAP.md) sobre el baseline
 > vigente, cerrando la brecha de *ejecución sin registro* de los objetivos **Q-1** (auditorías de
@@ -66,7 +66,7 @@
 
 ## 3. AUD-C-01 — Auditoría de gestión de configuración (Q-1)
 
-**Criterio:** SCMP §5–7 (etiquetas, archivo de resultados, `.gitignore`). **Resultado: CONFORME con no conformidad abierta.**
+**Criterio:** SCMP §5–7 (etiquetas, archivo de resultados, `.gitignore`). **Resultado: CONFORME.**
 
 | # | Comprobación | Estado | Evidencia |
 |---|--------------|--------|-----------|
@@ -75,9 +75,9 @@
 | C-01.3 | Checksums de binarios de datos | ✅ | `tests/data/checksums.txt` (RNC-005 cerrada) |
 | C-01.4 | Resultados de verificación archivados | ✅ | `resultados_soi1.html`; artefactos de cobertura en CI |
 | C-01.5 | `.gitignore` endurecido (excluye entorno/artefactos nuevos) | ✅ | `.gitignore` |
-| C-01.6 | Histórico libre de binarios versionados (`.pcap`/`.duckdb`/`.venv`) | ❌ **RNC-010** | Los binarios siguen en el histórico git; requiere purga controlada (`git filter-repo`) |
+| C-01.6 | Histórico libre de binarios versionados (`.pcap`/`.duckdb`/`.venv`) | ✅ | **RNC-010 CERRADA** (2026-07-09): purga con `git filter-repo`, remoto 114 MB → 25 MB; verificado 0 blobs purgados alcanzables y árbol de la app completo ([doc 18](18_procedimiento_purga_RNC010.md)) |
 
-**Hallazgos:** **RNC-010** (clase C) — purga del histórico pendiente. Acción de higiene de configuración; sin impacto en la operación ni en la reproducibilidad del baseline actual.
+**Hallazgos:** ninguno abierto. **RNC-010 cerrada** con la ejecución de la fase B (purga del histórico); respaldo espejo pre-purga conservado y tabla de equivalencia de hashes en [SCMP §5.4](10_SCMP.md).
 
 ---
 
@@ -90,7 +90,7 @@
 | Planificación | 90 % (P-5 cerrado) | ↑ |
 | Desarrollo (D-2/D-3) | 92 % (todo HLR con LLR) | ↑ |
 | Verificación | 70 % | = |
-| SCM | 75 % (RNC-010 abierta) | = |
+| SCM | 88 % (RNC-010 cerrada) | ↑ |
 | SQA | ↑ con este documento | ↑ |
 | Análisis de seguridad | 67 % (PSSA/SSA + safety case) | ↑↑ |
 
@@ -137,13 +137,14 @@ dependen de trabajo interno adicional.
 
 | Hallazgo | Auditoría | Clase | Estado |
 |----------|-----------|-------|--------|
-| RNC-010 — binarios en histórico git | AUD-C-01 | C | Abierta (purga controlada) |
+| RNC-010 — binarios en histórico git | AUD-C-01 | C | **CERRADA** (2026-07-09, purga fase B) |
 | RNC-006 — independencia de verificación | AUD-T-01, AUD-PR-01 | B | Abierta (acuerdo ANAC) |
 | Obs. P-01.7 — idioma de logs heredados | AUD-P-01 | Obs. | Sin RNC (menor) |
 | Acción SSA-A2 — regresión visual | AUD-V-01 | — | Abierta (trazada) |
 
-**Conclusión global:** sin no conformidades de clase A. Dos RNC clase B/C abiertas, ambas ya trazadas y
-ninguna en la ruta crítica de una barrera de seguridad. El baseline es apto para presentación SOI-1.
+**Conclusión global:** sin no conformidades de clase A. Tras cerrar RNC-010, queda **una sola RNC abierta
+(RNC-006, clase B, independencia de verificación)**, de resolución externa (acuerdo ANAC) y fuera de la
+ruta crítica de una barrera de seguridad. El baseline es apto para presentación SOI-1.
 
 ---
 
@@ -152,3 +153,4 @@ ninguna en la ruta crítica de una barrera de seguridad. El baseline es apto par
 | Ver | Fecha | Cambio |
 |-----|-------|--------|
 | 0.1 | 2026-07-05 | Emisión inicial: ejecución y registro de las auditorías AUD-P/V/C/G/PR/T-01 sobre el baseline v0.4.0+; cierra la ejecución de Q-1/Q-2/Q-3. Hallazgos RNC-010 y confirmación de RNC-006. |
+| 0.2 | 2026-07-09 | **Cierre de RNC-010** en AUD-C-01 (C-01.6 ✅, purga del histórico ejecutada). Única RNC abierta: RNC-006. |

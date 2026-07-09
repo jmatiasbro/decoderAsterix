@@ -1,6 +1,6 @@
 # Gap Analysis — DO-278A / ED-109A
 
-**Versión:** 1.1. **Fecha:** 2026-07-06. **SWAL de referencia:** 2 (núcleo, provisional).
+**Versión:** 1.2. **Fecha:** 2026-07-09. **SWAL de referencia:** 2 (núcleo, provisional).
 
 > Estado por objetivo: ✅ Cumplido · ⚠️ Parcial · ❌ Ausente. La columna *Evidencia* apunta a lo que
 > existe hoy en el repositorio. Los objetivos se agrupan por proceso DO-278A. La numeración es
@@ -15,20 +15,20 @@
 | Planificación | 5 | 4 | 1 | 0 | 90% |
 | Desarrollo (requisitos/diseño/código) | 6 | 6 | 0 | 0 | 100% |
 | Verificación | 7 | 4 | 2 | 1 | 70% |
-| Gestión de configuración (SCM) | 4 | 2 | 2 | 0 | 78% |
+| Gestión de configuración (SCM) | 4 | 3 | 1 | 0 | 88% |
 | Aseguramiento de calidad (SQA) | 3 | 3 | 0 | 0 | 100% |
 | Enlace con autoridad | 2 | 0 | 1 | 1 | 15% |
 | Análisis de seguridad | 3 | 1 | 2 | 0 | 75% |
-| **Total** | **30** | **20** | **8** | **2** | **~80%** |
+| **Total** | **30** | **21** | **7** | **2** | **~82%** |
 
 Conclusión: **la capa de evidencia de proceso está sustancialmente construida** (planes, FHA, SRS con
 57 HLR, matriz de trazabilidad, CI con cobertura de decisiones al 88.5 % sobre módulos SWAL 2,
 estándares formales de código/diseño (con linter en CI) y de requisitos, y registros de revisión de
 código, SDD con LLR para todas las capas, y PSSA/SSA con argumento de seguridad). Las brechas restantes
-se concentran en: **independencia de verificación** (equipo unipersonal), **validación con la autoridad**
-de los supuestos de seguridad (EANA/ANAC) e **higiene de configuración** (purga de binarios del histórico
-git, RNC-010). El sistema no está aún aprobado, pero el paquete es coherente para presentar SOI-1 y avanzar
-hacia SOI-2.
+se concentran ahora en dos frentes **externos**: **independencia de verificación** (equipo unipersonal)
+y **validación con la autoridad** de los supuestos de seguridad (EANA/ANAC). La higiene de configuración
+quedó cerrada (RNC-010, purga del histórico ejecutada). El sistema no está aún aprobado, pero el paquete es
+coherente para presentar SOI-1 y avanzar hacia SOI-2.
 
 > **Nota de trazabilidad de este documento:** la v0.1 (2026-06-28) precedía a la creación de los planes
 > y la FHA/SRS; esta v0.2 actualiza el estado a lo efectivamente producido.
@@ -74,7 +74,7 @@ hacia SOI-2.
 |-----|-------------|--------|--------------------|
 | C-1 | Identificación de la configuración | ✅ | Baselines etiquetados `v0.1.0-soi1` … `v0.4.0`; lockfile y checksums |
 | C-2 | Control de cambios / problem reporting | ⚠️ | Commits convencionales + tabla de RNCs (SQAP §5.3); falta herramienta formal de seguimiento |
-| C-3 | Integridad del árbol de fuentes | ⚠️ | `.gitignore` endurecido; purga del histórico **con procedimiento listo para ejecutar** ([doc 18](18_procedimiento_purga_RNC010.md), RNC-010) — requiere decisión del responsable (destructivo) |
+| C-3 | Integridad del árbol de fuentes | ✅ | `.gitignore` endurecido; **purga del histórico ejecutada** (RNC-010 CERRADA, 2026-07-09): `git filter-repo`, remoto 114 MB → 25 MB, sin pérdida de commits/refs y árbol de la app completo ([doc 18](18_procedimiento_purga_RNC010.md), tabla de hashes en [SCMP §5.4](10_SCMP.md)) |
 | C-4 | Control de entornos de build | ✅ | Runtime documentado; `requirements.txt`/`-linux`/`.lock`; CI reproducible en Linux |
 
 ## 5. Aseguramiento de Calidad (SQA)
@@ -164,7 +164,7 @@ Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0
 1. **Independencia de verificación** (V-7 / RNC-006): revisor externo o acuerdo ANAC.
 2. **Validar el análisis de seguridad** con EANA/ANAC: PSSA/SSA y safety case redactados y con todas las acciones técnicas cerradas ([doc 16](16_PSSA_SSA.md)); resta solo validar supuestos H-AS-1..6 (FHA-A1/A2, externo).
 3. **Enlace con la autoridad** (A-1): coordinar SOI-1 con ANAC sobre el paquete ya construido.
-4. **Higiene de configuración**: ejecutar la purga de binarios (C-3 / RNC-010) según el [procedimiento listo](18_procedimiento_purga_RNC010.md) — requiere decisión del responsable (destructivo).
+4. ✅ **Higiene de configuración** (C-3 / RNC-010): purga del histórico **ejecutada** (2026-07-09) — CERRADA.
 5. **Refinamiento menor**: LLR por categoría de decodificación y contratos por función ([SDD §13](15_SDD.md)).
 
 ## 9. Registro de cambios
@@ -182,3 +182,4 @@ Reordenadas al estado actual (cerrados: planes/FHA/SRS/CI en v0.2; P-5/D-4 en v0
 | 0.9 | 2026-07-05 | Cierre de SSA-A1/A3/A7 (SSR-03/09/10 verificados, 11/11) y **registros de auditoría SQA (doc 17)**: **Q-1/Q-2/Q-3** ⚠️→✅. SQA 50 % → 100 %; total ~73 % → ~78 %. |
 | 1.0 | 2026-07-05 | Cierre de **SSA-A2** (regresión visual) y **SSA-A4** (STCA denso PCAP) — sin residual técnico interno; **D-3 ✅** (diagramas estados/despliegue, SDD v0.4); procedimiento de purga RNC-010 listo ([doc 18](18_procedimiento_purga_RNC010.md)). Desarrollo 100 %; total ~78 % → **~80 %**. |
 | 1.1 | 2026-07-06 | **STCA segmentado TMA/Ruta** (cierra hallazgo STCA-2: el TMA quedaba sin protección) y **TRK-1/RNC-011 cerrado**: fusión errónea por proximidad con Mode S distintos (FC-TRK-01, detectada por el nuevo escenario TMA y corregida con veto de identidad en paso E). |
+| 1.2 | 2026-07-09 | **RNC-010 CERRADA** — purga del histórico ejecutada (fase B): **C-3 ⚠️→✅**; SCM 78 % → 88 %; total ~80 % → **~82 %**. Cero RNC clase C abiertas; solo resta RNC-006 (independencia, externa). |

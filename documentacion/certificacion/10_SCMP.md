@@ -2,7 +2,7 @@
 
 **Sistema:** Decodificador ASTERIX + Display PPI ATC.
 **Norma:** EUROCAE ED-109A / RTCA DO-278A — Sección 7 (Gestión de Configuración de Software).
-**Versión:** 0.1 (borrador). **Fecha:** 2026-07-03. **Estado:** PROPUESTO — no aprobado por ANAC.
+**Versión:** 0.2 (borrador). **Fecha:** 2026-07-09. **Estado:** PROPUESTO — no aprobado por ANAC.
 
 ---
 
@@ -136,6 +136,31 @@ El baseline de entrada a la primera revisión con ANAC (SOI-1) debe incluir:
 > **Acción requerida:** Crear la etiqueta `v0.1.0-soi1` al completar los planes y aprobarlos
 > internamente.
 
+### 5.4 Reescritura del histórico — purga RNC-010 (2026-07-09)
+
+La ejecución de la **fase B de RNC-010** ([doc 18](18_procedimiento_purga_RNC010.md)) reescribió el
+histórico con `git-filter-repo` para eliminar binarios versionados (`.pcap`, `.S4RD`, `node_modules`,
+logs, artefactos). Esto **cambia el hash de todos los commits y etiquetas**; para preservar la
+trazabilidad de baselines (C-1) se registra la equivalencia:
+
+| Ref | Hash viejo | Hash nuevo |
+|-----|-----------|-----------|
+| v0.1.0-soi1 | 1304854 | f8513b4 |
+| v0.2.0-perf | 454ff42 | 85d34fa |
+| v0.3.0 | 087baea | 8724ab1 |
+| v0.4.0 | e66089c | b1d8574 |
+| main | d92ecd2 | 5580428 |
+| feature/monoradar-track-lifecycle | 95e426e | 0029cdd |
+| feature/msaw-zonas-poligonales | c81b09c | 98eca29 |
+
+Evidencia y garantías:
+- Respaldo espejo pre-purga conservado (`respaldo-remoto-pre-purga.git`, 114 MB) como registro histórico.
+- Commits por rama preservados (main 219, feature/monoradar 273, feature/msaw 173); ninguna ref perdida.
+- Árbol de la aplicación íntegro: 1794 → 1791 archivos trackeados (solo 2 artefactos basura + 1 PDF suelto).
+- Verificado: 0 blobs purgados alcanzables desde las ramas; fixtures y datos de la app intactos.
+- Todo clon existente debe **re-clonarse** (no `git pull`); no pushear ramas locales con histórico viejo
+  (`feature/atsep-monitor`, `feature/cartografia-base`).
+
 ---
 
 ## 6. Control de cambios
@@ -228,3 +253,4 @@ El SQAP ([11_SQAP.md](11_SQAP.md)) planifica auditorías periódicas del proceso
 | Ver | Fecha | Cambio |
 |-----|-------|--------|
 | 0.1 | 2026-07-03 | Creación del borrador inicial. |
+| 0.2 | 2026-07-09 | §5.4: registro de la reescritura del histórico (purga RNC-010) con la tabla de equivalencia de hashes viejo→nuevo (trazabilidad de baselines C-1). |
