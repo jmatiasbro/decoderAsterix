@@ -42,6 +42,9 @@ de tierra CNS/ATM, y exponer con claridad qué existe, qué falta y qué esfuerz
 | 18 | [Procedimiento de Purga RNC-010](18_procedimiento_purga_RNC010.md) | Purga de binarios del histórico git (fases A/B) — **EJECUTADO**, RNC-010 cerrada | v0.2 |
 | 19 | [SAS — Software Accomplishment Summary](19_SAS.md) | Documento de cierre (SOI-4): resumen de conformidad, verificación y PR/RNC | Borrador v0.1 |
 | 20 | [Registros de Revisión de Requisitos y Diseño](20_registros_revision_req_diseno.md) | Actas de revisión del SRS (V-1) y SDD (V-2); independencia pendiente (RNC-006) | v0.1 |
+| 21 | [Dossier de Presentación a la Autoridad (SOI-1)](21_dossier_SOI1.md) | Paquete de entrada a ANAC: índice, conformidad, criterios y agenda SOI-1 | v0.1 |
+| 22 | [Plan de Independencia de Verificación](22_plan_independencia_verificacion.md) | Arreglo para cerrar RNC-006 con ANAC + acta de acuerdo | v0.1 |
+| 23 | [Protocolo de Validación con EANA](23_protocolo_validacion_eana.md) | Validación de supuestos H-AS-1..6 (cierra S-2/S-3) + acta | v0.1 |
 
 ## 3. Cómo leer el paquete
 
