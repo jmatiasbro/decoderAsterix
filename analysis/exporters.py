@@ -578,6 +578,118 @@ class PassExporter:
             print(f"[Exporter] Error exportando Playback KMZ: {e}")
             return False
 
+    def export_safety_events_csv(self, output_file: str = "safety_events_audit.csv",
+                                  sesion_id: str = None) -> bool:
+        """
+        Exporta safety_events a CSV para informes de auditoría OACI/ATSEP.
+
+        Columnas: fecha_hora_utc, ts_epoch, subsistema, transicion, nivel,
+                  aeronave_1, aeronave_2, descripcion, duracion_s, sesion_id.
+
+        La duración se calcula pareando cada ONSET con su primer CLEAR
+        posterior de la misma (subsistema, clave). Los ONSETs sin CLEAR
+        quedan con duracion_s vacío (alerta aún activa al cierre de sesión).
+        """
+        import ast
+
+        try:
+            output_file = os.path.abspath(output_file).replace("\\", "/")
+            os.makedirs(os.path.dirname(output_file) or ".", exist_ok=True)
+
+            # ── Consulta ────────────────────────────────────────────────────
+            filtros, params = [], []
+            if sesion_id:
+                filtros.append("sesion_id = ?")
+                params.append(sesion_id)
+            where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
+            sql = f"""
+                SELECT ts, ts_wall, subsistema, transicion, clave,
+                       nivel, origen, descripcion, sesion_id
+                FROM safety_events
+                {where}
+                ORDER BY ts ASC
+            """
+
+            def _run(conn):
+                return conn.execute(sql, params).fetchall() if params else conn.execute(sql).fetchall()
+
+            if self.repo_db and self.repo_db.conn:
+                rows = _run(self.repo_db.conn.cursor())
+            else:
+                with duckdb.connect(self.db_path, read_only=True) as conn:
+                    rows = _run(conn)
+
+            if not rows:
+                print("[PassExporter] safety_events vacía — nada que exportar.")
+                return False
+
+            # ── Calcular duraciones (ONSET→CLEAR) ───────────────────────────
+            pending: dict[tuple, tuple] = {}   # (sub, clave) → (idx, ts_onset)
+            duraciones: dict[int, float] = {}
+
+            for idx, r in enumerate(rows):
+                ts, _, sub, trans, clave = r[0], r[1], r[2], r[3], r[4]
+                key = (sub, clave)
+                if trans == "ONSET":
+                    pending[key] = (idx, ts)
+                elif trans == "CLEAR" and key in pending:
+                    onset_idx, onset_ts = pending.pop(key)
+                    duraciones[onset_idx] = round(ts - onset_ts, 1)
+
+            # ── Extraer identificadores de aeronave de la clave ─────────────
+            def _parse_entidades(clave_str: str, subsistema: str):
+                """Devuelve (aeronave_1, aeronave_2) desde la repr de la clave."""
+                try:
+                    obj = ast.literal_eval(clave_str)
+                except Exception:
+                    return clave_str, ""
+
+                if subsistema == "STCA":
+                    # clave = ((t1, t2), estado)  ó  (t1, t2) viejo
+                    if isinstance(obj, tuple) and len(obj) == 2:
+                        first = obj[0]
+                        if isinstance(first, tuple) and len(first) == 2:
+                            return str(first[0]), str(first[1])
+                        return str(obj[0]), str(obj[1])
+                elif subsistema in ("APW", "MSAW"):
+                    # clave = (track_id, zona/icao, tipo)
+                    if isinstance(obj, tuple) and len(obj) >= 2:
+                        return str(obj[0]), str(obj[1])
+                return clave_str, ""
+
+            # ── Escribir CSV ─────────────────────────────────────────────────
+            fieldnames = [
+                "fecha_hora_utc", "ts_epoch", "subsistema", "transicion",
+                "nivel", "aeronave_1", "aeronave_2", "descripcion",
+                "duracion_s", "sesion_id",
+            ]
+            with open(output_file, "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=fieldnames)
+                w.writeheader()
+                for idx, r in enumerate(rows):
+                    ts, _wall, sub, trans, clave, nivel, _orig, desc, sesion = r
+                    ae1, ae2 = _parse_entidades(clave, sub)
+                    dur = duraciones.get(idx)
+                    w.writerow({
+                        "fecha_hora_utc": datetime.utcfromtimestamp(ts).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "ts_epoch":       round(ts, 3),
+                        "subsistema":     sub or "",
+                        "transicion":     trans or "",
+                        "nivel":          nivel or "",
+                        "aeronave_1":     ae1,
+                        "aeronave_2":     ae2,
+                        "descripcion":    desc or "",
+                        "duracion_s":     "" if dur is None else dur,
+                        "sesion_id":      sesion or "",
+                    })
+
+            print(f"[PassExporter] Eventos de seguridad exportados: {output_file} ({len(rows)} filas)")
+            return True
+
+        except Exception as e:
+            print(f"[PassExporter] Error exportando safety_events: {e}")
+            return False
+
     def export_coverage_map_kmz(self, sac_sic, output_file=None, theoretical_range_nm=240):
         """
         Genera un KMZ estructurado por carpetas para distintos niveles de vuelo (FL 50, 100, 150, 200, 250, 300).

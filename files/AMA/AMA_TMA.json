@@ -1,0 +1,125 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.5,
+          -32.5
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "116",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.5,
+          -32.5
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "30",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -65.5,
+          -31.5
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "74",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.5,
+          -31.5
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "115",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.5,
+          -31.5
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "29",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -65.5,
+          -30.5
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "62",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -64.5,
+          -30.5
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "87",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.5,
+          -30.5
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "56",
+        "type": "text"
+      }
+    }
+  ]
+}

@@ -1671,8 +1671,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -69.31277777777777,
-          -51.60888888888889
+          -69.30694444444444,
+          -51.60861111111111
         ]
       },
       "properties": {
@@ -2742,7 +2742,7 @@
       },
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
-        "name": "GDH",
+        "name": "SROD",
         "type": "text"
       }
     },
@@ -3387,7 +3387,7 @@
       },
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
-        "name": "MLE",
+        "name": "SROL",
         "type": "text"
       }
     },
@@ -3747,7 +3747,7 @@
       },
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
-        "name": "TCM",
+        "name": "SRNH",
         "type": "text"
       }
     },
@@ -4632,7 +4632,7 @@
       },
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
-        "name": "CDU",
+        "name": "SRAU",
         "type": "text"
       }
     },
@@ -4752,7 +4752,7 @@
       },
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
-        "name": "CLN",
+        "name": "SRAC",
         "type": "text"
       }
     },
@@ -4797,7 +4797,7 @@
       },
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
-        "name": "CNO",
+        "name": "SRFA",
         "type": "text"
       }
     },
@@ -4932,7 +4932,7 @@
       },
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
-        "name": "CTS",
+        "name": "SRDS",
         "type": "text"
       }
     },
@@ -5473,6 +5473,21 @@
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
         "name": "GOZ",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.71805555555556,
+          -35.67361111111111
+        ]
+      },
+      "properties": {
+        "layer": "NOMBRES_AEROPUERTOS",
+        "name": "GPF",
         "type": "text"
       }
     },
@@ -7287,7 +7302,7 @@
       },
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
-        "name": "LJN",
+        "name": "SRDL",
         "type": "text"
       }
     },
@@ -7917,7 +7932,7 @@
       },
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
-        "name": "PED",
+        "name": "SRAP",
         "type": "text"
       }
     },
@@ -9057,7 +9072,7 @@
       },
       "properties": {
         "layer": "NOMBRES_AEROPUERTOS",
-        "name": "VDP",
+        "name": "SRDV",
         "type": "text"
       }
     },

@@ -58,7 +58,7 @@ def area_from_dict(d: dict) -> Area:
         dias=set(vd.get("dias", []) or []),
         desde=_str_to_t(vd.get("desde")), hasta=_str_to_t(vd.get("hasta")),
     )
-    return Area(
+    area = Area(
         name=d["name"], kind=d.get("kind", "C"), shape=d.get("shape", "poly"),
         lower_fl=int(d.get("lower_fl", 0)), upper_fl=int(d.get("upper_fl", 999)),
         vertices=[tuple(p) for p in d.get("vertices", [])],
@@ -66,6 +66,10 @@ def area_from_dict(d: dict) -> Area:
         radius_nm=d.get("radius_nm"), vigencia=vig, origen="usuario",
         prediction_time=int(d.get("prediction_time", 120)),
     )
+    errores = area.validar()
+    if errores:
+        raise ValueError(f"Área '{area.name}' inválida: {'; '.join(errores)}")
+    return area
 
 
 def _safe(name: str) -> str:

@@ -1,6 +1,32 @@
-dpkt>=1.9.7
-numpy
-matplotlib
-pyproj
-fpdf2
-pygeomag
+# Dependencias del sistema ASTERIX Radar Decoder (entry point: main.py).
+# Refleja los paquetes de terceros realmente importados por la aplicación
+# canónica (player/, decoder/, analysis/, fusion/, utils/). Para las herramientas
+# de verificación ver requirements-dev.txt; para el pin exacto ver requirements.lock.
+
+# --- Interfaz y presentación ---
+PyQt6>=6.6.0
+qtawesome>=1.3.0          # iconos de la UI (player/main_window.py)
+pyqtgraph>=0.13.0         # capas/gráficos acelerados (player/osm_layer.py)
+
+# --- Decodificación y datos ---
+dpkt>=1.9.7               # lectura PCAP (decoder/data_engine.py)
+scapy>=2.5.0              # captura/parseo auxiliar (asterix_worker.py, herramientas)
+duckdb>=1.1.0             # base ATM y persistencia/analítica
+numpy>=1.26.0
+
+# --- Geodesia y cartografía ---
+pyproj>=3.6.0             # proyección polar -> WGS-84
+pygeomag>=1.0.0           # declinación magnética (WMM) offline
+
+# --- Análisis, exportación e informes ---
+matplotlib>=3.8.0        # gráficos del Centro Técnico
+Pillow>=10.0.0           # backend de imagen para matplotlib (export PNG)
+simplekml>=1.3.0         # exportación KMZ a Google Earth (analysis/exporters.py)
+fpdf2>=2.7.0             # informes PDF
+
+# --- Opcional: servidor web embebido (player/web_server.py) ---
+# No lo carga el entry point canónico; instalar solo si se usa la vista web.
+#   flask>=3.0.0
+
+# Nota: la extensión C de decodificación ASTERIX (asterix_decoder-0.7.4) se
+# gestiona como COTS/SOUP (ver PSAC §7), no como paquete pip de este archivo.

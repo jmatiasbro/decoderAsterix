@@ -238,9 +238,23 @@ class StereographicLocal:
             self._build_proj()
 
     def _build_proj(self):
-        """Construye internamente el objeto Proj de pyproj."""
+        """Construye internamente el objeto Proj de pyproj.
+
+        Valida que el centro esté en rango geográfico plausible (SSR-03 / HLR-GEO-03):
+        un centro fuera de [-90,90]×[-180,180] o no numérico se rechaza con ValueError
+        en lugar de construir una proyección silenciosamente corrupta.
+        """
         if self.center_lat is None or self.center_lon is None:
             raise ValueError("Se requiere center_lat y center_lon para construir la proyección.")
+        try:
+            clat = float(self.center_lat)
+            clon = float(self.center_lon)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Centro de proyección no numérico: lat={self.center_lat}, lon={self.center_lon}")
+        if not (-90.0 <= clat <= 90.0) or not (-180.0 <= clon <= 180.0):
+            raise ValueError(
+                f"Centro de proyección fuera de rango: lat={clat} (±90), lon={clon} (±180)")
         proj_string = (
             f"+proj=stere +lat_0={self.center_lat} +lon_0={self.center_lon} "
             f"+k=1 +datum=WGS84 +units=m +no_defs"

@@ -1,0 +1,2 @@
+# SHA-256 de artefactos de referencia (SCMP §6 / RNC-005)
+SHA256 (2ba9a2668914515a8244448e1e5b007d20e2c6b6a1ae07ef1c50d4912cb45ad5)  baires.pcap

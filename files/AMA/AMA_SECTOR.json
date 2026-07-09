@@ -1,0 +1,620 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -71.0,
+          -39.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "147",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -69.0,
+          -39.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "73",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -71.0,
+          -37.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "185",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -69.0,
+          -37.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "159",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -67.0,
+          -37.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "51",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -65.0,
+          -37.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "30",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -71.0,
+          -35.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "203",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -69.0,
+          -35.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "210",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -67.0,
+          -35.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "58",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -65.0,
+          -35.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "33",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -71.0,
+          -33.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "252",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -69.0,
+          -33.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "251",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -67.0,
+          -33.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "98",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -65.0,
+          -33.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "116",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.0,
+          -33.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "30",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -61.0,
+          -33.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "23",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -71.0,
+          -31.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "246",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -69.0,
+          -31.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "231",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -67.0,
+          -31.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "134",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -65.0,
+          -31.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "115",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.0,
+          -31.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "57",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -61.0,
+          -31.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "23",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -69.0,
+          -29.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "251",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -67.0,
+          -29.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "236",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -65.0,
+          -29.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "158",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.0,
+          -29.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "54",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -61.0,
+          -29.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "24",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -69.0,
+          -27.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "255",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -67.0,
+          -27.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "234",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -65.0,
+          -27.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "200",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.0,
+          -27.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "29",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -61.0,
+          -27.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "26",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -69.0,
+          -25.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "251",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -67.0,
+          -25.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "242",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -65.0,
+          -25.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "221",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.0,
+          -25.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "33",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -61.0,
+          -25.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "29",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -67.0,
+          -23.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "222",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -65.0,
+          -23.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "200",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -63.0,
+          -23.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "68",
+        "type": "text"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -61.0,
+          -23.0
+        ]
+      },
+      "properties": {
+        "layer": "BOUNDARY",
+        "name": "25",
+        "type": "text"
+      }
+    }
+  ]
+}

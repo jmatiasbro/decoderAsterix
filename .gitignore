@@ -39,3 +39,31 @@ pass_analytics_fallback_*.duckdb*
 
 # Logs de eventos de sistema (auditoria local, no versionar)
 logs/
+
+# Cachés de herramientas
+.asterix_cache/
+.pytest_cache/
+
+# Capturas y datos de radar pesados (no versionar — usar almacenamiento externo)
+*.pcap
+*.S4RD
+*.kmz
+*.dat
+# Excepción: fixtures de test vendorizados con la extensión C (pequeños, deterministas)
+!asterix_decoder-0.7.4/**/*.pcap
+
+# SQLite local (auth, etc.)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Volcados de crash y artefactos de depuración ad-hoc
+crash_*.txt
+test_crash_count.txt
+
+# Cobertura
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+coverage/

@@ -19,6 +19,7 @@ TILE = wm.TILE_SIZE
 
 class FirMapView(QWidget):
     track_selected = pyqtSignal(str)   # id del track clickeado
+    track_context_requested = pyqtSignal(str, object)  # (id, QPoint global) clic derecho
 
     def __init__(self, mbtiles_path: str = None, parent=None):
         super().__init__(parent)
@@ -234,6 +235,12 @@ class FirMapView(QWidget):
             self._drag_last = e.position()
             self._press_pos = e.position()
             self._moved = False
+        elif e.button() == Qt.MouseButton.RightButton:
+            # Clic derecho sobre un track → menú contextual (FDP) vía main_window
+            tid = self._hit_test(e.position())
+            if tid is not None:
+                self.track_context_requested.emit(
+                    str(tid), e.globalPosition().toPoint())
 
     def mouseMoveEvent(self, e):
         if self._drag_last is not None:

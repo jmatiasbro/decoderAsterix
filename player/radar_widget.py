@@ -41,10 +41,10 @@ from threading import Lock, RLock
 from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt, QTimer, QPointF, QRectF, pyqtSlot, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath, QFont, QFontMetrics, QPalette
+from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath, QFont, QFontMetrics, QPalette, QPixmap
 from PyQt6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QDialogButtonBox, QHBoxLayout, QLabel, QToolTip
+    QHeaderView, QDialogButtonBox, QHBoxLayout, QLabel, QToolTip, QPushButton
 )
 
 from utils.geo import METERS_PER_NM, StereographicLocal, WGS84_GEOD
@@ -473,6 +473,13 @@ class RadarPlot:
         return self.age < max_age
 
     @property
+    def is_coasting(self) -> bool:
+        """True cuando el track está en coasting: vivo pero sin plot reciente
+        (age > MAX_AGE/2). La UI debe diferenciarlo visualmente (HLR-HMI-04)."""
+        max_age = MAX_AGE_TRACK if self.is_track else MAX_AGE_PLOT
+        return self.age > max_age / 2
+
+    @property
     def lat(self) -> Optional[float]:
         if self.raw_dict:
             return self.raw_dict.get('lat') or self.raw_dict.get('lat_render')
@@ -522,58 +529,8 @@ class TargetInspectionDialog(QDialog):
         self.setWindowTitle(f"Detalle de Blanco ASTERIX - {callsign}")
         from player.ui_scaling import escalar_ventana
         escalar_ventana(self, 680, 520, centrar=False)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #0E131F;
-                border: 2px solid #00E5FF;
-                border-radius: 8px;
-            }
-            QLabel {
-                color: #FFFFFF;
-                font-family: 'Segoe UI', sans-serif;
-                font-size: 11pt;
-                font-weight: bold;
-            }
-            QTableWidget {
-                background-color: #121824;
-                color: #E0E6ED;
-                gridline-color: #2D3548;
-                border: 1px solid #2D3548;
-                border-radius: 6px;
-                font-family: 'Monospace';
-                font-size: 9pt;
-            }
-            QTableWidget::item {
-                padding: 6px;
-                border-bottom: 1px solid #1B2232;
-                color: #E0E6ED;
-            }
-            QTableWidget::item:selected {
-                background-color: rgba(0, 229, 255, 30);
-                color: #00E5FF;
-            }
-            QHeaderView::section {
-                background-color: #1A2233;
-                color: #00E5FF;
-                padding: 6px;
-                border: 1px solid #2D3548;
-                font-weight: bold;
-                font-size: 9pt;
-            }
-            QPushButton {
-                background-color: rgba(45, 49, 60, 200);
-                border: 1px solid #4B5263;
-                border-radius: 4px;
-                padding: 6px 12px;
-                color: #FFFFFF;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #3E4451;
-                border: 1px solid #00E5FF;
-                color: #00E5FF;
-            }
-        """)
+        from player.style_manager import StyleManager
+        StyleManager.aplicar(self)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
@@ -735,6 +692,11 @@ class RadarWidget(_RadarBase):
     def __init__(self, parent=None, sensores: Dict = None, declinacion_magnetica: float = 0.0):
         super().__init__(parent)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # El widget se pinta completamente solo; evitar que Qt interfiera con el fondo vía stylesheet
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.setAutoFillBackground(False)
+
+        self._crear_botones_zoom()
 
         self.sensor_info = sensores or {}
         self.declinacion_magnetica = declinacion_magnetica
@@ -761,6 +723,11 @@ class RadarWidget(_RadarBase):
         #   'color': QColor }
         self.rbl_lines = []
         self._rbl_color = QColor("#FFD700")  # Color único para todos los RBLs
+        # Interacción con el texto del RBL: clic corto = borrar, arrastre = mover a lo
+        # largo de la línea. _press_idx marca el RBL bajo el cursor al presionar.
+        self._rbl_label_press_idx = None
+        self._rbl_label_press_pos = None
+        self._rbl_label_moved = False
         self.focused_target_id = None
         self.rbl_drag_origin_anchor = None
         self.mouse_press_pos = None
@@ -844,10 +811,31 @@ class RadarWidget(_RadarBase):
         self._last_repaint = 0.0
         self._repaint_min_dt = 1.0 / 15.0
 
+        # Fuente y métricas de etiqueta OACI cacheadas: se construían por track en
+        # cada paint (QFontMetrics es caro). La fuente es fija, así que se reusan.
+        self._font_oaci = None
+        self._fm_oaci = None
+        # Fuentes ODS cacheadas (normal y negrita), reusadas por track.
+        self._font_ods = None
+        self._font_ods_bold = None
+
+        # Cache del mapa de fondo (cartografía + coberturas + anillos): capas
+        # estáticas que se redibujaban vectorialmente en cada paint (~40 ms). Se
+        # renderizan a un QPixmap y solo se regeneran al cambiar zoom/pan/tamaño/capas.
+        self._basemap_cache = None
+        self._basemap_key = None
+
+        # Observabilidad de descartes: _process_plot_data traga excepciones para no
+        # caer el render, pero un plot descartado en silencio = aeronave no pintada
+        # (FC-HMI-01). Se contabiliza y loguea (throttle) para que no sea invisible.
+        self._plots_descartados = 0
+        self._descarte_log_last = 0.0
+
         # Filtros
         self.active_sensors: Set[Tuple[int, int]] = set()
         self.squawk_filter = ""
         self.filter_enabled = False
+        self.max_rango_sensor_nm: float = 200.0  # descarta plots CAT48/01 fuera de este rango
         
         # Configuración de Filtro de Etiquetas (Fase 9)
         self.label_filter_config = {
@@ -910,6 +898,16 @@ class RadarWidget(_RadarBase):
         # Estado previo por subsistema para publicar al bus solo transiciones.
         self._safety_eventos_prev: dict = {}
 
+        # Watchdog HLR-HMI-06: detecta bloqueo de la cadena safety-nets.
+        # _safety_wall_last: wall-clock de la última vez que la cadena completó.
+        # Se alerta si > 5 s sin output MIENTRAS hay tracks activos.
+        import time as _wt
+        self._safety_wall_last: float = _wt.time()
+        self._safety_watchdog_alerted: bool = False
+        self._watchdog_timer = QTimer(self)
+        self._watchdog_timer.timeout.connect(self._check_safety_watchdog)
+        self._watchdog_timer.start(2000)  # verifica cada 2 s
+
         # Enable mouse tracking for tooltip on history points
         self.setMouseTracking(True)
 
@@ -940,12 +938,25 @@ class RadarWidget(_RadarBase):
         self.plots_raw: List[Dict[str, Any]] = []
 
         # Inicializar STCA Engine, Diálogo y QualityManager (DQF)
-        from analysis.stca_analyzer import STCA_Engine
+        from analysis.stca_analyzer import STCA_Engine, STCAConfig
         from player.stca_dialog import STCADialog
         from player.apw_dialog import APWDialog
         from player.msaw_dialog import MSAWDialog
         from analysis.quality_manager import QualityManager
-        self.stca_engine = STCA_Engine()
+        # HLR-STCA-01/02/07: motor parametrizado por volúmenes (TMA 3 NM/800 ft,
+        # Ruta 5 NM/1000 ft). config/stca.json permite el ajuste operativo; ante
+        # un archivo ilegible o inválido se aplica el FALLBACK SEGURO del SRS
+        # (3 NM / 1000 ft, FL030–FL600): el sistema nunca queda sin red.
+        _stca_cfg_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "config", "stca.json")
+        try:
+            _stca_cfg = STCAConfig.cargar_archivo(_stca_cfg_path)
+        except Exception as _e:
+            print(f"[STCA] Config inválida ({_e}); aplicando fallback seguro "
+                  f"(3 NM / 1000 ft, FL030–FL600)")
+            _stca_cfg = STCAConfig.fallback_seguro()
+        self.stca_engine = STCA_Engine(_stca_cfg)
         self.stca_dialog = STCADialog(self)
         self.stca_habilitado = True
         self.apw_dialog = APWDialog(self)
@@ -1629,6 +1640,13 @@ class RadarWidget(_RadarBase):
             if hasattr(self, 'sensores_visibles') and self.sensores_visibles is not None and sensor_id not in self.sensores_visibles:
                 return None
 
+            # Filtro de rango máximo por sensor (solo CAT48/01 con coordenadas polares)
+            cat = data.get('category', 0)
+            if cat in (1, 48):
+                _rho = data.get('raw_range') or data.get('rho_render')
+                if _rho is not None and _rho > self.max_rango_sensor_nm:
+                    return None
+
             if not self.projection_set:
                 return None
 
@@ -1774,9 +1792,31 @@ class RadarWidget(_RadarBase):
                 # Sin altitud: 1 NM (estricto); con altitud: 3 NM + verificación vertical
                 max_dist_m = (3.0 if has_alt else 1.0) * 1852.0
                 t_plot = plot_time if plot_time is not None else data.get('time')
+                # Identidad del plot para vetar candidatos contradictorios
+                # (HLR-TRK-06/SSR-06: dos Mode S válidos distintos o dos squawks
+                # discretos distintos NUNCA se fusionan, ni por proximidad).
+                _plot_ms = (data.get('mode_s') or '').strip().upper()
+                if _plot_ms == '----':
+                    _plot_ms = ''
+                _m3a_p = data.get('mode3a')
+                _plot_sq = f"{_m3a_p:04o}" if isinstance(_m3a_p, int) else str(_m3a_p or '').strip()
+                if _plot_sq in ('----', '0000', '1200', '2000', '7000'):
+                    _plot_sq = ''
                 best_dist_m = float('inf')
                 best_tid = None
                 for tid, track in list(self.tracks.items()) + list(self.pending_tracks.items()):
+                    # Veto por identidad contradictoria (fusión conservadora, DD-2):
+                    # el paso E es solo para blancos SIN identidad común, no puede
+                    # unir dos aeronaves identificadas como distintas (FC-TRK-01).
+                    _t_ms = (track.mode_s or '').strip().upper()
+                    if _plot_ms and _t_ms and _t_ms != '----' and _plot_ms != _t_ms:
+                        continue
+                    _m3a_t = track.mode3a
+                    _t_sq = f"{_m3a_t:04o}" if isinstance(_m3a_t, int) else str(_m3a_t or '').strip()
+                    if _t_sq in ('----', '0000', '1200', '2000', '7000'):
+                        _t_sq = ''
+                    if _plot_sq and _t_sq and _plot_sq != _t_sq:
+                        continue
                     fl_t = track.flight_level
                     alt_t = track.altitude_ft
                     alt_t_val = fl_t * 100.0 if fl_t is not None else alt_t
@@ -2139,14 +2179,33 @@ class RadarWidget(_RadarBase):
                 else:
                     self.pending_tracks[target_id] = plot
                 update_track(plot)
-            except Exception:
+            except Exception as _e:
+                self._registrar_descarte_plot(data, _e)
                 return None
 
             self.plot_count = len(self.tracks) + len(self.pending_tracks)
             self._last_tod = data.get('time', self._last_tod)
             return target_id
-        except Exception:
+        except Exception as _e:
+            self._registrar_descarte_plot(data, _e)
             return None
+
+    def _registrar_descarte_plot(self, data, exc):
+        """Contabiliza un plot descartado por excepción en el procesamiento y lo
+        loguea con throttle (~1/s) para no inundar bajo un error persistente. Hace
+        visible un descarte que de otro modo sería silencioso (observabilidad)."""
+        self._plots_descartados += 1
+        try:
+            import time as _t
+            now = _t.monotonic()
+            if now - self._descarte_log_last >= 1.0:
+                self._descarte_log_last = now
+                sid = (data or {}).get('sac_sic', '?')
+                cat = (data or {}).get('category', '?')
+                print(f"[PLOT DESCARTADO] sensor={sid} cat={cat} "
+                      f"{type(exc).__name__}: {exc} (total={self._plots_descartados})")
+        except Exception:
+            pass
 
     @pyqtSlot(object)
     @_timed("on_new_plot")
@@ -2545,15 +2604,40 @@ class RadarWidget(_RadarBase):
         """Publica al bus de mensajes de sistema solo las claves nuevas.
 
         eventos: {clave_estable: (nivel, origen, desc)}.
+        También persiste transiciones ONSET/CLEAR en DuckDB para auditoría.
         """
-        bus = getattr(self, 'system_bus', None)
-        if bus is None:
-            return
-        prev = self._safety_eventos_prev.get(subsistema, set())
-        actuales = set(eventos)
+        import time as _time_mod
+        bus  = getattr(self, 'system_bus', None)
+        repo = getattr(self, '_repo_db', None)
+
+        prev         = self._safety_eventos_prev.get(subsistema, set())
+        prev_data    = getattr(self, '_safety_eventos_prev_data', {}).get(subsistema, {})
+        actuales     = set(eventos)
+        ts_sim       = SimulationTime.time()
+        ts_wall      = _time_mod.time()
+        sesion       = getattr(self, '_sesion_id', 'LIVE')
+
+        # ONSET: claves que aparecen ahora
         for clave in actuales - prev:
             nivel, origen, desc = eventos[clave]
-            bus.inyectar(nivel, origen, desc)
+            if bus:
+                bus.inyectar(nivel, origen, desc)
+            if repo:
+                repo.guardar_evento_safety(
+                    ts_sim, ts_wall, subsistema, 'ONSET',
+                    str(clave), nivel, origen, desc, sesion)
+
+        # CLEAR: claves que desaparecen
+        if repo:
+            for clave in prev - actuales:
+                nivel, origen, desc = prev_data.get(clave, ('INFO', subsistema, ''))
+                repo.guardar_evento_safety(
+                    ts_sim, ts_wall, subsistema, 'CLEAR',
+                    str(clave), nivel, origen, desc, sesion)
+
+        if not hasattr(self, '_safety_eventos_prev_data'):
+            self._safety_eventos_prev_data = {}
+        self._safety_eventos_prev_data[subsistema] = {k: v for k, v in eventos.items()}
         self._safety_eventos_prev[subsistema] = actuales
 
     def evaluar_msaw(self):
@@ -2614,6 +2698,38 @@ class RadarWidget(_RadarBase):
                 for a in self.msaw_activos})
         except Exception as e:
             print(f"[MSAW ERROR] {e}")
+        finally:
+            # Watchdog: cadena completó (éxito o error) — registrar wall-clock.
+            import time as _wt
+            self._safety_wall_last = _wt.time()
+            if self._safety_watchdog_alerted:
+                self._safety_watchdog_alerted = False
+
+    def _check_safety_watchdog(self):
+        """Verifica que la cadena safety completó en los últimos 5 s (HLR-HMI-06)."""
+        import time as _wt
+        if not getattr(self, 'tracks', None):
+            return  # sin tracks activos no hay cadena que supervisar
+        elapsed = _wt.time() - getattr(self, '_safety_wall_last', _wt.time())
+        if elapsed > 5.0 and not self._safety_watchdog_alerted:
+            self._safety_watchdog_alerted = True
+            bus = getattr(self, 'system_bus', None)
+            if bus:
+                bus.inyectar(
+                    "CRITICAL", "WATCHDOG",
+                    f"Cadena safety-nets sin respuesta > {elapsed:.0f} s "
+                    "— función de alerta DEGRADADA")
+
+    def estado_redes_seguridad(self) -> dict:
+        """Estado habilitado/inhibido de cada red de seguridad (SSR-10 / HLR-HMI-05).
+
+        Fuente única de verdad para el indicador HMI siempre visible: el estado no
+        debe requerir abrir un menú para consultarse. True = habilitada."""
+        return {
+            "STCA": bool(getattr(self, "stca_habilitado", True)),
+            "APW": bool(getattr(self, "apw_habilitado", True)),
+            "MSAW": bool(getattr(self, "msaw_habilitado", True)),
+        }
 
     def evaluar_stca(self):
         """
@@ -2680,6 +2796,10 @@ class RadarWidget(_RadarBase):
 
                 m3a = track.mode3a
                 m3a_str = f"{m3a:04o}" if isinstance(m3a, int) else str(m3a).strip()
+                # Parrots (Sqwk 0000): transpondedor de calibración / código no asignado.
+                # No son tránsito válido → excluir de la evaluación STCA.
+                if m3a_str == '0000':
+                    continue
                 tracks_for_stca[tid] = {
                     'flight_level': fl_str,
                     'lat_render': lat,
@@ -2816,6 +2936,13 @@ class RadarWidget(_RadarBase):
         self.active_sensors = active_sensors
         self.squawk_filter = squawk_filter
         self.filter_enabled = bool(active_sensors) or bool(squawk_filter)
+        self.update()
+
+    def set_max_rango_sensor(self, nm: float):
+        """Descarta plots CAT48/01 con rango > nm. 0 = sin límite."""
+        self.max_rango_sensor_nm = float(nm) if nm > 0 else float('inf')
+        self.tracks.clear()
+        self.pending_tracks.clear()
         self.update()
 
     def _plot_passes_filter(self, data: dict) -> bool:
@@ -3164,14 +3291,169 @@ class RadarWidget(_RadarBase):
         except Exception:
             pass
 
+    def _basemap_cache_key(self, w, h, z, center_x, center_y):
+        """Firma que invalida el cache del mapa de fondo. Incluye todo lo que
+        afecta el render estático: geometría de vista, capas visibles, intensidad,
+        centro de proyección y coberturas."""
+        map_sig = None
+        if hasattr(self, 'map_manager'):
+            try:
+                vis = self.map_manager.get_visible_layers("ESTRUCTURAL")
+                map_sig = tuple(sorted(getattr(l, 'name', '') for l in vis))
+            except Exception:
+                map_sig = None
+        intens = getattr(self, 'ods_layer_intensity', None)
+        map_factor = round(intens.get('map', 1.0), 3) if isinstance(intens, dict) else 1.0
+        return (
+            w, h, round(z, 9), round(center_x, 2), round(center_y, 2),
+            bool(getattr(self, 'vista_controlador', False)),
+            bool(getattr(self, 'projection_set', False)),
+            getattr(self, 'center_key', None),
+            len(getattr(self, 'radar_coverages', None) or ()),
+            map_sig, map_factor,
+        )
+
+    def _paint_static_basemap(self, painter, w, h, z, inv_z, center_x, center_y):
+        """Dibuja las capas estáticas desde un QPixmap cacheado. El cache se
+        regenera solo cuando cambia la clave (zoom/pan/tamaño/capas). Ante cualquier
+        fallo cae al dibujo directo para no romper nunca el render."""
+        try:
+            if w <= 0 or h <= 0:
+                return
+            key = self._basemap_cache_key(w, h, z, center_x, center_y)
+            if key != self._basemap_key or self._basemap_cache is None:
+                pm = QPixmap(w, h)
+                pm.fill(Qt.GlobalColor.transparent)
+                cp = QPainter(pm)
+                try:
+                    cp.setRenderHint(QPainter.RenderHint.Antialiasing)
+                    cp.translate(center_x, center_y)
+                    cp.scale(z, -z)
+                    self._draw_static_basemap(cp, inv_z)
+                finally:
+                    cp.end()
+                self._basemap_cache = pm
+                self._basemap_key = key
+            painter.save()
+            painter.resetTransform()
+            painter.drawPixmap(0, 0, self._basemap_cache)
+            painter.restore()
+        except Exception:
+            # Fallback robusto: dibujo directo con el transform de mundo ya aplicado.
+            self._draw_static_basemap(painter, inv_z)
+
+    def _draw_static_basemap(self, painter: QPainter, inv_z: float):
+        """Capas estáticas del fondo: cartografía estructural, coberturas de radar
+        y anillos de rango. Sin estado dinámico (barrido, tracks, selección)."""
+        # ---- 1. MAPA ESTRUCTURAL (FONDO) ----
+        self._draw_video_maps(painter, inv_z, "ESTRUCTURAL")
+
+        # ---- 1.5. COBERTURAS DE RADAR (Fase 16) — oculto en vista controlador ----
+        if (not self.vista_controlador) and getattr(self, 'radar_coverages', None) and self.projection_set and self.proy.activo:
+            try:
+                for cov in self.radar_coverages:
+                    lat = cov['lat']
+                    lon = cov['lon']
+                    radius_nm = cov['radius_nm']
+                    short_name = cov['short_name']
+
+                    cx, cy = self.proy.latlon_to_xy(lat, lon)
+                    if not is_valid_coord(cx, cy):
+                        continue
+
+                    # Si está en el origen (es el active projection center)
+                    is_active = (cx * cx + cy * cy) < 1000.0 * 1000.0
+
+                    if is_active:
+                        # El radar activo se ancla al origen de proyección (0,0) para
+                        # que el círculo/etiqueta coincidan con el símbolo 'Y' del sensor.
+                        # La coord. del .map difiere <1km de la de site-params y causaba desfase.
+                        cx, cy = 0.0, 0.0
+                        # Highlighted active radar coverage
+                        pen_active = QPen(QColor(0, 229, 255, 100))
+                        pen_active.setWidthF(inv_z * 1.2)
+                        pen_active.setStyle(Qt.PenStyle.DashLine)
+                        painter.setPen(pen_active)
+                        painter.setBrush(QBrush(QColor(0, 229, 255, 8))) # opacidad 3%
+
+                        r = radius_nm * METERS_PER_NM
+                        painter.drawEllipse(QPointF(cx, cy), r, r)
+
+                        # Centro del radar activo
+                        pen_center = QPen(QColor(0, 229, 255, 200))
+                        pen_center.setWidthF(inv_z * 1.5)
+                        painter.setPen(pen_center)
+                        painter.setBrush(QBrush(QColor(0, 229, 255, 120)))
+                        painter.drawEllipse(QPointF(cx, cy), inv_z * 4.0, inv_z * 4.0)
+
+                        # Etiqueta
+                        painter.setFont(QFont("Monospace", 8))
+                        painter.setPen(QColor(0, 229, 255, 220))
+                        painter.save()
+                        painter.translate(cx, cy)
+                        painter.scale(inv_z, -inv_z)
+                        # Título separado del símbolo (arriba-derecha) para no pisarlo
+                        painter.drawText(QPointF(12, 22), f"{short_name} (ACTIVE)")
+                        painter.restore()
+                    else:
+                        # Subtle background radar coverage
+                        pen_bg = QPen(QColor(0, 229, 255, 22)) # opacidad muy sutil
+                        pen_bg.setWidthF(inv_z * 0.8)
+                        pen_bg.setStyle(Qt.PenStyle.DotLine)
+                        painter.setPen(pen_bg)
+                        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+
+                        r = radius_nm * METERS_PER_NM
+                        painter.drawEllipse(QPointF(cx, cy), r, r)
+
+                        # Centro del radar secundario
+                        pen_center = QPen(QColor(0, 229, 255, 45))
+                        pen_center.setWidthF(inv_z * 0.8)
+                        painter.setPen(pen_center)
+                        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                        painter.drawEllipse(QPointF(cx, cy), inv_z * 2.5, inv_z * 2.5)
+
+                        # Etiqueta
+                        painter.setFont(QFont("Monospace", 8))
+                        painter.setPen(QColor(0, 229, 255, 40))
+                        painter.save()
+                        painter.translate(cx, cy)
+                        painter.scale(inv_z, -inv_z)
+                        painter.drawText(QPointF(12, 22), short_name)
+                        painter.restore()
+            except Exception:
+                pass
+
+        # ---- 2. ANILLOS DE RANGO (sensor-céntricos) — ocultos en vista controlador ----
+        if not self.vista_controlador:
+            try:
+                pen_ring = QPen(COLOR_RING)
+                pen_ring.setWidthF(inv_z)
+                painter.setPen(pen_ring)
+                for dist_nm in [50, 100, 200]:
+                    r = dist_nm * METERS_PER_NM
+                    painter.drawEllipse(QPointF(0.0, 0.0), r, r)
+                font_label = QFont("Monospace", 8)
+                painter.setFont(font_label)
+                painter.setPen(COLOR_RING_LABEL)
+                for dist_nm in [50, 100, 200]:
+                    r = dist_nm * METERS_PER_NM
+                    painter.save()
+                    painter.translate(0.0 + r, 0.0)
+                    painter.scale(inv_z, -inv_z)
+                    painter.drawText(QPointF(4, 12), f"{dist_nm} NM")
+                    painter.restore()
+            except Exception:
+                pass
+
     def _draw_video_maps(self, painter: QPainter, inv_z: float, tipo: str):
         if not hasattr(self, 'map_manager'):
             return
-            
+
         visibles = self.map_manager.get_visible_layers(tipo)
         if not visibles:
             return
-            
+
         try:
             painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
 
@@ -3362,106 +3644,8 @@ class RadarWidget(_RadarBase):
             painter.translate(center_x, center_y)
             painter.scale(z, -z)
 
-            # ---- 1. MAPA ESTRUCTURAL (FONDO) ----
-            self._draw_video_maps(painter, inv_z, "ESTRUCTURAL")
-
-            # ---- 1.5. COBERTURAS DE RADAR (Fase 16) — oculto en vista controlador ----
-            if (not self.vista_controlador) and getattr(self, 'radar_coverages', None) and self.projection_set and self.proy.activo:
-                try:
-                    for cov in self.radar_coverages:
-                        lat = cov['lat']
-                        lon = cov['lon']
-                        radius_nm = cov['radius_nm']
-                        short_name = cov['short_name']
-                        
-                        cx, cy = self.proy.latlon_to_xy(lat, lon)
-                        if not is_valid_coord(cx, cy):
-                            continue
-                            
-                        # Si está en el origen (es el active projection center)
-                        is_active = (cx * cx + cy * cy) < 1000.0 * 1000.0
-                        
-                        if is_active:
-                            # El radar activo se ancla al origen de proyección (0,0) para
-                            # que el círculo/etiqueta coincidan con el símbolo 'Y' del sensor.
-                            # La coord. del .map difiere <1km de la de site-params y causaba desfase.
-                            cx, cy = 0.0, 0.0
-                            # Highlighted active radar coverage
-                            pen_active = QPen(QColor(0, 229, 255, 100))
-                            pen_active.setWidthF(inv_z * 1.2)
-                            pen_active.setStyle(Qt.PenStyle.DashLine)
-                            painter.setPen(pen_active)
-                            painter.setBrush(QBrush(QColor(0, 229, 255, 8))) # opacidad 3%
-                            
-                            r = radius_nm * METERS_PER_NM
-                            painter.drawEllipse(QPointF(cx, cy), r, r)
-                            
-                            # Centro del radar activo
-                            pen_center = QPen(QColor(0, 229, 255, 200))
-                            pen_center.setWidthF(inv_z * 1.5)
-                            painter.setPen(pen_center)
-                            painter.setBrush(QBrush(QColor(0, 229, 255, 120)))
-                            painter.drawEllipse(QPointF(cx, cy), inv_z * 4.0, inv_z * 4.0)
-                            
-                            # Etiqueta
-                            painter.setFont(QFont("Monospace", 8))
-                            painter.setPen(QColor(0, 229, 255, 220))
-                            painter.save()
-                            painter.translate(cx, cy)
-                            painter.scale(inv_z, -inv_z)
-                            # Título separado del símbolo (arriba-derecha) para no pisarlo
-                            painter.drawText(QPointF(12, 22), f"{short_name} (ACTIVE)")
-                            painter.restore()
-                        else:
-                            # Subtle background radar coverage
-                            pen_bg = QPen(QColor(0, 229, 255, 22)) # opacidad muy sutil
-                            pen_bg.setWidthF(inv_z * 0.8)
-                            pen_bg.setStyle(Qt.PenStyle.DotLine)
-                            painter.setPen(pen_bg)
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            
-                            r = radius_nm * METERS_PER_NM
-                            painter.drawEllipse(QPointF(cx, cy), r, r)
-                            
-                            # Centro del radar secundario
-                            pen_center = QPen(QColor(0, 229, 255, 45))
-                            pen_center.setWidthF(inv_z * 0.8)
-                            painter.setPen(pen_center)
-                            painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            painter.drawEllipse(QPointF(cx, cy), inv_z * 2.5, inv_z * 2.5)
-                            
-                            # Etiqueta
-                            painter.setFont(QFont("Monospace", 8))
-                            painter.setPen(QColor(0, 229, 255, 40))
-                            painter.save()
-                            painter.translate(cx, cy)
-                            painter.scale(inv_z, -inv_z)
-                            painter.drawText(QPointF(12, 22), short_name)
-                            painter.restore()
-                except Exception:
-                    pass
-
-            # ---- 2. ANILLOS DE RANGO (sensor-céntricos) — ocultos en vista controlador ----
-            if not self.vista_controlador:
-                try:
-                    pen_ring = QPen(COLOR_RING)
-                    pen_ring.setWidthF(inv_z)
-                    painter.setPen(pen_ring)
-                    for dist_nm in [50, 100, 200]:
-                        r = dist_nm * METERS_PER_NM
-                        painter.drawEllipse(QPointF(0.0, 0.0), r, r)
-                    font_label = QFont("Monospace", 8)
-                    painter.setFont(font_label)
-                    painter.setPen(COLOR_RING_LABEL)
-                    for dist_nm in [50, 100, 200]:
-                        r = dist_nm * METERS_PER_NM
-                        painter.save()
-                        painter.translate(0.0 + r, 0.0)
-                        painter.scale(inv_z, -inv_z)
-                        painter.drawText(QPointF(4, 12), f"{dist_nm} NM")
-                        painter.restore()
-                except Exception:
-                    pass
+            # ---- 1. MAPA ESTÁTICO (cartografía + coberturas + anillos) vía cache ----
+            self._paint_static_basemap(painter, w, h, z, inv_z, center_x, center_y)
 
             # ---- 2.b ANILLO DE ÁREA DE CONTROL (controlador o toggle de incumbencia) ----
             if (self.vista_controlador or getattr(self, 'mostrar_incumbencia', False)) \
@@ -3831,61 +4015,9 @@ class RadarWidget(_RadarBase):
                 else:
                     alertas_dict[tid] = (a.tipo, a.eta_s, 'MSAW')
 
+            self._alertas_dict_render = alertas_dict
+
             all_active_plots = list(self.tracks.items()) + list(self.pending_tracks.items())
-
-            # --- FASE 3: ALGORITMO ANTI-SOLAPAMIENTO VISUAL DE ETIQUETAS ---
-            label_shifts = {} # { track_id: [shift_x, shift_y] }
-            for track_id, plot in all_active_plots:
-                label_shifts[track_id] = [0.0, 0.0]
-                
-            if len(all_active_plots) > 1:
-                default_centers = {}
-                for track_id, plot in all_active_plots:
-                    if not plot.is_alive():
-                        continue
-                    
-                    # Comprobar filtros de visualización para ver si realmente se dibujará la etiqueta
-                    if self.plot_filter_fn and not self.plot_filter_fn(plot):
-                        continue
-                    sensor_id = getattr(plot, 'sac_sic', f"UNK_CAT{plot.category}")
-                    visibles = getattr(self, 'sensores_visibles', None)
-                    if visibles is not None and sensor_id not in visibles and plot.category != 62:
-                        continue
-                        
-                    sx_sy = self._world_to_screen(plot.x, plot.y)
-                    if sx_sy is None:
-                        continue
-                    
-                    lines = self._build_plot_label_lines(plot)
-                    if not lines:
-                        continue
-                        
-                    # Estimación rápida del ancho máximo de texto (aprox. 6.5px por carácter)
-                    max_w = max(len(str(line)) * 6.5 for line in lines)
-                    
-                    cfg_or = self.label_filter_config.get("orientacion", "NE")
-                    if cfg_or == "NE":
-                        dx, dy = 15.0, -15.0
-                    elif cfg_or == "NO":
-                        dx, dy = -15.0 - max_w/2.0, -15.0
-                    elif cfg_or == "SE":
-                        dx, dy = 15.0, 15.0
-                    elif cfg_or == "SO":
-                        dx, dy = -15.0 - max_w/2.0, 15.0
-                    else:
-                        dx, dy = 15.0, -15.0
-                        
-                    default_centers[track_id] = (sx_sy.x() + dx, sx_sy.y() + dy, max_w)
-                
-                # Relajación de colisiones (función pura testeada en player.ods.declutter)
-                from player.ods.declutter import resolve_shifts
-                _res = resolve_shifts(default_centers, min_dist=50.0, passes=2)
-                for _tid, (_dx, _dy) in _res.items():
-                    label_shifts[_tid][0] += _dx
-                    label_shifts[_tid][1] += _dy
-
-            # Store label shifts in cache for use in drawing methods
-            self._label_shifts_cache = label_shifts
 
             for track_id, plot in all_active_plots:
                 try:
@@ -4071,6 +4203,28 @@ class RadarWidget(_RadarBase):
             except Exception:
                 pass
 
+            # ---- 8b. INDICADOR DE ESTADO DE REDES DE SEGURIDAD (SSR-10) ----
+            # Siempre visible, sin requerir abrir un menú: cada red en verde
+            # (habilitada) o rojo con "INH" (inhibida). Esquina superior izquierda.
+            try:
+                painter.save()
+                estado_sn = self.estado_redes_seguridad()
+                painter.setFont(QFont("Monospace", 9, QFont.Weight.Bold))
+                painter.setBrush(QBrush(QColor(11, 14, 20, 220)))
+                painter.setPen(QPen(QColor("#3A3F4B"), 1.0))
+                rect_sn = QRectF(10, 10, 150, 20)
+                painter.drawRect(rect_sn)
+                x_txt = 16.0
+                for nombre in ("STCA", "APW", "MSAW"):
+                    on = estado_sn.get(nombre, True)
+                    painter.setPen(QColor("#00FF00") if on else QColor("#FF3B30"))
+                    etiqueta = nombre if on else f"{nombre}·INH"
+                    painter.drawText(QPointF(x_txt, 24.0), etiqueta)
+                    x_txt += (len(etiqueta) * 7.0) + 6.0
+                painter.restore()
+            except Exception:
+                pass
+
             # ---- 9. RENDERIZADO DE LA HERRAMIENTA RBL (RANGE & BEARING LINE) ----
             try:
                 # Pintar encuadre de etiqueta enfocada o hovereada
@@ -4150,48 +4304,57 @@ class RadarWidget(_RadarBase):
                                 painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, "RBL")
                                 painter.restore()
 
-                    # Calcular métricas — declinación magnética dinámica (WMM) en el
-                    # centroide de la línea, cacheada por celda para no recalcular por frame.
+                    # Métricas del RBL — B = rumbo magnético, R = distancia (NM).
+                    # E (tiempo a la distancia mínima) y X (distancia mínima pronosticada)
+                    # se muestran mientras el RBL se acorta (convergen): dos aeronaves, o
+                    # una aeronave y un punto fijo. `_rbl_cpa` devuelve None si divergen o
+                    # ya pasaron el CPA (equivalente a "la distancia deja de disminuir").
                     dist = calcular_distancia_nm(olat, olon, dlat, dlon)
                     decl = self.magnetic_compensator.obtener_declinacion(
                         (olat + dlat) / 2.0, (olon + dlon) / 2.0
                     )
                     rumbo = calcular_rumbo_magnetico(olat, olon, dlat, dlon, decl)
-                    info_text = f"{rumbo:03.0f}\u00b0 M | {dist:.1f} NM"
-                    if orig_lbl and dest_lbl:
-                        label_text = f"{orig_lbl} -> {dest_lbl}\n{info_text}"
-                    elif orig_lbl:
-                        label_text = f"{orig_lbl} -> {info_text}"
-                    elif dest_lbl:
-                        label_text = f"{info_text} -> {dest_lbl}"
-                    else:
-                        label_text = info_text
+                    lines_t = [f"B {rumbo:5.1f}", f"R {dist:6.1f}"]
+                    hay_ac = ((o_anchor and o_anchor.get("type") == "aircraft")
+                              or (d_anchor and d_anchor.get("type") == "aircraft"))
+                    if hay_ac:
+                        t_cpa, sep_cpa = self._rbl_cpa(olat, olon, o_anchor, dlat, dlon, d_anchor)
+                        if t_cpa is not None:
+                            _m = int(t_cpa // 60)
+                            _s = int(round(t_cpa - _m * 60))
+                            if _s == 60:
+                                _m += 1
+                                _s = 0
+                            lines_t.append(f"E {_m}'{_s:02d}")
+                            lines_t.append(f"X {sep_cpa:.2f}")
 
-                    mid_x = (p_origen.x() + p_destino.x()) / 2.0
-                    mid_y = (p_origen.y() + p_destino.y()) / 2.0
+                    # Solo texto (sin recuadro), a lo largo de la línea (label_t, arrastrable)
+                    # con un desplazamiento perpendicular para no taparla.
+                    t_pos = rbl_entry.get('label_t', 0.5) if rbl_entry is not None else 0.5
+                    mid_x = p_origen.x() + t_pos * (p_destino.x() - p_origen.x())
+                    mid_y = p_origen.y() + t_pos * (p_destino.y() - p_origen.y())
+                    seg_dx = p_destino.x() - p_origen.x()
+                    seg_dy = p_destino.y() - p_origen.y()
+                    seg_len = math.hypot(seg_dx, seg_dy) or 1.0
+                    nx, ny = -seg_dy / seg_len, seg_dx / seg_len
+                    if ny > 0:  # empujar el texto hacia arriba en pantalla
+                        nx, ny = -nx, -ny
 
                     font = QFont("Consolas", 9, QFont.Weight.Bold)
                     painter.setFont(font)
-                    lines_t = label_text.split('\n')
                     fm = painter.fontMetrics()
-                    rect_w = max(fm.horizontalAdvance(line) for line in lines_t) + 16
-                    rect_h = fm.height() * len(lines_t) + 8
-                    text_rect = QRectF(mid_x - rect_w / 2.0, mid_y - rect_h / 2.0, rect_w, rect_h)
+                    rect_w = max(fm.horizontalAdvance(line) for line in lines_t) + 12
+                    rect_h = fm.height() * len(lines_t) + 6
+                    perp = rect_h / 2.0 + 12.0
+                    cx = mid_x + nx * perp
+                    cy = mid_y + ny * perp
+                    text_rect = QRectF(cx - rect_w / 2.0, cy - rect_h / 2.0, rect_w, rect_h)
 
-                    if ods:
-                        # ODS: texto sin caja, en el color de la herramienta
-                        painter.setPen(QColor(rbl_color))
-                    else:
-                        # Técnico: borde del color del RBL, fondo negro
-                        painter.setPen(QPen(rbl_color, 1.5))
-                        painter.setBrush(QBrush(QColor("#000000")))
-                        painter.drawRoundedRect(text_rect, 4, 4)
-                        painter.setPen(QColor("#FFFFFF"))
+                    # Texto en el color de la herramienta (ODS) o blanco (técnico).
+                    painter.setPen(QColor(rbl_color) if ods else QColor("#FFFFFF"))
                     for i, line in enumerate(lines_t):
-                        line_y = text_rect.top() + fm.ascent() + 4 + i * fm.height()
-                        line_w = fm.horizontalAdvance(line)
-                        line_x = text_rect.left() + (rect_w - line_w) / 2.0
-                        painter.drawText(QPointF(line_x, line_y), line)
+                        line_y = text_rect.top() + fm.ascent() + 3 + i * fm.height()
+                        painter.drawText(QPointF(text_rect.left() + 6, line_y), line)
 
                     painter.restore()
                     return text_rect, p_origen, p_destino
@@ -4301,21 +4464,156 @@ class RadarWidget(_RadarBase):
     # WHEEL — ZOOM
     # ================================================================
 
+    def _crear_botones_zoom(self):
+        """Botones flotantes + / − superpuestos sobre el PPI (esquina inf. derecha)."""
+        estilo = (
+            "QPushButton {"
+            "  background-color: rgba(20, 26, 36, 210);"
+            "  color: #E0F7FF; border: 1px solid rgba(0,229,255,120);"
+            "  border-radius: 5px; font-size: 20px; font-weight: bold;"
+            "}"
+            "QPushButton:hover { background-color: rgba(0,229,255,60); }"
+            "QPushButton:pressed { background-color: rgba(0,229,255,110); }"
+        )
+        self._btn_zoom_in = QPushButton("+", self)
+        self._btn_zoom_out = QPushButton("−", self)
+        for b, cb, tip in ((self._btn_zoom_in, self.zoom_in, "Acercar (tecla +)"),
+                           (self._btn_zoom_out, self.zoom_out, "Alejar (tecla −)")):
+            b.setFixedSize(34, 34)
+            b.setStyleSheet(estilo)
+            b.setToolTip(tip)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            # No robar el foco de teclado del PPI (para que + / − sigan andando).
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            b.clicked.connect(cb)
+        self._posicionar_botones_zoom()
+
+    def _posicionar_botones_zoom(self):
+        if not hasattr(self, '_btn_zoom_in'):
+            return
+        m = 12          # margen al borde
+        s = 34          # lado del botón
+        gap = 6
+        x = self.width() - s - m
+        y = self.height() - 2 * s - gap - m
+        self._btn_zoom_in.move(x, y)
+        self._btn_zoom_out.move(x, y + s + gap)
+        self._btn_zoom_in.raise_()
+        self._btn_zoom_out.raise_()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._posicionar_botones_zoom()
+
+    def zoom_por_factor(self, factor: float, anchor_screen: Optional[QPointF] = None):
+        """Aplica zoom multiplicando el factor, manteniendo fijo un punto ancla en
+        pantalla (ajustando el pan) para no "perder el foco".
+
+        Ancla, en orden de prioridad:
+          1. `anchor_screen` explícito (p. ej. la posición del cursor en la rueda).
+          2. El track enfocado (dorado), si existe y está vivo.
+          3. El centro de la vista.
+        """
+        try:
+            z_old = self.zoom_factor
+            if z_old < MIN_ZOOM:
+                z_old = MIN_ZOOM
+            # Determinar el ancla en coordenadas de mundo (metros).
+            ax = ay = None
+            if anchor_screen is not None:
+                w2 = self._screen_to_world(anchor_screen.x(), anchor_screen.y())
+                if w2 is not None:
+                    ax, ay = w2
+            if ax is None:
+                fid = getattr(self, 'focused_target_id', None)
+                trk = self.tracks.get(fid) or self.pending_tracks.get(fid) if fid else None
+                if trk is not None and trk.is_alive() and is_valid_coord(trk.x, trk.y):
+                    ax, ay = trk.x, trk.y
+            if ax is None:
+                # Centro de la vista en mundo: x=-pan_x/z, y=pan_y/z
+                ax = -self.pan_x / z_old
+                ay = self.pan_y / z_old
+
+            self.zoom_factor *= factor
+            self._clamp_zoom()
+            z_new = self.zoom_factor
+            # Recolocar el pan para que (ax, ay) quede en el mismo píxel de pantalla.
+            self.pan_x += ax * (z_old - z_new)
+            self.pan_y -= ay * (z_old - z_new)
+            self.update()
+        except Exception:
+            self._clamp_zoom()
+            self.update()
+
+    def zoom_in(self):
+        """Acerca un paso, anclado al foco/centro (para botón +/tecla)."""
+        self.zoom_por_factor(1.2)
+
+    def zoom_out(self):
+        """Aleja un paso, anclado al foco/centro (para botón −/tecla)."""
+        self.zoom_por_factor(1.0 / 1.2)
+
     def wheelEvent(self, event):
         try:
             delta = event.angleDelta().y()
-            if delta > 0:
-                self.zoom_factor *= 1.2
-            elif delta < 0:
-                self.zoom_factor /= 1.2
-            self._clamp_zoom()
-            self.update()
+            if delta == 0:
+                return
+            factor = 1.2 if delta > 0 else 1.0 / 1.2
+            # La rueda ancla en el cursor (comportamiento estándar de mapa).
+            self.zoom_por_factor(factor, anchor_screen=event.position())
         except Exception:
             pass
 
     # ================================================================
     # MOUSE — DRAG PAN
     # ================================================================
+
+    def _anchor_velocity_nm_h(self, anchor):
+        """(v_este, v_norte) en NM/h del blanco del anchor; (0,0) si no es aeronave viva o sin velocidad.
+
+        Usa la velocidad SUAVIZADA (`_smooth_vx/_smooth_vy`, la misma del vector de
+        tendencia) para evitar el ruido y el flip ~180° del `track_angle` crudo entre
+        radares, que desestabilizaba el CPA (E/X). Fallback a ground_speed/track_angle.
+        """
+        if not anchor or anchor.get("type") != "aircraft":
+            return 0.0, 0.0
+        pid = anchor.get("plot_id")
+        trk = self.tracks.get(pid) if pid else None
+        if trk is None or not trk.is_alive():
+            return 0.0, 0.0
+        svx = getattr(trk, "_smooth_vx", None)
+        svy = getattr(trk, "_smooth_vy", None)
+        if svx is not None and svy is not None and math.hypot(svx, svy) > 2.5:  # ~5 kt
+            conv = 3600.0 / METERS_PER_NM  # m/s (coords proyectadas) -> NM/h
+            return svx * conv, svy * conv
+        gs = getattr(trk, "ground_speed", None)
+        ta = getattr(trk, "track_angle", None)
+        if gs is None or ta is None:
+            return 0.0, 0.0
+        rad = math.radians(ta)
+        return gs * math.sin(rad), gs * math.cos(rad)
+
+    def _rbl_cpa(self, olat, olon, o_anchor, dlat, dlon, d_anchor):
+        """CPA (punto de máxima aproximación) entre los dos extremos del RBL.
+
+        Devuelve (t_cpa_seg, sep_cpa_nm), o (None, None) si no hay aproximación futura
+        o ningún extremo tiene velocidad. Marco ENU local en NM alrededor del punto medio.
+        """
+        v1e, v1n = self._anchor_velocity_nm_h(o_anchor)
+        v2e, v2n = self._anchor_velocity_nm_h(d_anchor)
+        dve, dvn = v2e - v1e, v2n - v1n
+        dv2 = dve * dve + dvn * dvn
+        if dv2 <= 1e-6:
+            return None, None  # sin movimiento relativo
+        cos0 = math.cos(math.radians((olat + dlat) / 2.0))
+        re = (dlon - olon) * cos0 * 60.0   # posición destino-origen (este, NM)
+        rn = (dlat - olat) * 60.0          # (norte, NM)
+        t_h = -(re * dve + rn * dvn) / dv2  # horas hasta CPA
+        if t_h <= 0:
+            return None, None               # divergiendo o CPA ya pasado
+        ce = re + dve * t_h
+        cn = rn + dvn * t_h
+        return t_h * 3600.0, math.hypot(ce, cn)
 
     def _rbl_point_near_segment(self, p, a, b, tol=10.0):
         """Devuelve True si el punto p está a menos de tol píxeles del segmento a-b."""
@@ -4352,18 +4650,27 @@ class RadarWidget(_RadarBase):
                     return
 
             # ── Comprobar si el clic elimina algún RBL persistente ──
-            clic = event.position()
-            idx_to_remove = None
-            for i, rbl in enumerate(self.rbl_lines):
-                hit_label = rbl.get('label_hitbox') and rbl['label_hitbox'].contains(clic)
-                hit_line  = self._rbl_point_near_segment(clic, rbl.get('p_origen'), rbl.get('p_destino'))
-                if hit_label or hit_line:
-                    idx_to_remove = i
-                    break
-            if idx_to_remove is not None:
-                self.rbl_lines.pop(idx_to_remove)
-                self.update()
-                return
+            # Solo en clic izquierdo simple (sin Shift ni botón central): así Shift+clic
+            # o clic central pueden arrancar un RBL nuevo desde un punto ya usado como
+            # extremo de otro RBL sin borrarlo (reuso del mismo punto).
+            is_middle_btn = event.button() == Qt.MouseButton.MiddleButton
+            if event.button() == Qt.MouseButton.LeftButton and not is_shift and not is_middle_btn:
+                clic = event.position()
+                # Etiqueta del RBL: arranca posible arrastre. En el release se decide:
+                # clic corto = borrar, arrastre = mover a lo largo de la línea.
+                # (Shift+clic / clic central arrancan RBL nuevo y no entran acá.)
+                for i, rbl in enumerate(self.rbl_lines):
+                    if rbl.get('label_hitbox') and rbl['label_hitbox'].contains(clic):
+                        self._rbl_label_press_idx = i
+                        self._rbl_label_press_pos = clic
+                        self._rbl_label_moved = False
+                        return
+                # Clic sobre la línea (fuera de la etiqueta) → eliminar el RBL.
+                for i, rbl in enumerate(self.rbl_lines):
+                    if self._rbl_point_near_segment(clic, rbl.get('p_origen'), rbl.get('p_destino')):
+                        self.rbl_lines.pop(i)
+                        self.update()
+                        return
 
             # Activación de herramienta RBL: Shift + Clic Izquierdo O Clic Central (Middle Button)
             is_shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
@@ -4514,6 +4821,10 @@ class RadarWidget(_RadarBase):
                 self.selected_history_point = None  # Limpiar selección al hacer pan
                 self.update()
             elif event.button() == Qt.MouseButton.RightButton:
+                # Click derecho sobre la etiqueta de un track → menú contextual FDP.
+                # Si no cae sobre ningún track, comportamiento normal (selección).
+                if self._menu_contextual_track(event):
+                    return
                 self.is_selecting = True
                 self.selection_start_point = event.position()
                 self.selection_rect = QRectF(self.selection_start_point, self.selection_start_point)
@@ -4524,6 +4835,27 @@ class RadarWidget(_RadarBase):
 
     def mouseMoveEvent(self, event):
         try:
+            # Arrastre del texto de un RBL a lo largo de su línea (tras superar el umbral)
+            if self._rbl_label_press_idx is not None and (event.buttons() & Qt.MouseButton.LeftButton):
+                idx = self._rbl_label_press_idx
+                if 0 <= idx < len(self.rbl_lines):
+                    pos = event.position()
+                    pp = self._rbl_label_press_pos
+                    if pp is not None and math.hypot(pos.x() - pp.x(), pos.y() - pp.y()) > 4.0:
+                        rbl = self.rbl_lines[idx]
+                        a, b = rbl.get('p_origen'), rbl.get('p_destino')
+                        if a is not None and b is not None:
+                            ab = b - a
+                            ab_len_sq = ab.x()**2 + ab.y()**2
+                            if ab_len_sq > 0:
+                                ap = pos - a
+                                t = (ap.x()*ab.x() + ap.y()*ab.y()) / ab_len_sq
+                                rbl['label_t'] = max(0.0, min(1.0, t))
+                                self._rbl_label_moved = True
+                                self.update()
+                    return
+                self._rbl_label_press_idx = None
+
             # Dragging label logic (FASE 2)
             all_plots = list(self.tracks.values()) + list(self.pending_tracks.values())
             dragging_plot = None
@@ -4633,6 +4965,18 @@ class RadarWidget(_RadarBase):
 
     def mouseReleaseEvent(self, event):
         try:
+            # Fin de interacción con el texto de un RBL: clic corto = borrar, arrastre = mover.
+            if self._rbl_label_press_idx is not None:
+                idx = self._rbl_label_press_idx
+                moved = self._rbl_label_moved
+                self._rbl_label_press_idx = None
+                self._rbl_label_press_pos = None
+                self._rbl_label_moved = False
+                if not moved and 0 <= idx < len(self.rbl_lines):
+                    self.rbl_lines.pop(idx)
+                self.update()
+                return
+
             # Release label drag state (FASE 2)
             all_plots = list(self.tracks.values()) + list(self.pending_tracks.values())
             released_any = False
@@ -4716,6 +5060,11 @@ class RadarWidget(_RadarBase):
             elif key == Qt.Key.Key_Down:
                 self.pan_y -= step
                 self.update()
+            elif key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
+                # '+' y '=' (misma tecla sin Shift) acercan, anclado al foco/centro.
+                self.zoom_in()
+            elif key in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore):
+                self.zoom_out()
             else:
                 super().keyPressEvent(event)
         except Exception:
@@ -4777,7 +5126,11 @@ class RadarWidget(_RadarBase):
                 fl_for_label = plot.altitude_ft / 100.0
             if fl_for_label is not None and getattr(self, 'altimetry', None) is not None:
                 level_str = self.altimetry.formatear_altitud(fl_for_label) + _fdb.trend_arrow(vr)
-            return _fdb.build_lines(plot, full=True, vrate=vr, fields=cfg, level_str=level_str)
+            ods_lines = _fdb.build_lines(plot, full=True, vrate=vr, fields=cfg, level_str=level_str)
+            alerta_ods = getattr(self, '_alertas_dict_render', {}).get(plot.id)
+            if alerta_ods and ods_lines:
+                ods_lines = [f"[{alerta_ods[2]}] {ods_lines[0]}"] + list(ods_lines[1:])
+            return ods_lines
 
         # 1. Line 1: Identity
         show_id = True if es_ctrl else cfg.get("identific_aeronave", True)
@@ -5006,6 +5359,9 @@ class RadarWidget(_RadarBase):
             elif cfg.get("rho_theta", False) and plot.raw_range is not None and plot.raw_azimuth is not None:
                 lines.append(f"R:{plot.raw_range:.1f}NM A:{plot.raw_azimuth:.1f}°")
 
+        alerta = getattr(self, '_alertas_dict_render', {}).get(plot.id)
+        if alerta and lines:
+            lines[0] = f"[{alerta[2]}] {lines[0]}"
         return lines
 
     def _get_label_rect(self, plot: 'RadarPlot', z: float, inv_z: float,
@@ -5045,6 +5401,53 @@ class RadarWidget(_RadarBase):
         label_x = sx + 10
         label_y = sy - 10  # yo = -10 for first line
         return QRectF(label_x, label_y, max_width + 4, total_height + 4)
+
+    def _menu_contextual_track(self, event) -> bool:
+        """Muestra el menú contextual FDP si el clic derecho cae sobre un track.
+
+        Devuelve True si se mostró el menú (hubo hit sobre una etiqueta), False
+        en caso contrario (para que el llamador siga con la selección normal).
+        """
+        try:
+            if not getattr(self, 'label_hitboxes', None):
+                return False
+            click_pos = event.position()
+            for pid, hitbox in self.label_hitboxes.items():
+                plot = self.tracks.get(pid) or self.pending_tracks.get(pid)
+                if not plot or not plot.is_alive():
+                    continue
+                if not hitbox.contains(click_pos):
+                    continue
+
+                from PyQt6.QtWidgets import QMenu
+                callsign = (getattr(plot, 'callsign', None) or "").strip()
+                menu = QMenu(self)
+                act_fdp = menu.addAction("Ver Plan de Vuelo…")
+                act_fdp.setEnabled(bool(callsign))
+                elegido = menu.exec(event.globalPosition().toPoint())
+                if elegido is act_fdp:
+                    self._abrir_plan_fdp(callsign)
+                return True
+            return False
+        except Exception:
+            return False
+
+    def _abrir_plan_fdp(self, callsign: str):
+        """Busca el plan FDP por callsign y abre el diálogo, o avisa si no hay."""
+        from PyQt6.QtWidgets import QMessageBox
+        try:
+            from player.fdp.lookup import buscar_plan
+            plan = buscar_plan(callsign)
+        except Exception:
+            plan = None
+        if not plan:
+            QMessageBox.information(
+                self.window(), "Plan de Vuelo FDP",
+                f"No hay plan de vuelo FDP para «{callsign}».")
+            return
+        from player.fdp.flight_plan_dialog import FlightPlanDialog
+        dlg = FlightPlanDialog(callsign, plan, parent=self.window())
+        dlg.exec()
 
     def mouseDoubleClickEvent(self, event):
         """
@@ -5314,9 +5717,11 @@ class RadarWidget(_RadarBase):
         painter.setPen(pen)
         painter.drawLine(QPointF(sp.x(), sp.y()), QPointF(lx, ly))  # leader line
         # A intensidad máxima, negrita para que la etiqueta se lea más clara.
-        font = QFont("Consolas", 8)
-        if lab_intensity >= 0.95:
-            font.setBold(True)
+        if self._font_ods is None:
+            self._font_ods = QFont("Consolas", 8)
+            self._font_ods_bold = QFont("Consolas", 8)
+            self._font_ods_bold.setBold(True)
+        font = self._font_ods_bold if lab_intensity >= 0.95 else self._font_ods
         painter.setFont(font)
         fm = painter.fontMetrics()
         hitbox = None
@@ -5649,10 +6054,12 @@ class RadarWidget(_RadarBase):
                 except Exception:
                     pass
 
-            # 5. Vector de tendencia (Predictive speed vector in screen pixels - FASE 1)
+            # 5. Vector de velocidad (predictor): a ESCALA REAL del mapa, la punta cae
+            # exactamente donde estará la aeronave; una marca por cada minuto hasta el
+            # horizonte elegido (menú Ver → Vector Velocidad, 1/2/3 min).
             es_pista = plot.is_track or is_fused
 
-            # MÓDULO (largo) = velocidad del blanco; DIRECCIÓN = velocidad suavizada
+            # MÓDULO = velocidad del blanco; DIRECCIÓN = velocidad suavizada
             # (evita oscilación ~180° entre radares), con fallback al track_angle crudo.
             target_gs = plot.ground_speed
             target_heading = plot.track_angle
@@ -5670,28 +6077,36 @@ class RadarWidget(_RadarBase):
                     # Tope anti-inflación: la velocidad estimada puede dispararse por los
                     # saltos de posición entre radares; ningún avión civil supera ~600 kt.
                     gs_clamp = min(float(target_gs), 600.0)
+                    gs_mps = gs_clamp * (METERS_PER_NM / 3600.0)  # m/s en coords del mundo
 
-                    painter.save()
-                    painter.translate(x, y)
-                    painter.scale(inv_z, -inv_z)  # espacio de PÍXELES de pantalla
-
-                    # Largo FIJO en pantalla, proporcional a la velocidad (no escala con el
-                    # zoom): así siempre es visible y nunca cruza la pantalla. PX_POR_NM es
-                    # una escala visual fija (no representa distancia real en el mapa).
-                    PX_POR_NM = 5.0
-                    distancia_vector_nm = (gs_clamp / 60.0) * self.vector_tiempo_minutos
-                    longitud_px = distancia_vector_nm * PX_POR_NM
-
-                    # 0° apunta al Norte (el scale(-inv_z) ya invierte el eje Y).
+                    # Componentes de velocidad en el mundo (0° = Norte, +x Este, +y Norte).
                     ang = math.radians(target_heading)
-                    dx_vector = longitud_px * math.sin(ang)
-                    dy_vector = -longitud_px * math.cos(ang)
+                    v_east = gs_mps * math.sin(ang)
+                    v_north = gs_mps * math.cos(ang)
 
-                    pen_v = QPen(base_color, 1.5, Qt.PenStyle.SolidLine)
-                    painter.setPen(pen_v)
-                    painter.drawLine(QPointF(0, 0), QPointF(dx_vector, dy_vector))
-
-                    painter.restore()
+                    minutos = max(1, int(round(getattr(self, 'vector_tiempo_minutos', 2))))
+                    sp0 = self._world_to_screen(plot.x, plot.y)
+                    if sp0 is not None:
+                        painter.save()
+                        painter.resetTransform()  # dibujar en píxeles de pantalla, a escala real
+                        painter.setPen(QPen(base_color, 1.5, Qt.PenStyle.SolidLine))
+                        prev = sp0
+                        for m in range(1, minutos + 1):
+                            t = m * 60.0  # segundos
+                            spm = self._world_to_screen(plot.x + v_east * t, plot.y + v_north * t)
+                            if spm is None:
+                                break
+                            painter.drawLine(prev, spm)
+                            # Marca de minuto: tick perpendicular de largo fijo en pantalla.
+                            dxp, dyp = spm.x() - prev.x(), spm.y() - prev.y()
+                            seg = math.hypot(dxp, dyp)
+                            if seg > 1e-3:
+                                nx, ny = -dyp / seg, dxp / seg
+                                tl = 3.0
+                                painter.drawLine(QPointF(spm.x() - nx * tl, spm.y() - ny * tl),
+                                                 QPointF(spm.x() + nx * tl, spm.y() + ny * tl))
+                            prev = spm
+                        painter.restore()
                 except Exception:
                     pass
 
@@ -5715,9 +6130,12 @@ class RadarWidget(_RadarBase):
                     painter.translate(x, y)
                     painter.scale(inv_z, -inv_z)
                     
-                    font_oaci = QFont("Consolas", 9)
+                    if self._font_oaci is None:
+                        self._font_oaci = QFont("Consolas", 9)
+                        self._fm_oaci = QFontMetrics(self._font_oaci)
+                    font_oaci = self._font_oaci
                     painter.setFont(font_oaci)
-                    
+
                     if is_coasting:
                         label_pen_color = QColor(128, 128, 128)
                     elif is_emergency:
@@ -5725,9 +6143,9 @@ class RadarWidget(_RadarBase):
                     else:
                         label_pen_color = QColor(plot_color)
                         label_pen_color.setAlpha(alpha)
-                        
+
                     painter.setPen(label_pen_color)
-                    fm = QFontMetrics(font_oaci)
+                    fm = self._fm_oaci
                     
                     max_w = max(fm.horizontalAdvance(line) for line in lines)
                     

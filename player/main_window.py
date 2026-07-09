@@ -582,6 +582,366 @@ class PanelSensoresFlotante(QWidget):
         self._drag_offset = None
 
 
+from PyQt6.QtWidgets import QWidgetAction
+
+class ScrollableAreaListMenu(QWidgetAction):
+    def __init__(self, parent_menu, areas, main_window):
+        super().__init__(parent_menu)
+        self.main_window = main_window
+        self.areas = areas
+        
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(4)
+        
+        self.btn_all = QPushButton("Todos")
+        self.btn_all.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #00E5FF;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        self.btn_none = QPushButton("Ninguno")
+        self.btn_none.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #6B7A8D;
+                border: 1px solid rgba(107, 122, 141, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(107, 122, 141, 20);
+            }
+        """)
+        
+        btn_layout.addWidget(self.btn_all)
+        btn_layout.addWidget(self.btn_none)
+        layout.addLayout(btn_layout)
+        
+        self.list_widget = QListWidget()
+        num_items = len(areas)
+        list_height = min(300, 30 + num_items * 26)
+        self.list_widget.setFixedHeight(list_height)
+        self.list_widget.setFixedWidth(220)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #0B0E14;
+                color: #E0E6ED;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+            }
+            QListWidget::item {
+                padding: 4px;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        mm_ref = getattr(main_window.radar, 'map_manager', None)
+        for area in areas:
+            item = QListWidgetItem(area.name)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            
+            layer_name = f"AREA::{area.name}"
+            was_visible = mm_ref is not None and layer_name in mm_ref.layers
+            item.setCheckState(Qt.CheckState.Checked if was_visible else Qt.CheckState.Unchecked)
+            
+            item.setData(Qt.ItemDataRole.UserRole, area)
+            self.list_widget.addItem(item)
+            
+        layout.addWidget(self.list_widget)
+        
+        self.list_widget.itemChanged.connect(self.on_item_changed)
+        self.btn_all.clicked.connect(self.select_all)
+        self.btn_none.clicked.connect(self.select_none)
+        self.setDefaultWidget(container)
+        
+    def on_item_changed(self, item):
+        area = item.data(Qt.ItemDataRole.UserRole)
+        checked = item.checkState() == Qt.CheckState.Checked
+        self.main_window._toggle_individual_db_area(area, checked)
+        
+    def select_all(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Checked:
+                item.setCheckState(Qt.CheckState.Checked)
+                area = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_individual_db_area(area, True, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window.radar.update()
+        
+    def select_none(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Unchecked:
+                item.setCheckState(Qt.CheckState.Unchecked)
+                area = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_individual_db_area(area, False, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window.radar.update()
+
+
+class ScrollableMapListMenu(QWidgetAction):
+    def __init__(self, parent_menu, items_list, main_window):
+        super().__init__(parent_menu)
+        self.main_window = main_window
+        self.items_list = items_list
+        
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(4)
+        
+        self.btn_all = QPushButton("Todos")
+        self.btn_all.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #00E5FF;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        self.btn_none = QPushButton("Ninguno")
+        self.btn_none.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #6B7A8D;
+                border: 1px solid rgba(107, 122, 141, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(107, 122, 141, 20);
+            }
+        """)
+        
+        btn_layout.addWidget(self.btn_all)
+        btn_layout.addWidget(self.btn_none)
+        layout.addLayout(btn_layout)
+        
+        self.list_widget = QListWidget()
+        num_items = len(items_list)
+        list_height = min(300, 30 + num_items * 26)
+        self.list_widget.setFixedHeight(list_height)
+        self.list_widget.setFixedWidth(220)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #0B0E14;
+                color: #E0E6ED;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+            }
+            QListWidget::item {
+                padding: 4px;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        for label, paths in items_list:
+            item = QListWidgetItem(label)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            
+            is_checked = any(p in main_window._active_map_paths for p in paths)
+            item.setCheckState(Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked)
+            item.setData(Qt.ItemDataRole.UserRole, paths)
+            
+            item.setChecked = lambda checked, it=item: it.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+            item.isChecked = lambda it=item: it.checkState() == Qt.CheckState.Checked
+            
+            for p in paths:
+                main_window.map_actions[p] = item
+                
+            self.list_widget.addItem(item)
+            
+        layout.addWidget(self.list_widget)
+        
+        self.list_widget.itemChanged.connect(self.on_item_changed)
+        self.btn_all.clicked.connect(self.select_all)
+        self.btn_none.clicked.connect(self.select_none)
+        
+        self.setDefaultWidget(container)
+        
+    def on_item_changed(self, item):
+        paths = item.data(Qt.ItemDataRole.UserRole)
+        checked = item.checkState() == Qt.CheckState.Checked
+        
+        self.list_widget.blockSignals(True)
+        self.main_window._toggle_map_paths_group(paths, checked)
+        self.list_widget.blockSignals(False)
+        
+    def select_all(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Checked:
+                item.setCheckState(Qt.CheckState.Checked)
+                paths = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_map_paths_group(paths, True, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window._rebuild_and_draw_maps()
+        
+    def select_none(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Unchecked:
+                item.setCheckState(Qt.CheckState.Unchecked)
+                paths = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_map_paths_group(paths, False, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window._rebuild_and_draw_maps()
+
+
+class ScrollableATMListMenu(QWidgetAction):
+    def __init__(self, parent_menu, items_list, main_window):
+        super().__init__(parent_menu)
+        self.main_window = main_window
+        self.items_list = items_list
+        
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(4)
+        
+        self.btn_all = QPushButton("Todos")
+        self.btn_all.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #00E5FF;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        self.btn_none = QPushButton("Ninguno")
+        self.btn_none.setStyleSheet("""
+            QPushButton {
+                background-color: #121824;
+                color: #6B7A8D;
+                border: 1px solid rgba(107, 122, 141, 40);
+                font-size: 8pt;
+                font-weight: bold;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(107, 122, 141, 20);
+            }
+        """)
+        
+        btn_layout.addWidget(self.btn_all)
+        btn_layout.addWidget(self.btn_none)
+        layout.addLayout(btn_layout)
+        
+        self.list_widget = QListWidget()
+        num_items = len(items_list)
+        list_height = min(300, 30 + num_items * 26)
+        self.list_widget.setFixedHeight(list_height)
+        self.list_widget.setFixedWidth(220)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #0B0E14;
+                color: #E0E6ED;
+                border: 1px solid rgba(0, 229, 255, 40);
+                font-size: 8pt;
+            }
+            QListWidget::item {
+                padding: 4px;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(0, 229, 255, 20);
+            }
+        """)
+        
+        mm_ref = getattr(main_window.radar, 'map_manager', None)
+        for label, key, builder in items_list:
+            item = QListWidgetItem(label)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            
+            layer_name = f"ATM::{key}"
+            was_visible = mm_ref is not None and layer_name in mm_ref.layers
+            item.setCheckState(Qt.CheckState.Checked if was_visible else Qt.CheckState.Unchecked)
+            item.setData(Qt.ItemDataRole.UserRole, (key, builder))
+            
+            item.setChecked = lambda checked, it=item: it.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+            item.isChecked = lambda it=item: it.checkState() == Qt.CheckState.Checked
+            
+            main_window.atm_map_actions[key] = item
+            self.list_widget.addItem(item)
+            
+        layout.addWidget(self.list_widget)
+        
+        self.list_widget.itemChanged.connect(self.on_item_changed)
+        self.btn_all.clicked.connect(self.select_all)
+        self.btn_none.clicked.connect(self.select_none)
+        
+        self.setDefaultWidget(container)
+        
+    def on_item_changed(self, item):
+        key, builder = item.data(Qt.ItemDataRole.UserRole)
+        checked = item.checkState() == Qt.CheckState.Checked
+        self.main_window._toggle_atm_layer(key, checked, builder)
+        
+    def select_all(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Checked:
+                item.setCheckState(Qt.CheckState.Checked)
+                key, builder = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_atm_layer(key, True, builder, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window.radar.update()
+        
+    def select_none(self):
+        self.list_widget.blockSignals(True)
+        for idx in range(self.list_widget.count()):
+            item = self.list_widget.item(idx)
+            if item.checkState() != Qt.CheckState.Unchecked:
+                item.setCheckState(Qt.CheckState.Unchecked)
+                key, builder = item.data(Qt.ItemDataRole.UserRole)
+                self.main_window._toggle_atm_layer(key, False, builder, redraw=False)
+        self.list_widget.blockSignals(False)
+        self.main_window.radar.update()
+
+
 class MainWindow(QMainWindow):
     # Sectores de Vuelo VFR: áreas de la DB que se muestran fuera de 'Áreas
     # Restringidas', en su propio submenú dentro de 'Mapas'.
@@ -783,6 +1143,8 @@ class MainWindow(QMainWindow):
         self.system_bus = SystemEventBus(self)
         self._health_alarmas_prev: dict = {}
         self.profile_manager = ProfileManager()
+        from player.style_manager import StyleManager
+        StyleManager.set_modo(self.profile_manager.profile.get("modo_ambiente", "DUSK"))
         self.techo_incumbencia = self.profile_manager.get_nivel_incumbencia()
         self.cache_dir = tempfile.mkdtemp(prefix="asterix_cache_")
         
@@ -866,36 +1228,21 @@ class MainWindow(QMainWindow):
         # Reubicar el reloj cuando cambia el ancho del radar (ej. al ensanchar el
         # dock lateral, que no dispara el resizeEvent de la ventana).
         self.radar.installEventFilter(self)
+        self._aplicar_estilos_ambiente()
+
+    def _aplicar_estilos_ambiente(self) -> None:
+        from player.style_manager import StyleManager
+        self.setStyleSheet("")
+        self.toolbar.setStyleSheet("")
+        self.hud_bar.setStyleSheet("")
+        self._dock_scroll.setStyleSheet("")
+        self._dock_container.setStyleSheet("")
+        self.menuBar().setStyleSheet(StyleManager.get_estilo_menubar())
 
     def _setup_menu_bar(self):
+        from player.style_manager import StyleManager
         menu_bar = self.menuBar()
-        menu_bar.setStyleSheet("""
-            QMenuBar {
-                background-color: #121824;
-                color: #E0E6ED;
-                border-bottom: 1px solid rgba(0, 229, 255, 50);
-            }
-            QMenuBar::item {
-                background-color: transparent;
-                padding: 5px 10px;
-            }
-            QMenuBar::item:selected {
-                background-color: rgba(0, 229, 255, 30);
-                color: #39FF14;
-            }
-            QMenu {
-                background-color: #0E131F;
-                color: #E0E6ED;
-                border: 1px solid #00E5FF;
-            }
-            QMenu::item {
-                padding: 6px 20px;
-            }
-            QMenu::item:selected {
-                background-color: rgba(0, 229, 255, 30);
-                color: #39FF14;
-            }
-        """)
+        menu_bar.setStyleSheet(StyleManager.get_estilo_menubar())
 
         # Menú Archivo
         menu_archivo = menu_bar.addMenu("Archivo")
@@ -912,6 +1259,10 @@ class MainWindow(QMainWindow):
         self.act_exp_cobertura = menu_exportar.addAction("Mapa de Cobertura Real a Google Earth (KMZ)...", self.exportar_cobertura_kmz)
         self.act_exp_csv = menu_exportar.addAction("Heatmap a QGIS (CSV)", self.exportar_csv)
         self.act_exp_parquet = menu_exportar.addAction("Datos a Power BI (Parquet)", self.exportar_parquet)
+        menu_exportar.addSeparator()
+        self.act_exp_safety_csv = menu_exportar.addAction(
+            "Eventos de Seguridad — Auditoría OACI (CSV)…", self.exportar_safety_csv)
+        self.act_exp_safety_csv.setEnabled(False)
         self.act_exp_kmz.setEnabled(False)
         self.act_exp_playback.setEnabled(False)
         self.act_exp_cobertura.setEnabled(False)
@@ -941,6 +1292,8 @@ class MainWindow(QMainWindow):
         self.act_analizador_paquetes = menu_ver.addAction("Analizador de Paquetes…", self._abrir_analizador_paquetes)
         self.act_finder = menu_ver.addAction("Finder Táctico…", self._abrir_finder)
         self.act_finder.setShortcut("Ctrl+F")
+        self.act_inspector_sensor = menu_ver.addAction("Inspector Multi-sensor…", self._abrir_inspector_sensor)
+        self.act_inspector_sensor.setShortcut("Ctrl+I")
         menu_ver.addSeparator()
         self.act_toggle_incumbencia = menu_ver.addAction("Vista de Incumbencia (Jurisdicción)")
         self.act_toggle_incumbencia.setCheckable(True)
@@ -991,6 +1344,14 @@ class MainWindow(QMainWindow):
         self.act_centro_tecnico = menu_config.addAction(
             "Centro Técnico ATSEP…", self._abrir_centro_tecnico)
         self.act_centro_tecnico.setEnabled(self.profile_manager.get_rol() == "tecnico")
+        self.act_auditoria_safety = menu_config.addAction(
+            "Auditoría Safety Nets…", self._abrir_auditoria_safety)
+        self.act_auditoria_safety.setEnabled(self.profile_manager.get_rol() == "tecnico")
+        # FDP (Flight Data Processing): feed ADEXP por TCP. Solo rol técnico.
+        self.act_fdp = menu_config.addAction("Conectar FDP (ADEXP)")
+        self.act_fdp.setCheckable(True)
+        self.act_fdp.toggled.connect(self._toggle_fdp)
+        self.act_fdp.setEnabled(self.profile_manager.get_rol() == "tecnico")
 
         # Menú Mapas — capas generadas dinámicamente desde la base ATM (atm.duckdb)
         from player import atm_db, atm_maps
@@ -999,27 +1360,38 @@ class MainWindow(QMainWindow):
 
         if atm_db.available():
             sub_aero = self.menu_mapas.addMenu("Aerovías")
-            for label, cat in [("Superiores", "SUP"), ("Inferiores", "INF")]:
-                self._add_atm_action(sub_aero, f"AERO_{cat}", label,
-                                     (lambda c=cat: atm_maps.airway_segments(c)))
+            aero_items = [
+                ("Superiores", "AERO_SUP", lambda: atm_maps.airway_segments("SUP")),
+                ("Inferiores", "AERO_INF", lambda: atm_maps.airway_segments("INF"))
+            ]
+            scroll_aero = ScrollableATMListMenu(sub_aero, aero_items, self)
+            sub_aero.addAction(scroll_aero)
 
             sub_proc = self.menu_mapas.addMenu("Procedimientos por Aeropuerto")
             for icao in atm_db.airports_with_procedures():
                 sub_ap = sub_proc.addMenu(icao)
+                proc_items = []
                 for kind in ("SID", "STAR", "IAP"):
-                    self._add_atm_action(sub_ap, f"{icao}_{kind}", kind,
-                                         (lambda i=icao, k=kind: atm_maps.procedure_segments(i, k)))
+                    proc_items.append((kind, f"{icao}_{kind}", lambda i=icao, k=kind: atm_maps.procedure_segments(i, k)))
+                scroll_ap = ScrollableATMListMenu(sub_ap, proc_items, self)
+                sub_ap.addAction(scroll_ap)
 
             sub_fix = self.menu_mapas.addMenu("Puntos y Fixes (Waypoints)")
-            for label, kinds in [("VOR", ["VO"]), ("NDB", ["ND"]), ("DME", ["DM"]),
-                                 ("Ruta (ROU)", ["RO"]), ("Terminal (APP)", ["AP"])]:
-                self._add_atm_action(sub_fix, f"FIX_{label}", label,
-                                     (lambda k=kinds: atm_maps.fix_segments(k)))
+            fix_items = [
+                ("VOR", "FIX_VOR", lambda: atm_maps.fix_segments(["VO"])),
+                ("NDB", "FIX_NDB", lambda: atm_maps.fix_segments(["ND"])),
+                ("DME", "FIX_DME", lambda: atm_maps.fix_segments(["DM"])),
+                ("Ruta (ROU)", "FIX_Ruta (ROU)", lambda: atm_maps.fix_segments(["RO"])),
+                ("Terminal (APP)", "FIX_Terminal (APP)", lambda: atm_maps.fix_segments(["AP"]))
+            ]
+            scroll_fix = ScrollableATMListMenu(sub_fix, fix_items, self)
+            sub_fix.addAction(scroll_fix)
         else:
             act_na = self.menu_mapas.addAction("Base ATM no encontrada (data/atm/atm.duckdb)")
             act_na.setEnabled(False)
 
         self._setup_vfr_submenu()
+        self._setup_custom_categories_submenus()
 
         self._sep_cargar_mapa = self.menu_mapas.addSeparator()
         self.act_cargar_mapa = self.menu_mapas.addAction(
@@ -1049,9 +1421,29 @@ class MainWindow(QMainWindow):
         self.act_fir.setCheckable(True)
         self.act_fir.toggled.connect(self._toggle_vista_fir)
 
+        # Menú Ambiente — cambio de paleta de colores DAY / DUSK / NIGHT
+        from PyQt6.QtGui import QActionGroup
+        menu_ambiente = menu_bar.addMenu("Ambiente")
+        grupo_ambiente = QActionGroup(self)
+        grupo_ambiente.setExclusive(True)
+        modo_actual = StyleManager.get_modo()
+        for modo, label in (("DAY", "Día"), ("DUSK", "Crepúsculo"), ("NIGHT", "Noche")):
+            act = menu_ambiente.addAction(label, lambda m=modo: self._cambiar_ambiente(m))
+            act.setCheckable(True)
+            act.setChecked(modo == modo_actual)
+            grupo_ambiente.addAction(act)
+        self._acts_ambiente = {a.text(): a for a in grupo_ambiente.actions()}
+
         # Menú Ayuda — guía de funcionamiento (se abre en el navegador)
         menu_ayuda = menu_bar.addMenu("Ayuda")
         menu_ayuda.addAction(_icon("fa5s.book"), "Guía de la aplicación", self._abrir_ayuda)
+
+    def _cambiar_ambiente(self, modo: str) -> None:
+        from player.style_manager import StyleManager
+        StyleManager.set_modo(modo)
+        self._aplicar_estilos_ambiente()
+        self.profile_manager.profile["modo_ambiente"] = modo
+        self.profile_manager.save_profile()
 
     def _abrir_ayuda(self):
         """Abre la guía de funcionamiento (HTML) en el navegador por defecto."""
@@ -1084,6 +1476,7 @@ class MainWindow(QMainWindow):
                 # Arrancar al mayor zoom disponible que no supere ~nivel TMA.
                 v.set_zoom(min(v.max_zoom, 8))
                 v.track_selected.connect(self._fir_select_track)
+                v.track_context_requested.connect(self._fir_context_menu)
                 self._fir_view = v
                 self._fir_timer = QTimer(self)
                 self._fir_timer.timeout.connect(self._refresh_fir)
@@ -1118,6 +1511,18 @@ class MainWindow(QMainWindow):
         if hasattr(self.radar, 'focused_target_id'):
             self.radar.focused_target_id = track_id
             self.radar.update()
+
+    def _fir_context_menu(self, track_id, global_pos):
+        """Clic derecho sobre un avión en la vista FIR satelital -> menú FDP."""
+        plot = (self.radar.tracks.get(track_id)
+                or self.radar.pending_tracks.get(track_id))
+        callsign = (getattr(plot, 'callsign', None) or "").strip() if plot else ""
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+        act_fdp = menu.addAction("Ver Plan de Vuelo…")
+        act_fdp.setEnabled(bool(callsign))
+        if menu.exec(global_pos) is act_fdp:
+            self.radar._abrir_plan_fdp(callsign)
 
     def _toggle_ods(self, on: bool):
         if hasattr(self.radar, 'ods_enabled'):
@@ -1363,6 +1768,15 @@ class MainWindow(QMainWindow):
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.hud_bar.addWidget(spacer)
 
+        # Semáforo FDP — visible solo cuando el feed TCP está activo
+        self.lbl_hud_fdp = QLabel("● FDP")
+        self.lbl_hud_fdp.setStyleSheet(
+            "color: #FF9900; font-size: 9pt; font-weight: bold; padding: 2px 6px;")
+        self.lbl_hud_fdp.setToolTip("Estado de conexión FDP/ADEXP")
+        self._act_hud_fdp = self.hud_bar.addWidget(self.lbl_hud_fdp)
+        self._act_hud_fdp.setVisible(False)
+        self.hud_bar.addSeparator()
+
         # Mensajes de Sistema — disponible para ambos roles (técnico y controlador).
         self.btn_hud_msgs = QPushButton(" MSG")
         self.btn_hud_msgs.setToolTip("Lista de mensajes de sistema (eventos sin reconocer)")
@@ -1412,6 +1826,15 @@ class MainWindow(QMainWindow):
         self._finder_dialog.activateWindow()
         self._finder_dialog.txt_search.setFocus()
         self._finder_dialog.txt_search.selectAll()
+
+    def _abrir_inspector_sensor(self):
+        from player.sensor_inspector_dialog import SensorInspectorDialog
+        if getattr(self, "_sensor_inspector_dlg", None) is None:
+            self._sensor_inspector_dlg = SensorInspectorDialog(self.radar, self)
+        self._sensor_inspector_dlg.show()
+        self._sensor_inspector_dlg.raise_()
+        self._sensor_inspector_dlg.activateWindow()
+        self._sensor_inspector_dlg.txt_query.setFocus()
 
     def _actualizar_hud(self, perfil_data: dict):
         """Refresca los campos del HUD desde el perfil operativo."""
@@ -1805,6 +2228,8 @@ class MainWindow(QMainWindow):
         grupo_analisis.setLayout(l_analisis)
         v_layout.addWidget(grupo_analisis)
 
+        self._dock_scroll = scroll
+        self._dock_container = container
         scroll.setWidget(container)
         self.dock_lateral.setWidget(scroll)
         self.dock_lateral.setMinimumWidth(260)
@@ -2219,6 +2644,7 @@ class MainWindow(QMainWindow):
         self.act_exp_cobertura.setEnabled(False)
         self.act_exp_csv.setEnabled(False)
         self.act_exp_parquet.setEnabled(False)
+        self.act_exp_safety_csv.setEnabled(False)
         self.chk_modo_integrado.setEnabled(False)
         self._modo_manual = False  # permitir default automático por nº de sensores
         self._auto_modo_estado = None
@@ -2386,6 +2812,13 @@ class MainWindow(QMainWindow):
             self.panel_sensores.agregar_sensor(text_label, color,
                                                presentacion=present, historico=histo)
 
+    def _inyectar_repo_en_radar(self, sesion_id: str):
+        """Inyecta el DuckDBRepository activo en el radar para que _publicar_eventos_safety persista alertas."""
+        repo = getattr(getattr(self, 'worker', None), 'engine', None)
+        repo = getattr(repo, 'repo_db', None) if repo else None
+        self.radar._repo_db  = repo
+        self.radar._sesion_id = sesion_id
+
     def _on_scan_complete(self, success: bool):
         self.btn_cargar.setEnabled(True)
         self.btn_cargar.setText(" Modo Playback")
@@ -2431,6 +2864,7 @@ class MainWindow(QMainWindow):
             self.act_exp_cobertura.setEnabled(True)
             self.act_exp_csv.setEnabled(True)
             self.act_exp_parquet.setEnabled(True)
+            self.act_exp_safety_csv.setEnabled(self.profile_manager.get_rol() == "tecnico")
 
             # Default por nº de sensores: multisensor -> Integrado, un solo sensor -> Crudo.
             # Ambos botones quedan habilitados (modos mutuamente excluyentes).
@@ -2440,6 +2874,8 @@ class MainWindow(QMainWindow):
                 multis = len(self.sensores_conocidos) > 1
                 self._auto_modo_estado = multis
                 self._set_modo(multis)
+            from pathlib import Path
+            self._inyectar_repo_en_radar(Path(self.pcap_path if isinstance(self.pcap_path, str) else self.pcap_path[0]).name)
         else:
             self.btn_play.setText("Error en PCAP")
             self._show_panel()
@@ -2477,7 +2913,7 @@ class MainWindow(QMainWindow):
 
     def _on_sensor_detected(self, sac: int, sic: int):
         sensor_id = f"{sac}/{sic}"
-        
+
         info = self.sensores.get((sac, sic))
         nombre = info.get('name', f"Radar {sac}/{sic}") if info else f"Radar {sac}/{sic}"
         text_label = f"[{sac}/{sic}] {nombre}"
@@ -3261,6 +3697,8 @@ class MainWindow(QMainWindow):
         # El Centro Técnico (incluye calibración) es exclusivo del rol técnico
         if hasattr(self, 'act_centro_tecnico'):
             self.act_centro_tecnico.setEnabled(rol == "tecnico")
+        if hasattr(self, 'act_auditoria_safety'):
+            self.act_auditoria_safety.setEnabled(rol == "tecnico")
         self.radar.update()
         print(f"[ROL] Cambiado en caliente a: {rol}")
 
@@ -3294,6 +3732,121 @@ class MainWindow(QMainWindow):
             repo_db=repo_db, worker=worker, session_records=records,
             profile_config=profile_config, sensor_rpms=sensor_rpms, parent=self)
         self._centro_tecnico_win.show()
+
+    def _abrir_auditoria_safety(self):
+        """Abre el visor histórico de alertas STCA/APW/MSAW (solo rol técnico)."""
+        from player.safety_audit_dialog import SafetyAuditDialog
+        repo = getattr(getattr(self, 'worker', None), 'engine', None)
+        repo = getattr(repo, 'repo_db', None) if repo else None
+        if repo is None:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "Auditoría Safety Nets",
+                                    "No hay sesión activa. Cargá un PCAP o conectate a UDP primero.")
+            return
+        if not hasattr(self, '_auditoria_win') or self._auditoria_win is None:
+            self._auditoria_win = SafetyAuditDialog(repo, parent=self)
+            self._auditoria_win.seek_to_ts.connect(self._analizador_seek)
+            self._auditoria_win.destroyed.connect(lambda: setattr(self, '_auditoria_win', None))
+        self._auditoria_win.show()
+        self._auditoria_win.raise_()
+
+    # ------------------------------------------------------------------
+    # FDP — feed ADEXP por TCP (solo rol técnico)
+    # ------------------------------------------------------------------
+    def _fdp_config(self) -> dict:
+        """Lee la sección 'fdp' del perfil con defaults seguros."""
+        cfg = self.profile_manager.profile.get("fdp", {}) or {}
+        return {
+            "host": cfg.get("host", "127.0.0.1"),
+            "port": int(cfg.get("port", 4000)),
+        }
+
+    def _toggle_fdp(self, activar: bool):
+        if activar:
+            self._iniciar_fdp()
+        else:
+            self._detener_fdp()
+
+    def _iniciar_fdp(self):
+        if getattr(self, '_fdp_worker', None) is not None:
+            return
+        from pathlib import Path
+        from player.fdp.worker import FdpWorker
+        from player.fdp.flight_panel import FlightPanel
+
+        cfg = self._fdp_config()
+        db_path = str(Path(__file__).resolve().parent.parent
+                      / "data" / "fdp" / "fdp.duckdb")
+
+        # Panel de vuelos activos (dock derecho)
+        if getattr(self, '_fdp_panel', None) is None:
+            self._fdp_panel = FlightPanel(db_path, parent=self)
+            self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._fdp_panel)
+        self._fdp_panel.show()
+        self._fdp_panel.refrescar()
+
+        worker = FdpWorker(cfg["host"], cfg["port"], db_path, parent=self)
+        worker.conectado.connect(self._on_fdp_conectado)
+        worker.mensaje_procesado.connect(self._on_fdp_mensaje)
+        worker.error_conexion.connect(self._on_fdp_error)
+        worker.start()
+        self._fdp_worker = worker
+
+        # Semáforo: naranja = conectando
+        self._fdp_set_semaforo("conectando")
+        self.system_bus.inyectar(
+            "INFO", "FDP", f"Conectando a FDP {cfg['host']}:{cfg['port']}")
+
+    def _detener_fdp(self):
+        worker = getattr(self, '_fdp_worker', None)
+        if worker is None:
+            return
+        worker.stop()
+        worker.wait(3000)
+        self._fdp_worker = None
+        self._fdp_set_semaforo(None)
+        self.system_bus.inyectar("INFO", "FDP", "Feed FDP desconectado")
+
+    def _fdp_set_semaforo(self, estado):
+        """Actualiza el semáforo HUD del feed FDP.
+
+        estado: 'conectado' | 'reconectando' | 'conectando' | None (oculto)
+        """
+        if not hasattr(self, '_act_hud_fdp'):
+            return
+        if estado is None:
+            self._act_hud_fdp.setVisible(False)
+            return
+        self._act_hud_fdp.setVisible(True)
+        colores = {
+            "conectado":    "#39FF14",
+            "conectando":   "#FF9900",
+            "reconectando": "#FF9900",
+        }
+        color = colores.get(estado, "#FF3333")
+        self.lbl_hud_fdp.setStyleSheet(
+            f"color: {color}; font-size: 9pt; font-weight: bold; padding: 2px 6px;")
+        tooltips = {
+            "conectado":    "FDP conectado",
+            "conectando":   "FDP conectando…",
+            "reconectando": "FDP reconectando…",
+        }
+        self.lbl_hud_fdp.setToolTip(tooltips.get(estado, "FDP"))
+
+    def _on_fdp_conectado(self, ok: bool):
+        if ok:
+            self._fdp_set_semaforo("conectado")
+            self.system_bus.inyectar("INFO", "FDP", "Feed FDP conectado")
+        else:
+            self._fdp_set_semaforo("reconectando")
+            self.system_bus.inyectar("WARNING", "FDP", "Conexión FDP caída — reintentando")
+
+    def _on_fdp_mensaje(self, tipo: str, arcid: str):
+        if getattr(self, '_fdp_panel', None) is not None:
+            self._fdp_panel.refrescar()
+
+    def _on_fdp_error(self, message: str):
+        self.system_bus.inyectar("WARNING", "FDP", message)
 
     def _recargar_sensores_calib(self):
         """Recarga sensores con los offsets recién guardados por el calibrador."""
@@ -3645,12 +4198,16 @@ class MainWindow(QMainWindow):
 
     def _on_rotation_speed_detected(self, sac: int, sic: int, rpm: float):
         sensor_key = (sac, sic)
+        prev = self._sensor_rpms.get(sensor_key)
         self._sensor_rpms[sensor_key] = rpm
         if hasattr(self.radar, 'sensor_rpms'):
             self.radar.sensor_rpms[sensor_key] = rpm
         if self.radar.center_key == sensor_key:
             self.radar.set_sweep_speed(rpm)
-        print(f"[REPROYECTOR] Velocidad de rotación detectada para {sac}/{sic} -> {rpm:.2f} RPM")
+        # Solo loguear al cambiar el RPM: este handler corre en el hilo de UI y el
+        # print síncrono a la terminal inundaba y frenaba el render bajo carga.
+        if prev is None or abs(prev - rpm) >= 0.1:
+            print(f"[REPROYECTOR] Velocidad de rotación detectada para {sac}/{sic} -> {rpm:.2f} RPM")
 
 
     def _load_custom_map(self, file_path: str):
@@ -3664,23 +4221,85 @@ class MainWindow(QMainWindow):
 
     def _setup_vfr_submenu(self):
         """Submenú 'VFR' en Mapas con capas conmutables (ATZs, corredores VFR,
-        pistas y nombres). Cada acción carga/descarga su GeoJSON bajo demanda."""
+        pistas y nombres) usando un formato de lista scrollable con botones Todos/Ninguno."""
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         sub_vfr = self.menu_mapas.addMenu("VFR")
         archivos = [
-            ("ATZs", "files/ATZs.geojson"),
-            ("Corredores VFR", "files/corrVFR.geojson"),
-            ("Pistas", "files/pistas.json"),
-            ("Nombres", "files/nombres.json"),
+            ("ATZs", ["files/ATZs.geojson"]),
+            ("Corredores VFR", ["files/corrVFR.geojson"]),
+            ("Pistas", ["files/pistas.json"]),
+            ("Nombres", ["files/nombres.json"]),
         ]
-        for label, rel in archivos:
-            abs_path = os.path.abspath(os.path.join(base_dir, rel))
-            action = sub_vfr.addAction(label)
-            action.setCheckable(True)
-            action.setChecked(False)
-            action.triggered.connect(
-                lambda checked, p=abs_path: self._on_map_action_triggered(p))
-            self.map_actions[abs_path] = action
+        
+        items_list = []
+        for label, rel_paths in archivos:
+            abs_paths = [os.path.abspath(os.path.join(base_dir, rel)) for rel in rel_paths]
+            items_list.append((label, abs_paths))
+            
+        scroll_action = ScrollableMapListMenu(sub_vfr, items_list, self)
+        sub_vfr.addAction(scroll_action)
+
+    def _setup_custom_categories_submenus(self):
+        """Carga y agrega las subcarpetas del usuario (Antigranizo, Radares, AMA,
+        Sectores Externos y Sectores Internos) al menú de Mapas usando listas scrollables con Todos/Ninguno."""
+        import json
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        files_dir = os.path.join(base_dir, "files")
+        
+        categories = [
+            ("Antigranizo", "ANTIGRANIZO"),
+            ("Radares", "RADARES"),
+            ("AMA", "AMA"),
+            ("Sectores Externos", "SECTORES_EXTERNOS"),
+            ("Sectores Internos", "SECTORES_INTERNOS")
+        ]
+        
+        for menu_label, folder_name in categories:
+            folder_path = os.path.join(files_dir, folder_name)
+            if not os.path.exists(folder_path):
+                continue
+                
+            items_list = []
+            
+            if folder_name == "AMA":
+                groups = {
+                    "Sectores": ["AMA_SECTOR.json", "meridianos_sector.json", "paralelos_sector.json"],
+                    "TMA": ["AMA_TMA.json", "meridianos_tma.json", "paralelos_tma.json"],
+                    "CTR": ["meridianos_ctr.json", "paralelos_ctr.json"]
+                }
+                for group_name, file_names in groups.items():
+                    abs_paths = []
+                    for name in file_names:
+                        full_path = os.path.join(folder_path, name)
+                        if os.path.exists(full_path):
+                            abs_paths.append(full_path)
+                    if abs_paths:
+                        items_list.append((group_name, abs_paths))
+            else:
+                json_files = []
+                for file in os.listdir(folder_path):
+                    if file.lower().endswith('.json'):
+                        full_path = os.path.join(folder_path, file)
+                        try:
+                            with open(full_path, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                                if len(data.get("features", [])) > 0:
+                                    json_files.append((file[:-5], full_path))
+                        except:
+                            pass
+                            
+                if json_files:
+                    json_files.sort(key=lambda x: x[0])
+                    for label, abs_path in json_files:
+                        clean_label = label.replace('_', ' ')
+                        items_list.append((clean_label, [abs_path]))
+                        
+            if not items_list:
+                continue
+                
+            sub_menu = self.menu_mapas.addMenu(menu_label)
+            scroll_action = ScrollableMapListMenu(sub_menu, items_list, self)
+            sub_menu.addAction(scroll_action)
 
     def _cargar_mapa_al_final(self):
         """Reubica 'Cargar Mapa Personalizado' (y su separador) al final del menú
@@ -3764,6 +4383,51 @@ class MainWindow(QMainWindow):
                 self._active_map_paths.remove(abs_path)
             self._rebuild_and_draw_maps()
 
+    def _on_map_group_action_triggered(self, abs_paths: List[str], action):
+        is_checked = action.isChecked()
+        print(f"[MAPAS] Grupo de mapas gatillado - Activo: {is_checked}")
+        for abs_path in abs_paths:
+            abs_path = os.path.abspath(abs_path)
+            if is_checked:
+                if abs_path in self._loaded_custom_maps:
+                    self._active_map_paths.add(abs_path)
+                else:
+                    print(f"[MAPAS] Iniciando carga asíncrona de capa en grupo: {abs_path}")
+                    self.radar.map_is_absolute = True
+                    loader = DxfLoaderThread(abs_path)
+                    loader.dxf_data.connect(self._on_custom_map_loaded)
+                    loader.dxf_error.connect(lambda msg, p=abs_path: self._on_custom_map_error(p, msg))
+                    loader.start()
+                    if not hasattr(self, '_active_loaders'):
+                        self._active_loaders = []
+                    self._active_loaders.append(loader)
+            else:
+                if abs_path in self._active_map_paths:
+                    self._active_map_paths.remove(abs_path)
+        self._rebuild_and_draw_maps()
+
+    def _toggle_map_paths_group(self, abs_paths: List[str], checked: bool, redraw=True):
+        for abs_path in abs_paths:
+            abs_path = os.path.abspath(abs_path)
+            if checked:
+                if abs_path in self._loaded_custom_maps:
+                    self._active_map_paths.add(abs_path)
+                else:
+                    print(f"[MAPAS] Iniciando carga asíncrona de capa en grupo: {abs_path}")
+                    self.radar.map_is_absolute = True
+                    loader = DxfLoaderThread(abs_path)
+                    loader.dxf_data.connect(self._on_custom_map_loaded)
+                    loader.dxf_error.connect(lambda msg, p=abs_path: self._on_custom_map_error(p, msg))
+                    loader.start()
+                    if not hasattr(self, '_active_loaders'):
+                        self._active_loaders = []
+                    self._active_loaders.append(loader)
+            else:
+                if abs_path in self._active_map_paths:
+                    self._active_map_paths.remove(abs_path)
+        if redraw:
+            self._rebuild_and_draw_maps()
+
     def _on_custom_map_loaded(self, segments, min_x, min_y, max_x, max_y):
         loader = self.sender()
         if not loader:
@@ -3801,7 +4465,7 @@ class MainWindow(QMainWindow):
         act.toggled.connect(lambda on, k=key, b=builder: self._toggle_atm_layer(k, on, b))
         self.atm_map_actions[key] = act
 
-    def _toggle_atm_layer(self, key, on, builder):
+    def _toggle_atm_layer(self, key, on, builder, redraw=True):
         """Agrega/quita una capa ATM (aerovía/procedimiento/fixes) en el PPI."""
         from player import atm_maps
         mm = getattr(self.radar, 'map_manager', None)
@@ -3825,7 +4489,8 @@ class MainWindow(QMainWindow):
                 mm.reproject_all(self.radar.proy)
         else:
             mm.layers.pop(layer_name, None)
-        self.radar.update()
+        if redraw:
+            self.radar.update()
 
     def _rebuild_areas_menu(self):
         """Reconstruye el menú 'Áreas' con los submenús Restringidas, Prohibidas y Peligrosas
@@ -3862,53 +4527,7 @@ class MainWindow(QMainWindow):
                     if area_name not in current_db_names and area_name not in user_names:
                         mm.layers.pop(name, None)
 
-        from PyQt6.QtWidgets import QWidgetAction, QListWidget, QListWidgetItem
         from PyQt6.QtCore import Qt
-
-        class ScrollableAreaListMenu(QWidgetAction):
-            def __init__(self, parent_menu, areas, main_window):
-                super().__init__(parent_menu)
-                self.main_window = main_window
-                self.areas = areas
-                
-                self.list_widget = QListWidget()
-                self.list_widget.setFixedHeight(300)
-                self.list_widget.setFixedWidth(220)
-                self.list_widget.setStyleSheet("""
-                    QListWidget {
-                        background-color: #0B0E14;
-                        color: #E0E6ED;
-                        border: 1px solid rgba(0, 229, 255, 40);
-                        font-size: 8pt;
-                    }
-                    QListWidget::item {
-                        padding: 4px;
-                    }
-                    QListWidget::item:hover {
-                        background-color: rgba(0, 229, 255, 20);
-                    }
-                """)
-                
-                mm_ref = getattr(main_window.radar, 'map_manager', None)
-                for area in areas:
-                    item = QListWidgetItem(area.name)
-                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-                    
-                    layer_name = f"AREA::{area.name}"
-                    was_visible = mm_ref is not None and layer_name in mm_ref.layers
-                    item.setCheckState(Qt.CheckState.Checked if was_visible else Qt.CheckState.Unchecked)
-                    
-                    item.setData(Qt.ItemDataRole.UserRole, area)
-                    self.list_widget.addItem(item)
-                    
-                self.list_widget.itemChanged.connect(self.on_item_changed)
-                self.setDefaultWidget(self.list_widget)
-                
-            def on_item_changed(self, item):
-                area = item.data(Qt.ItemDataRole.UserRole)
-                checked = item.checkState() == Qt.CheckState.Checked
-                self.main_window._toggle_individual_db_area(area, checked)
-
         self.area_list_widgets = {}
 
         # Para cada tipo, creamos un submenú y agregamos el widget de lista scrollable
@@ -4065,7 +4684,7 @@ class MainWindow(QMainWindow):
             mm.layers.pop(name, None)
         self.radar.update()
 
-    def _toggle_individual_db_area(self, area, on):
+    def _toggle_individual_db_area(self, area, on, redraw=True):
         """Muestra u oculta una área de base de datos específica en el PPI/ODS."""
         from player.areas import render as _ar
         mm = getattr(self.radar, 'map_manager', None)
@@ -4084,7 +4703,8 @@ class MainWindow(QMainWindow):
                 print(f"[Áreas] Error generando capa individual {area.name}: {e}")
         else:
             mm.layers.pop(layer_name, None)
-        self.radar.update()
+        if redraw:
+            self.radar.update()
 
     def _toggle_area_layer(self, kind, on):
         """Refresca las capas de áreas individuales de la base de datos de un cierto tipo."""
@@ -4425,6 +5045,7 @@ class MainWindow(QMainWindow):
 
             # 7. Arrancar hilo y barrido radar
             self.worker.start()
+            self._inyectar_repo_en_radar(f"LIVE_{','.join(str(p) for p in puertos_escucha)}")
             self.playing = True
             self.udp_active = True
             self.radar.play()
@@ -4671,6 +5292,26 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.critical(self, "Error de Exportación", "Hubo un error al generar el archivo Parquet.")
 
+    def exportar_safety_csv(self):
+        """Exporta safety_events a CSV para informe de auditoría OACI (solo rol técnico)."""
+        repo_db = None
+        if self.worker and hasattr(self.worker, 'engine') and hasattr(self.worker.engine, 'repo_db'):
+            repo_db = self.worker.engine.repo_db
+        output_file, _ = QFileDialog.getSaveFileName(
+            self, "Exportar Eventos de Seguridad — Auditoría OACI",
+            "safety_events_audit.csv", "CSV (*.csv)")
+        if not output_file:
+            return
+        exporter = PassExporter(repo_db=repo_db)
+        sesion = getattr(self.radar, '_sesion_id', None)
+        success = exporter.export_safety_events_csv(output_file, sesion_id=sesion)
+        if success:
+            QMessageBox.information(self, "Exportación completada",
+                                    f"Eventos de seguridad exportados a:\n{output_file}")
+        else:
+            QMessageBox.warning(self, "Sin datos",
+                                "No hay eventos de seguridad registrados en esta sesión.")
+
     def exportar_playback_kmz(self):
         """Permite seleccionar de forma interactiva un vuelo y exportar su reproducción animada KMZ."""
         from PyQt6.QtWidgets import QInputDialog
@@ -4750,6 +5391,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._limpiar_worker()
+        self._detener_fdp()
         shutil.rmtree(self.cache_dir, ignore_errors=True)
         # Cerrar las ventanas flotantes (Qt.Tool: paneles MSAW/APW, finder, reloj,
         # panel de sensores, vista FIR…). Si no, quedan visibles y mantienen vivo el

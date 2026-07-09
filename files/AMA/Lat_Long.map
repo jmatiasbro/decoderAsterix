@@ -1,0 +1,8 @@
+SACF/AMA/meridianos_ctr.map      GENERICO   CTR
+SACF/AMA/paralelos_ctr.map       GENERICO   CTR
+SACF/AMA/meridianos_tma.map      GENERICO   TMA
+SACF/AMA/paralelos_tma.map       GENERICO   TMA
+SACF/AMA/AMA_TMA.map             GENERICO   TMA
+SACF/AMA/meridianos_sector.map   GENERICO   SECTORES
+SACF/AMA/paralelos_sector.map    GENERICO   SECTORES
+SACF/AMA/AMA_SECTOR.map          GENERICO   SECTORES

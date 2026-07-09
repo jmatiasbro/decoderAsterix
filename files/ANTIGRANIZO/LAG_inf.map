@@ -1,0 +1,47 @@
+/*
+      ================================================
+
+        Ruta Lucha Antigranizo Espacio Aereo inferior
+        Actualizado 211104 SGH
+
+      ================================================
+*/
+
+BrigthnessGroup LAG
+
+Range           2048
+
+ColorText       28
+
+ColorLine       28
+
+ColorSymbol     28
+
+LineStyle       0
+
+Polyline         7
+240844S0650123W
+243420S0644522W
+245306S0645552W
+244853S0651454W
+241539S0653103W
+240852S0652901W
+240844S0650123W
+
+LineStyle        1
+
+Circumference      242337S0650534W      35 
+
+Circumference      245108S0652902W      10 
+
+Circumference      242337S0650534W      10 
+
+
+Arc  235657.00S0644928.00W 245934.00S0641803.00W 255530.00S0651700.00W  Arc 
+
+Text     242741S0642628W   "LAG05" 
+Text     235328S0644609W   "LAG09"  
+Text     245906S0650442W   "LAG12" 
+FixPointSymbol   242741S0642628W           212 
+FixPointSymbol   235328S0644609W           212 
+FixPointSymbol   245906S0650442W           212 

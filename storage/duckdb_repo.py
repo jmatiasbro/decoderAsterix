@@ -45,7 +45,7 @@ class DuckDBRepository:
         self.hilo_worker.start()
 
     def _inicializar_esquema(self):
-        # Asegurar que la tabla esté limpia para evitar duplicaciones o contaminación entre diferentes PCAPs
+        # asterix_plots se recrea en cada sesión para evitar contaminación entre PCAPs
         self.conn.execute('DROP TABLE IF EXISTS asterix_plots')
         self.conn.execute('''
             CREATE TABLE asterix_plots (
@@ -74,11 +74,64 @@ class DuckDBRepository:
                 pd DOUBLE
             )
         ''')
+        # safety_events se acumula entre sesiones (IF NOT EXISTS) para auditoría histórica
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS safety_events (
+                ts          DOUBLE  NOT NULL,
+                ts_wall     DOUBLE  NOT NULL,
+                subsistema  VARCHAR NOT NULL,
+                transicion  VARCHAR NOT NULL,
+                clave       VARCHAR NOT NULL,
+                nivel       VARCHAR,
+                origen      VARCHAR,
+                descripcion VARCHAR,
+                sesion_id   VARCHAR
+            )
+        ''')
 
     def guardar_plot(self, plot_dict: Dict[str, Any]):
         """Punto de entrada no bloqueante para guardar un plot."""
         if self._running:
             self.cola_insercion.put(plot_dict)
+
+    def guardar_evento_safety(self, ts: float, ts_wall: float, subsistema: str,
+                               transicion: str, clave: str, nivel: str,
+                               origen: str, descripcion: str, sesion_id: str = ""):
+        """Encola un evento de red de seguridad para persistencia asíncrona."""
+        if self._running:
+            self.cola_insercion.put({
+                "_type": "safety_event",
+                "ts": ts, "ts_wall": ts_wall,
+                "subsistema": subsistema, "transicion": transicion,
+                "clave": clave, "nivel": nivel, "origen": origen,
+                "descripcion": descripcion, "sesion_id": sesion_id,
+            })
+
+    def query_safety_events(self, subsistema: str = None, sesion_id: str = None,
+                             ts_desde: float = None, ts_hasta: float = None) -> List[Tuple]:
+        """Consulta eventos de safety con filtros opcionales. Uso desde el hilo principal."""
+        filtros, params = [], []
+        if subsistema:
+            filtros.append("subsistema = ?")
+            params.append(subsistema)
+        if sesion_id:
+            filtros.append("sesion_id = ?")
+            params.append(sesion_id)
+        if ts_desde is not None:
+            filtros.append("ts_wall >= ?")
+            params.append(ts_desde)
+        if ts_hasta is not None:
+            filtros.append("ts_wall <= ?")
+            params.append(ts_hasta)
+        where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
+        sql = f"""
+            SELECT ts, ts_wall, subsistema, transicion, clave,
+                   nivel, origen, descripcion, sesion_id
+            FROM safety_events
+            {where}
+            ORDER BY ts_wall ASC
+        """
+        return self.query(sql, params) if params else self.query(sql)
 
     def flush(self):
         """Fuerza al hilo worker a escribir cualquier lote residual inmediatamente."""
@@ -173,24 +226,18 @@ class DuckDBRepository:
         finally:
             self._start_worker()
 
-    def guardar_plots_bulk(self, plots_list: List[Dict[str, Any]]):
-        self.log_repo(f"guardar_plots_bulk() starting with {len(plots_list)} plots")
-        if not plots_list:
-            return
-        
+    def guardar_plots_bulk(self, plots_iter):
         self.flush()  # Asegurar que no hay escrituras concurrentes pendientes
-        self.log_repo("guardar_plots_bulk() flushed")
-        
         self._stop_worker()
-        
-        # Generar un archivo CSV temporal
+
         fd, temp_csv_path = tempfile.mkstemp(suffix=".csv")
         os.close(fd)
-        
+
         try:
+            row_count = 0
             with open(temp_csv_path, 'w', newline='', encoding='utf-8') as f:
                 w = csv.writer(f, lineterminator='\r\n')
-                for plot in plots_list:
+                for plot in plots_iter:
                     time_val = plot.get('time') or plot.get('timestamp') or 0.0
                     rx_val = plot.get('pcap_time') or 0.0
                     cat_val = plot.get('category') or 0
@@ -272,6 +319,12 @@ class DuckDBRepository:
                         freq_val,
                         pd_val,
                     ])
+                    row_count += 1
+                    if row_count % 10000 == 0:
+                        time.sleep(0)  # cede el GIL para que el hilo UI procese eventos
+
+            if row_count == 0:
+                return
 
             try:
                 cursor = self.thread_conn.cursor()
@@ -356,6 +409,20 @@ class DuckDBRepository:
                             print(f"[Storage Layer] Error al vaciar lote en flush: {e}")
                             lote = []
                     self.cola_insercion.task_done()
+                    continue
+
+                if isinstance(plot, dict) and plot.get("_type") == "safety_event":
+                    try:
+                        hilo_conn.execute(
+                            "INSERT INTO safety_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            [plot["ts"], plot["ts_wall"], plot["subsistema"],
+                             plot["transicion"], plot["clave"], plot.get("nivel"),
+                             plot.get("origen"), plot.get("descripcion"), plot.get("sesion_id")]
+                        )
+                    except Exception as e:
+                        print(f"[Storage Layer] Error guardando safety_event: {e}")
+                    finally:
+                        self.cola_insercion.task_done()
                     continue
 
                 try:

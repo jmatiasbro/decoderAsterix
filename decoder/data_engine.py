@@ -727,6 +727,7 @@ class DataEngine:
                         progreso_base = int((file_idx / total_files) * estimated_total)
                         progreso_actual = progreso_base + min(estimated_total // total_files, total_pkts // total_files)
                         self.on_progress(progreso_actual, estimated_total)
+                        time.sleep(0)  # cede el GIL para que el hilo UI procese eventos
 
                     records = self.router.procesar_paquete_udp(payload)
                     if records:
@@ -764,6 +765,7 @@ class DataEngine:
                         progreso_base = int((file_idx / total_files) * estimated_total)
                         progreso_actual = progreso_base + min(estimated_total // total_files, total_pkts // total_files)
                         self.on_progress(progreso_actual, estimated_total)
+                        time.sleep(0)  # cede el GIL para que el hilo UI procese eventos
 
                     records = self.router.procesar_paquete_udp(block)
                     if records:
@@ -866,6 +868,7 @@ class DataEngine:
                             progreso_base = int((file_idx / total_files) * estimated_total)
                             progreso_actual = progreso_base + min(estimated_total // total_files, total_pkts // total_files)
                             self.on_progress(progreso_actual, estimated_total)
+                        time.sleep(0)  # cede el GIL para que el hilo UI procese eventos
 
                         records = self.router.procesar_paquete_udp(packet)
                         if records:
@@ -919,6 +922,7 @@ class DataEngine:
                                 progreso_base = int((file_idx / total_files) * estimated_total)
                                 progreso_actual = progreso_base + min(estimated_total // total_files, total_pkts // total_files)
                                 self.on_progress(progreso_actual, estimated_total)
+                                time.sleep(0)  # cede el GIL para que el hilo UI procese eventos
 
                             records = self.router.procesar_paquete_udp(asterix_payload)
                             if not records: continue
@@ -977,6 +981,7 @@ class DataEngine:
                                     progreso_base = int((file_idx / total_files) * estimated_total)
                                     progreso_actual = progreso_base + min(estimated_total // total_files, total_pkts // total_files)
                                     self.on_progress(progreso_actual, estimated_total)
+                                    time.sleep(0)  # cede el GIL para que el hilo UI procese eventos
 
                                 records = self.router.procesar_paquete_udp(asterix_payload)
                                 if not records: continue

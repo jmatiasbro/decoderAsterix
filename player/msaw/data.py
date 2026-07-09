@@ -30,6 +30,24 @@ _TRANS_ALT = {"SACO": 3500, "SANT": 4000, "SASA": 5500, "SASJ": 5000,
 RADIUS_NM = 25.0
 
 
+def filtrar_zonas_validas(zones):
+    """Valida cada zona en carga y descarta las inválidas con log (SSR-09 / HLR-MSAW-02).
+
+    Espeja la política de `player.areas.store`: una altitud MSA o geometría fuera de
+    rango no debe usarse silenciosamente. Devuelve solo las zonas conformes.
+    """
+    import sys
+    validas = []
+    for z in zones:
+        errores = z.validar()
+        if errores:
+            print(f"[MSAW] Zona '{getattr(z, 'icao', '?')}' descartada por datos "
+                  f"inválidos: {'; '.join(errores)}", file=sys.stderr)
+            continue
+        validas.append(z)
+    return validas
+
+
 def msa_zones():
     """[MsaZone] de la FIR Córdoba, anclando el centro a la base ATM (ARP).
 
@@ -56,4 +74,4 @@ def msa_zones():
             mag_decl_w=decl_w,
             sectors=[MsaSector(d, h, m) for (d, h, m) in secs],
         ))
-    return zones
+    return filtrar_zonas_validas(zones)

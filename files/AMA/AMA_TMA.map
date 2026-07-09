@@ -1,0 +1,23 @@
+BrightnessGroup    BOUNDARY
+
+Range	2048
+
+ColorLine  	25
+
+LineStyle         0
+
+LineWidth        1
+
+ColorText  	81
+Font 10 0 0
+
+Text	323000S064300W    "116"
+Text	32300S0633000W    "30"
+Text	313000S065300W    "74"
+Text	313000S064300W    "115"
+Text	313000S063300W    "29"
+Text	303000S065300W    "62"
+Text	303000S064300W    "87"
+Text	303000S063300W    "56"
+
+

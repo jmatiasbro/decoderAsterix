@@ -28,6 +28,52 @@ def test_area_circulo_contiene_y_banda():
     assert a.banda(105, margen=10) is True
 
 
+# ── HLR-APW-02: validación de geometría ─────────────────────────────────────
+
+class TestAreaValidar:
+
+    def test_poly_valido_sin_errores(self):
+        a = Area("Z", "R", "poly",
+                 vertices=[(-31.0, -64.0), (-31.0, -63.5), (-30.5, -63.7)])
+        assert a.validar() == []
+
+    def test_poly_menos_de_3_vertices(self):
+        a = Area("Z", "R", "poly", vertices=[(-31.0, -64.0), (-31.0, -63.5)])
+        errores = a.validar()
+        assert any("3 vértices" in e for e in errores)
+
+    def test_poly_lat_fuera_de_rango(self):
+        a = Area("Z", "R", "poly",
+                 vertices=[(91.0, -64.0), (-31.0, -63.5), (-30.5, -63.7)])
+        errores = a.validar()
+        assert any("lat=91.0" in e for e in errores)
+
+    def test_poly_lon_fuera_de_rango(self):
+        a = Area("Z", "R", "poly",
+                 vertices=[(-31.0, 181.0), (-31.0, -63.5), (-30.5, -63.7)])
+        errores = a.validar()
+        assert any("lon=181.0" in e for e in errores)
+
+    def test_circle_valido_sin_errores(self):
+        a = Area("C", "P", "circle", center=(-34.0, -58.0), radius_nm=10.0)
+        assert a.validar() == []
+
+    def test_circle_sin_center(self):
+        a = Area("C", "P", "circle", center=None, radius_nm=5.0)
+        errores = a.validar()
+        assert any("center" in e for e in errores)
+
+    def test_circle_radius_cero(self):
+        a = Area("C", "P", "circle", center=(-34.0, -58.0), radius_nm=0.0)
+        errores = a.validar()
+        assert any("radius_nm" in e for e in errores)
+
+    def test_circle_radius_negativo(self):
+        a = Area("C", "P", "circle", center=(-34.0, -58.0), radius_nm=-5.0)
+        errores = a.validar()
+        assert any("radius_nm" in e for e in errores)
+
+
 def test_area_poligono_bbox_y_polilinea():
     a = Area("Y", "R", "poly", vertices=[(0.0, 0.0), (0.0, 2.0), (2.0, 1.0)])
     assert a.bbox() == (0.0, 0.0, 2.0, 2.0)
