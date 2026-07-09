@@ -54,6 +54,7 @@
   <a href="#lateral">Barra lateral</a>
   <a href="#menus">Menús</a>
   <a href="#finder">Finder táctico</a>
+  <a href="#herramientas">Herramientas del PPI</a>
   <a href="#modos">Modos de operación</a>
   <a href="#filtros">Filtros avanzados</a>
   <a href="#mapas">Mapas y capas VFR</a>
@@ -188,8 +189,8 @@
     <tr><td><strong>Exportar</strong> <span class="pill tec">Técnico</span></td>
         <td>Trayectorias y reproducción animada a Google Earth (KMZ), cobertura real (KMZ),
             heatmap a QGIS (CSV), datos a Power BI (Parquet).</td></tr>
-    <tr><td><strong>Ver</strong></td><td>Panel lateral, vector velocidad, reloj UTC flotante,
-        panel de sensores flotante, diagnóstico ATSEP, Analizador de Paquetes y
+    <tr><td><strong>Ver</strong></td><td>Panel lateral, vector velocidad (horizonte 1/2/3&nbsp;min),
+        reloj UTC flotante, panel de sensores flotante, diagnóstico ATSEP, Analizador de Paquetes y
         <strong>Finder Táctico…</strong> (<span class="kbd">Ctrl+F</span>, ver abajo).</td></tr>
     <tr><td><strong>Configuración</strong></td><td>Perfil Operativo / Jurisdicción, Cambiar Perfil,
         Rol Operativo, Centro Técnico ATSEP <span class="pill tec">Técnico</span>.</td></tr>
@@ -226,6 +227,47 @@
   aparece un <strong>anillo de mira cian parpadeante</strong> con la etiqueta del elemento; para aeronaves,
   además se resalta la pista. El resaltado <strong>se apaga solo a los 15&nbsp;s</strong> (o al iniciar otra
   búsqueda). Si el elemento no existe o está fuera de cobertura, lo informa.</p>
+
+  <h2 class="sec" id="herramientas">Herramientas del PPI</h2>
+
+  <h3>Vector velocidad (predictor)</h3>
+  <p>Cada pista dibuja un <strong>vector de velocidad</strong> que proyecta su posición futura a
+  <strong>escala real del mapa</strong>: la punta cae donde estará la aeronave, con una
+  <strong>marca por cada minuto</strong>. El horizonte se elige en <em>Ver → Vector Velocidad</em>:</p>
+  <table>
+    <tr><th>Opción</th><th>Marca la posición proyectada a…</th></tr>
+    <tr><td><strong>1 minuto</strong></td><td>1 min (una marca)</td></tr>
+    <tr><td><strong>2 minutos</strong></td><td>1 y 2 min (dos marcas)</td></tr>
+    <tr><td><strong>3 minutos</strong></td><td>1, 2 y 3 min (tres marcas)</td></tr>
+  </table>
+  <p>El largo del vector corresponde a la velocidad de la pista (tope 600&nbsp;kt) y su dirección a la
+  velocidad suavizada de la trayectoria (evita oscilaciones entre radares). Solo se dibuja para pistas
+  con velocidad significativa (&gt; 10&nbsp;kt).</p>
+
+  <h3>RBL — Marcación y distancia (Range &amp; Bearing Line)</h3>
+  <p>La <strong>RBL</strong> mide rumbo y distancia entre dos puntos —dos aeronaves, o una aeronave y un
+  punto fijo— y predice su acercamiento.</p>
+  <table>
+    <tr><th>Acción</th><th>Gesto</th></tr>
+    <tr><td><strong>Crear</strong></td><td><span class="kbd">Mayús</span> + arrastrar (o botón central del
+        ratón) desde el origen hasta el destino; cada extremo se engancha al blanco/punto más cercano.
+        Si hay una pista seleccionada, se usa como origen.</td></tr>
+    <tr><td><strong>Borrar</strong></td><td>Clic izquierdo simple sobre la línea, o clic corto sobre su etiqueta.</td></tr>
+    <tr><td><strong>Mover la etiqueta</strong></td><td>Arrastrarla a lo largo de la línea.</td></tr>
+  </table>
+  <p>La etiqueta muestra:</p>
+  <table>
+    <tr><th>Campo</th><th>Significado</th></tr>
+    <tr><td><strong>B</strong></td><td>Rumbo <strong>magnético</strong> del origen al destino.</td></tr>
+    <tr><td><strong>R</strong></td><td>Distancia <strong>actual</strong> entre los extremos (NM).</td></tr>
+    <tr><td><strong>E</strong></td><td>Tiempo estimado hasta la <strong>distancia mínima</strong> pronosticada (min:seg).</td></tr>
+    <tr><td><strong>X</strong></td><td><strong>Distancia mínima</strong> pronosticada a la que pasarán, según la velocidad y el rumbo actuales (NM).</td></tr>
+  </table>
+  <p><strong>E</strong> y <strong>X</strong> solo aparecen mientras los extremos <strong>se acercan</strong>
+  (la RBL se acorta) y desaparecen al alcanzar el punto de máxima aproximación y empezar a alejarse.
+  <strong>X</strong> es la separación en ese punto futuro, <strong>no</strong> la distancia actual (esa es
+  <strong>R</strong>): por geometría, un cruce lejano da <strong>X</strong> grande y <strong>E</strong> chico,
+  mientras un acercamiento de frente da <strong>X</strong> chico y <strong>E</strong> grande.</p>
 
   <h2 class="sec" id="modos">Modos de operación (menú Modo)</h2>
   <table>

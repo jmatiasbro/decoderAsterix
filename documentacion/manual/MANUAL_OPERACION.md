@@ -222,7 +222,7 @@ Panel acoplable a la derecha, se muestra/oculta desde `Ver → Panel Lateral de 
 |------|---------------------|
 | **Archivo** | Log de Alertas STCA, Log de Eventos, Salir. |
 | **Exportar** *(Técnico)* | Google Earth (KMZ), cobertura real (KMZ), heatmap QGIS (CSV), datos Power BI (Parquet). |
-| **Ver** | Panel lateral, vector velocidad, reloj UTC flotante, panel de sensores, diagnóstico ATSEP, Analizador de Paquetes y Finder Táctico (`[Ctrl]+[F]`). |
+| **Ver** | Panel lateral, vector velocidad (horizonte 1/2/3 min), reloj UTC flotante, panel de sensores, diagnóstico ATSEP, Analizador de Paquetes y Finder Táctico (`[Ctrl]+[F]`). |
 | **Configuración** | Perfil Operativo, Cambiar Perfil, Rol Operativo, Centro Técnico ATSEP *(Técnico)*. |
 | **Mapas** | Aerovías, procedimientos, fixes, VFR, sectores VFR y mapas personalizados. |
 | **Áreas** | Espacios restringidos y capas de referencia. |
@@ -293,6 +293,47 @@ Al encontrarlo, la vista se centra **sin perder las pistas vivas** y aparece un 
 | **Vista ODS** | Simbología y paleta EUROCONTROL ODS (vista operativa del controlador): símbolos por estado de track, etiquetas FDB, barrido apagado. |
 | **Intensidad Visual** | Sliders 0–100 % por capa (mapa, etiquetas, anillos, estela, símbolos, compás, herramientas). |
 | **Vista FIR (satélite)** | Cartografía satelital de la FIR bajo los tracks, centrada en el aeropuerto del perfil. |
+
+### 6.4 Vector velocidad (predictor)
+
+Cada pista dibuja un **vector de velocidad** que proyecta su posición futura a **escala real del
+mapa**: la punta cae donde estará la aeronave, con una **marca por cada minuto**. El horizonte se
+elige en `Ver → Vector Velocidad`:
+
+| Opción | Marca la posición proyectada a… |
+|--------|---------------------------------|
+| **1 minuto** | 1 min (una marca) |
+| **2 minutos** | 1 y 2 min (dos marcas) |
+| **3 minutos** | 1, 2 y 3 min (tres marcas) |
+
+El largo del vector corresponde a la velocidad de la pista (tope 600 kt) y su dirección a la
+velocidad suavizada de la trayectoria (evita oscilaciones entre radares). Solo se dibuja para pistas
+con velocidad significativa (> 10 kt).
+
+### 6.5 Herramienta RBL — Marcación y distancia (Range & Bearing Line)
+
+La **RBL** mide rumbo y distancia entre dos puntos —dos aeronaves, o una aeronave y un punto fijo— y
+predice su acercamiento.
+
+| Acción | Gesto |
+|--------|-------|
+| **Crear** | `Mayús` + arrastrar (o botón central del ratón) desde el origen hasta el destino; cada extremo se engancha al blanco/punto más cercano. Si hay una pista seleccionada, se usa como origen. |
+| **Borrar** | Clic izquierdo simple sobre la línea, o clic corto sobre su etiqueta. |
+| **Mover la etiqueta** | Arrastrarla a lo largo de la línea. |
+
+La etiqueta muestra:
+
+| Campo | Significado |
+|-------|-------------|
+| **B** | Rumbo **magnético** del origen al destino. |
+| **R** | Distancia **actual** entre los extremos (NM). |
+| **E** | Tiempo estimado hasta la **distancia mínima** pronosticada (min:seg). |
+| **X** | **Distancia mínima** pronosticada a la que pasarán, según la velocidad y el rumbo actuales (NM). |
+
+> **E** y **X** solo aparecen mientras los extremos **se acercan** (la RBL se acorta) y desaparecen al
+> alcanzar el punto de máxima aproximación y empezar a alejarse. **X** es la separación en ese punto
+> futuro, **no** la distancia actual (esa es **R**): por geometría, un cruce lejano da **X** grande y
+> **E** chico, mientras un acercamiento de frente da **X** chico y **E** grande.
 
 <div style="page-break-after: always;"></div>
 
