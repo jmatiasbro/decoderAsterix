@@ -61,6 +61,7 @@ class SafetyAuditDialog(QDialog):
         self._build_ui()
         self._aplicar_estilo()
         self._cargar_sesiones()
+        self._buscar()  # poblar de entrada; evita tabla vacía al abrir
 
     # ------------------------------------------------------------------
     # Construcción UI
@@ -231,18 +232,17 @@ class SafetyAuditDialog(QDialog):
         ts_d    = _ts_a_seg(self.time_desde.time())
         ts_h    = _ts_a_seg(self.time_hasta.time())
 
-        # Convertir HH:MM:SS del día a epoch aproximado usando UTC-hoy como base
-        hoy_0 = datetime.datetime.utcnow().replace(
-            hour=0, minute=0, second=0, microsecond=0).timestamp()
-        ts_desde_epoch = hoy_0 + ts_d
-        ts_hasta_epoch = hoy_0 + ts_h + 1
-
         rows = self._repo.query_safety_events(
             subsistema=None if sub == "Todos" else sub,
             sesion_id=None if sesion == "Todas" else sesion,
-            ts_desde=ts_desde_epoch,
-            ts_hasta=ts_hasta_epoch,
         )
+
+        # Filtro por hora-del-día (0..86399 s) sobre el mismo instante que muestra
+        # la columna "Hora UTC": ts % 86400 == hora del día tanto si ts es ToD
+        # ASTERIX (seg-del-día) como epoch. No se ancla a "hoy" (dependía del huso
+        # horario y ocultaba todo el histórico de sesiones previas).
+        if (ts_d, ts_h) != (0, 86399):
+            rows = [r for r in rows if ts_d <= (r[0] % 86400) <= ts_h]
 
         duraciones = self._calcular_duraciones(rows)
         self._poblar_tabla(rows, duraciones)
